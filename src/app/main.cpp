@@ -1,13 +1,21 @@
 #include <wx/app.h>
 
+#include "ui/main_frame.h"
+
 class SayCountApp final : public wxApp {
 public:
     bool OnInit() override {
-        // Step 0.2 only verifies wxWidgets application initialization. The
-        // first real frame and lifecycle belong to Step 1.1.
-        return false;
+        if (!wxApp::OnInit()) {
+            return false;
+        }
+
+        SetAppName("say-count");
+        SetAppDisplayName("Say Count");
+
+        auto* frame = new say_count::ui::MainFrame();
+        frame->Show();
+        return true;
     }
 };
 
 wxIMPLEMENT_APP(SayCountApp);
-

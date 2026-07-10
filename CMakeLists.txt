@@ -16,7 +16,8 @@ target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 
 add_executable(say-count
     src/app/main.cpp
-    src/ui/placeholder.cpp
+    src/app/settings.cpp
+    src/ui/main_frame.cpp
 )
 target_link_libraries(say-count PRIVATE say_count_core ${wxWidgets_LIBRARIES})
 
@@ -39,4 +40,3 @@ if(BUILD_TESTING)
     include(Catch)
     catch_discover_tests(say-count-tests)
 endif()
-
