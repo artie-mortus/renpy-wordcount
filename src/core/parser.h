@@ -14,6 +14,7 @@ struct CountedLine {
     std::string text;
     std::size_t words = 0;
     std::string scene;
+    bool is_menu_choice = false;
 };
 
 struct ScriptAnalysis {
@@ -30,10 +31,14 @@ struct NamedScript {
     std::string content;
 };
 
+struct AnalysisOptions {
+    bool count_menu_choices = false;
+};
+
 std::string clean_renpy_text(std::string_view text);
 std::size_t count_words(std::string_view text);
-ScriptAnalysis analyze_script(std::string_view script);
-ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts);
+ScriptAnalysis analyze_script(std::string_view script, AnalysisOptions options = {});
+ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts, AnalysisOptions options = {});
 std::string analysis_json(const ScriptAnalysis& analysis);
 
 }  // namespace say_count

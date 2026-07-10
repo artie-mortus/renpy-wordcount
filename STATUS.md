@@ -1,6 +1,7 @@
 # Status
 
-- Completed: Steps 0.1 through 2.4 — editor shell and parser/counting foundation with character resolution.
+- Completed: Steps 0.1 through 2.5 — editor shell and parser/counting foundation through menu choices.
+- Step 2.5: detects plain and conditioned menu choices, ignores them by default or counts them as `menu choice` via `AnalysisOptions` / `--count-menu-choices`, and preserves source line and qualified-label context. JSON parity now exposes the menu-choice flag.
 - Step 2.4: parses `Character(...)` definitions (define/default/bare and optional `renpy.`), resolves aliases to display names across ordered project files, extracts 3–8 digit hex speaker colors, preserves unknown aliases safely, and exposes deterministic character data through JSON parity output.
 - Step 2.3: counts dialogue/narration, ignores configured Ren'Py code starters, tracks source lines and qualified labels, implements `extend`, and exposes `say-count --dump-json`. Added a Node/native ctest parity harness and a Unicode 17.0 L*/N* word scanner with vendored generated ranges.
 - Step 2.2: added a dependency-free Ren'Py line tokenizer with source line/indentation metadata, quote-aware comment splitting, escaped-quote segments, requested statement classifications, and safe malformed-input classification. Word counting remains Step 2.3 work.
@@ -17,4 +18,5 @@
 - Verified (2026-07-10): debug build and ctest green (5/5), including tokenizer forms, escaped quotes/comments, indentation, and malformed input; `git diff --check` clean.
 - Verified (2026-07-10): debug build and ctest green (9/9); native and JavaScript JSON dumps match on the current simple-dialogue parity fixture; Unicode word tests cover accented, CJK, full-width numeric, curly apostrophe, and emoji cases; reference JS remains unchanged.
 - Verified (2026-07-10): debug build and ctest green (13/13); JS/native parity matches for same-file and cross-file character data; unit coverage includes `None`, unknown aliases, colors, and later-definition overwrite behavior; cavecrew review found no correctness defects.
-- Next step: 2.5 — menus and conditioned choices.
+- Verified (2026-07-10): debug build and ctest green (16/16); JS/native parity matches with menu counting both disabled and enabled; direct tests cover totals, conditioned choices, line numbers, and label context.
+- Next step: 2.6 — complete parser fixture translation.

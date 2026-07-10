@@ -9,14 +9,16 @@ const ignoredStarters = new Set([
 ]);
 
 const parser = Parser.create({ ignoredStarters });
-const files = process.argv.slice(2).map(name => ({ name, content: fs.readFileSync(name, 'utf8') }));
-const result = files.length === 1 ? parser.analyzeScript(files[0].content) : parser.analyzeProject(files);
+const countMenuChoices = process.argv[2] === '--count-menu-choices';
+const files = process.argv.slice(countMenuChoices ? 3 : 2).map(name => ({ name, content: fs.readFileSync(name, 'utf8') }));
+const options = { countMenuChoices };
+const result = files.length === 1 ? parser.analyzeScript(files[0].content, options) : parser.analyzeProject(files, options);
 const output = {
   totalWords: result.totalWords,
   dialogueLines: result.dialogueLines,
   scriptLines: result.scriptLines,
-  counted: result.counted.map(({ lineNumber, speaker, text, words, scene }) =>
-    ({ lineNumber, speaker, text, words, scene })),
+  counted: result.counted.map(({ lineNumber, speaker, text, words, scene, isMenuChoice }) =>
+    ({ lineNumber, speaker, text, words, scene, isMenuChoice: Boolean(isMenuChoice) })),
   characterNames: Object.fromEntries([...(result.characterNames || [])].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
   speakerColors: Object.fromEntries([...(result.speakerColors || [])].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
 };

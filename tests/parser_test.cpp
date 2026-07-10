@@ -69,3 +69,22 @@ TEST_CASE("later project character definitions win in file order") {
     CHECK(result.speaker_colors.at("Eileen") == "#111");
     CHECK(result.speaker_colors.at("Eve") == "#222");
 }
+
+TEST_CASE("menu choices can be ignored or counted") {
+    const std::string script =
+        "label start:\n    menu:\n        \"Choice text\":\n            \"Narration.\"\n"
+        "        \"Conditioned choice\" if flag:\n            e \"Dialogue remains.\"";
+    const auto ignored = say_count::analyze_script(script);
+    CHECK(ignored.total_words == 3);
+    CHECK(ignored.counted.size() == 2);
+
+    const auto counted = say_count::analyze_script(script, say_count::AnalysisOptions{true});
+    CHECK(counted.total_words == 7);
+    REQUIRE(counted.counted.size() == 4);
+    CHECK(counted.counted[0].speaker == "menu choice");
+    CHECK(counted.counted[0].scene == "start");
+    CHECK(counted.counted[0].line_number == 3);
+    CHECK(counted.counted[0].is_menu_choice);
+    CHECK(counted.counted[2].speaker == "menu choice");
+    CHECK(counted.counted[2].is_menu_choice);
+}

@@ -154,7 +154,8 @@ std::size_t count_words(std::string_view text) {
 
 ScriptAnalysis analyze_with_characters(std::string_view script,
                                        const std::map<std::string, std::string>& names,
-                                       const std::map<std::string, std::string>& colors) {
+                                       const std::map<std::string, std::string>& colors,
+                                       AnalysisOptions options) {
     ScriptAnalysis result;
     result.character_names = names;
     result.speaker_colors = colors;
@@ -177,7 +178,17 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
             current_scene = name;
         } else if (token.type == LineType::Dialogue || token.type == LineType::Narration) {
             const std::string alias = token.type == LineType::Narration ? "" : token.keyword;
-            if (!ignored.count(alias)) {
+            const bool menu_choice = token.type == LineType::Narration && !token.quoted.empty() &&
+                token.quoted.front().begin == 0 && token.quoted.front().closed &&
+                [&] {
+                    auto suffix = std::string_view(token.code).substr(token.quoted.front().end + 1);
+                    while (!suffix.empty() && std::isspace(static_cast<unsigned char>(suffix.front()))) suffix.remove_prefix(1);
+                    return (!suffix.empty() && suffix.front() == ':') ||
+                        (suffix.size() >= 2 && suffix.substr(0, 2) == "if" &&
+                         (suffix.size() == 2 || std::isspace(static_cast<unsigned char>(suffix[2]))) &&
+                         !suffix.empty() && suffix.back() == ':');
+                }();
+            if (!ignored.count(alias) && (!menu_choice || options.count_menu_choices)) {
                 std::string combined;
                 for (const auto& quote : token.quoted) {
                     if (!combined.empty()) combined.push_back(' ');
@@ -185,11 +196,12 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
                 }
                 const auto words = count_words(combined);
                 if (words) {
-                    std::string speaker = alias.empty() ? "narrator" : alias;
+                    std::string speaker = menu_choice ? "menu choice" : alias.empty() ? "narrator" : alias;
                     if (alias == "extend" && !last_speaker.empty()) speaker = last_speaker;
                     else if (const auto found = names.find(alias); found != names.end()) speaker = found->second;
-                    if (alias != "extend") last_speaker = speaker;
-                    result.counted.push_back({line_number, speaker, clean_renpy_text(combined), words, current_scene});
+                    if (alias != "extend" && !menu_choice) last_speaker = speaker;
+                    result.counted.push_back({line_number, speaker, clean_renpy_text(combined), words,
+                                              current_scene, menu_choice});
                     result.total_words += words;
                 }
             }
@@ -202,14 +214,14 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
     return result;
 }
 
-ScriptAnalysis analyze_script(std::string_view script) {
+ScriptAnalysis analyze_script(std::string_view script, AnalysisOptions options) {
     std::map<std::string, std::string> names;
     std::map<std::string, std::string> colors;
     parse_characters(script, names, colors);
-    return analyze_with_characters(script, names, colors);
+    return analyze_with_characters(script, names, colors, options);
 }
 
-ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts) {
+ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts, AnalysisOptions options) {
     std::map<std::string, std::string> names;
     std::map<std::string, std::string> colors;
     for (const auto& script : scripts) parse_characters(script.content, names, colors);
@@ -217,7 +229,7 @@ ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts) {
     merged.character_names = names;
     merged.speaker_colors = colors;
     for (const auto& script : scripts) {
-        auto item = analyze_with_characters(script.content, names, colors);
+        auto item = analyze_with_characters(script.content, names, colors, options);
         merged.total_words += item.total_words;
         merged.dialogue_lines += item.dialogue_lines;
         merged.script_lines += item.script_lines;
@@ -235,7 +247,8 @@ std::string analysis_json(const ScriptAnalysis& analysis) {
         const auto& item = analysis.counted[i];
         out << "{\"lineNumber\":" << item.line_number << ",\"speaker\":\"" << json_escape(item.speaker)
             << "\",\"text\":\"" << json_escape(item.text) << "\",\"words\":" << item.words
-            << ",\"scene\":\"" << json_escape(item.scene) << "\"}";
+            << ",\"scene\":\"" << json_escape(item.scene) << "\",\"isMenuChoice\":"
+            << (item.is_menu_choice ? "true" : "false") << "}";
     }
     out << "],\"characterNames\":{";
     std::size_t field = 0;

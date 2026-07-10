@@ -67,4 +67,23 @@ if(BUILD_TESTING)
             -DFIXTURE2=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/characters/scene.rpy
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
     )
+    add_test(
+        NAME parser-parity-menu-ignored
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/menu-choices.rpy
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
+    add_test(
+        NAME parser-parity-menu-counted
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/menu-choices.rpy
+            -DCOUNT_MENU_CHOICES=ON
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
 endif()
