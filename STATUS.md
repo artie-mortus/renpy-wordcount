@@ -1,6 +1,7 @@
 # Status
 
-- Completed: Steps 0.1 through 2.2 — editor shell, parser inventory, and line tokenizer.
+- Completed: Steps 0.1 through 2.3 — editor shell and initial parser/counting foundation.
+- Step 2.3: counts dialogue/narration, ignores configured Ren'Py code starters, tracks source lines and qualified labels, implements `extend`, and exposes `say-count --dump-json`. Added a Node/native ctest parity harness and a Unicode 17.0 L*/N* word scanner with vendored generated ranges.
 - Step 2.2: added a dependency-free Ren'Py line tokenizer with source line/indentation metadata, quote-aware comment splitting, escaped-quote segments, requested statement classifications, and safe malformed-input classification. Word counting remains Step 2.3 work.
 - Step 2.1: documented the complete JavaScript parser contract and fixture mapping in `docs/parser-behavior.md`; selected a dependency-free UTF-8 scanner with vendored Unicode L*/N* category ranges for exact word-count semantics. No parser implementation was added.
 - Step 1.4: five-digit line-number margin; current-line highlight; word-wrap toggle; 10–32px font controls (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`); system/light/dark editor themes; atomic persistence alongside window settings.
@@ -13,4 +14,5 @@
 - Known issues: none.
 - Verified (2026-07-10): every `test/parser.test.js` fixture maps to a documented behavior; reference JavaScript repository remains unchanged.
 - Verified (2026-07-10): debug build and ctest green (5/5), including tokenizer forms, escaped quotes/comments, indentation, and malformed input; `git diff --check` clean.
-- Next step: 2.3 — core dialogue counting and the parity harness.
+- Verified (2026-07-10): debug build and ctest green (9/9); native and JavaScript JSON dumps match on the current simple-dialogue parity fixture; Unicode word tests cover accented, CJK, full-width numeric, curly apostrophe, and emoji cases; reference JS remains unchanged.
+- Next step: 2.4 — character definitions and display names.

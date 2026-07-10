@@ -10,6 +10,7 @@ find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base stc aui adv html xml)
 include(${wxWidgets_USE_FILE})
 
 add_library(say_count_core STATIC
+    src/core/parser.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
 )
@@ -38,10 +39,22 @@ if(BUILD_TESTING)
 
     add_executable(say-count-tests
         tests/core_smoke_test.cpp
+        tests/parser_test.cpp
         tests/tokenizer_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 
     include(Catch)
     catch_discover_tests(say-count-tests)
+
+    find_program(NODE_EXECUTABLE node REQUIRED)
+    add_test(
+        NAME parser-parity-simple
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/simple-dialogue.rpy
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
 endif()
