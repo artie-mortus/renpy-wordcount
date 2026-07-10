@@ -4,6 +4,7 @@
 #include "core/unicode_word_ranges.h"
 
 #include <cctype>
+#include <regex>
 #include <sstream>
 #include <unordered_set>
 
@@ -72,6 +73,41 @@ std::string label_name(const TokenizedLine& line) {
     return value;
 }
 
+void parse_characters(std::string_view script, std::map<std::string, std::string>& names,
+                      std::map<std::string, std::string>& colors) {
+    static const std::regex definition(
+        R"(^\s*(?:(?:define|default)\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:renpy\.)?Character\s*\()",
+        std::regex::ECMAScript);
+    static const std::regex color(R"re(\bcolor\s*=\s*["'](#[0-9a-fA-F]{3,8})["'])re");
+    std::size_t start = 0;
+    while (start <= script.size()) {
+        const auto newline = script.find('\n', start);
+        auto raw = script.substr(start, newline == std::string_view::npos ? script.size() - start : newline - start);
+        const auto token = tokenize_line(raw, 0);
+        std::smatch match;
+        if (std::regex_search(token.code, match, definition)) {
+            const std::string alias = match[1].str();
+            const auto arguments = token.code.substr(static_cast<std::size_t>(match.position() + match.length()));
+            const auto argument_token = tokenize_line(arguments, 0);
+            std::string display;
+            if (!argument_token.quoted.empty()) display = clean_renpy_text(argument_token.quoted.front().text);
+            std::string lowered = display;
+            for (char& c : lowered) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (!display.empty() && lowered != "none") names[alias] = display;
+
+            std::smatch color_match;
+            if (std::regex_search(token.code, color_match, color)) {
+                const std::string value = color_match[1].str();
+                colors[alias] = value;
+                // JS colors intentionally retain a nonempty `None` display key.
+                if (!display.empty()) colors[display] = value;
+            }
+        }
+        if (newline == std::string_view::npos) break;
+        start = newline + 1;
+    }
+}
+
 }  // namespace
 
 std::string clean_renpy_text(std::string_view text) {
@@ -116,8 +152,12 @@ std::size_t count_words(std::string_view text) {
     return count;
 }
 
-ScriptAnalysis analyze_script(std::string_view script) {
+ScriptAnalysis analyze_with_characters(std::string_view script,
+                                       const std::map<std::string, std::string>& names,
+                                       const std::map<std::string, std::string>& colors) {
     ScriptAnalysis result;
+    result.character_names = names;
+    result.speaker_colors = colors;
     if (script.empty()) return result;
     std::string current_scene = "No label";
     std::string current_global;
@@ -147,6 +187,7 @@ ScriptAnalysis analyze_script(std::string_view script) {
                 if (words) {
                     std::string speaker = alias.empty() ? "narrator" : alias;
                     if (alias == "extend" && !last_speaker.empty()) speaker = last_speaker;
+                    else if (const auto found = names.find(alias); found != names.end()) speaker = found->second;
                     if (alias != "extend") last_speaker = speaker;
                     result.counted.push_back({line_number, speaker, clean_renpy_text(combined), words, current_scene});
                     result.total_words += words;
@@ -161,6 +202,30 @@ ScriptAnalysis analyze_script(std::string_view script) {
     return result;
 }
 
+ScriptAnalysis analyze_script(std::string_view script) {
+    std::map<std::string, std::string> names;
+    std::map<std::string, std::string> colors;
+    parse_characters(script, names, colors);
+    return analyze_with_characters(script, names, colors);
+}
+
+ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts) {
+    std::map<std::string, std::string> names;
+    std::map<std::string, std::string> colors;
+    for (const auto& script : scripts) parse_characters(script.content, names, colors);
+    ScriptAnalysis merged;
+    merged.character_names = names;
+    merged.speaker_colors = colors;
+    for (const auto& script : scripts) {
+        auto item = analyze_with_characters(script.content, names, colors);
+        merged.total_words += item.total_words;
+        merged.dialogue_lines += item.dialogue_lines;
+        merged.script_lines += item.script_lines;
+        merged.counted.insert(merged.counted.end(), item.counted.begin(), item.counted.end());
+    }
+    return merged;
+}
+
 std::string analysis_json(const ScriptAnalysis& analysis) {
     std::ostringstream out;
     out << "{\"totalWords\":" << analysis.total_words << ",\"dialogueLines\":" << analysis.dialogue_lines
@@ -172,7 +237,19 @@ std::string analysis_json(const ScriptAnalysis& analysis) {
             << "\",\"text\":\"" << json_escape(item.text) << "\",\"words\":" << item.words
             << ",\"scene\":\"" << json_escape(item.scene) << "\"}";
     }
-    out << "]}";
+    out << "],\"characterNames\":{";
+    std::size_t field = 0;
+    for (const auto& [alias, name] : analysis.character_names) {
+        if (field++) out << ',';
+        out << '\"' << json_escape(alias) << "\":\"" << json_escape(name) << '\"';
+    }
+    out << "},\"speakerColors\":{";
+    field = 0;
+    for (const auto& [speaker, color] : analysis.speaker_colors) {
+        if (field++) out << ',';
+        out << '\"' << json_escape(speaker) << "\":\"" << json_escape(color) << '\"';
+    }
+    out << "}}";
     return out.str();
 }
 

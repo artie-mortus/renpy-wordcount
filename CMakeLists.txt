@@ -57,4 +57,14 @@ if(BUILD_TESTING)
             -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/simple-dialogue.rpy
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
     )
+    add_test(
+        NAME parser-parity-characters
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/characters/defs.rpy
+            -DFIXTURE2=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/characters/scene.rpy
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
 endif()

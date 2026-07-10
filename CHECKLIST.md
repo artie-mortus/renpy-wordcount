@@ -19,7 +19,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 2.1 — Inventory parser behavior · full · ≤500,000 tok — done 2026-07-10, commit recorded by the Step 2.1 completion commit
 - [x] Step 2.2 — Line tokenizer · full · ≤700,000 tok — done 2026-07-10, commit recorded by the Step 2.2 completion commit
 - [x] Step 2.3 — Core dialogue counting · full · ≤750,000 tok — done 2026-07-10, commit recorded by the Step 2.3 completion commit
-- [ ] Step 2.4 — Character definitions and display names · full · ≤650,000 tok
+- [x] Step 2.4 — Character definitions and display names · full · ≤650,000 tok — done 2026-07-10, commit recorded by the Step 2.4 completion commit
 - [ ] Step 2.5 — Menus and conditioned choices · full · ≤700,000 tok
 - [ ] Step 2.6 — Complete parser fixture translation · full · ≤1,000,000 tok
 - [ ] Step 2.7 — Syntax highlighting · mini · ≤750,000 tok

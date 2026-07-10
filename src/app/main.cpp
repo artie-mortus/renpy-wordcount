@@ -26,14 +26,20 @@ public:
 wxIMPLEMENT_APP_NO_MAIN(SayCountApp);
 
 int main(int argc, char** argv) {
-    if (argc == 3 && std::string_view(argv[1]) == "--dump-json") {
-        std::ifstream input(argv[2], std::ios::binary);
-        if (!input) {
-            std::cerr << "Unable to read " << argv[2] << '\n';
-            return 2;
+    if (argc >= 3 && std::string_view(argv[1]) == "--dump-json") {
+        std::vector<say_count::NamedScript> scripts;
+        for (int index = 2; index < argc; ++index) {
+            std::ifstream input(argv[index], std::ios::binary);
+            if (!input) {
+                std::cerr << "Unable to read " << argv[index] << '\n';
+                return 2;
+            }
+            scripts.push_back({argv[index], std::string((std::istreambuf_iterator<char>(input)),
+                                                        std::istreambuf_iterator<char>())});
         }
-        const std::string script((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-        std::cout << say_count::analysis_json(say_count::analyze_script(script)) << '\n';
+        const auto analysis = scripts.size() == 1 ? say_count::analyze_script(scripts.front().content)
+                                                  : say_count::analyze_project(scripts);
+        std::cout << say_count::analysis_json(analysis) << '\n';
         return 0;
     }
     return wxEntry(argc, argv);

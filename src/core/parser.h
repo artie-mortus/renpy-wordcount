@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <map>
 #include <vector>
 
 namespace say_count {
@@ -20,11 +21,19 @@ struct ScriptAnalysis {
     std::size_t dialogue_lines = 0;
     std::size_t script_lines = 0;
     std::vector<CountedLine> counted;
+    std::map<std::string, std::string> character_names;
+    std::map<std::string, std::string> speaker_colors;
+};
+
+struct NamedScript {
+    std::string name;
+    std::string content;
 };
 
 std::string clean_renpy_text(std::string_view text);
 std::size_t count_words(std::string_view text);
 ScriptAnalysis analyze_script(std::string_view script);
+ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts);
 std::string analysis_json(const ScriptAnalysis& analysis);
 
 }  // namespace say_count
