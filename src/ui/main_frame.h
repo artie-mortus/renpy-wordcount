@@ -19,7 +19,10 @@ private:
     void OnClose(wxCloseEvent& event);
     void OnCloseTab(wxCommandEvent& event);
     void OnNewTab(wxCommandEvent& event);
+    void OnOpen(wxCommandEvent& event);
     void OnQuit(wxCommandEvent& event);
+    void OnSave(wxCommandEvent& event);
+    void OnSaveAs(wxCommandEvent& event);
 
     app::Settings settings_;
     EditorNotebook* notebook_ = nullptr;

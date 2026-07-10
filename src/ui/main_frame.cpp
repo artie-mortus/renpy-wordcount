@@ -2,6 +2,9 @@
 
 #include <wx/aboutdlg.h>
 #include <wx/display.h>
+#include <wx/dnd.h>
+#include <wx/filedlg.h>
+#include <wx/filename.h>
 #include <wx/menu.h>
 
 #include "ui/editor_notebook.h"
@@ -11,6 +14,20 @@ namespace {
 
 constexpr int kDefaultWidth = 1100;
 constexpr int kDefaultHeight = 750;
+
+class ScriptDropTarget final : public wxFileDropTarget {
+public:
+    explicit ScriptDropTarget(EditorNotebook* notebook) : notebook_(notebook) {}
+    bool OnDropFiles(wxCoord, wxCoord, const wxArrayString& filenames) override {
+        std::vector<wxString> scripts;
+        for (const auto& filename : filenames) {
+            if (wxFileName(filename).GetExt().CmpNoCase("rpy") == 0) scripts.push_back(filename);
+        }
+        return !scripts.empty() && notebook_->OpenFiles(scripts);
+    }
+private:
+    EditorNotebook* notebook_;
+};
 
 bool IsGeometryVisible(const wxRect& rectangle) {
     for (unsigned int index = 0; index < wxDisplay::GetCount(); ++index) {
@@ -28,6 +45,7 @@ MainFrame::MainFrame()
     SetMinSize(wxSize(400, 300));
     BuildMenus();
     notebook_ = new EditorNotebook(this);
+    SetDropTarget(new ScriptDropTarget(notebook_));
     CreateStatusBar();
     SetStatusText("Ready");
     RestoreWindow();
@@ -35,6 +53,9 @@ MainFrame::MainFrame()
     Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
     Bind(wxEVT_MENU, &MainFrame::OnQuit, this, wxID_EXIT);
     Bind(wxEVT_MENU, &MainFrame::OnNewTab, this, wxID_NEW);
+    Bind(wxEVT_MENU, &MainFrame::OnOpen, this, wxID_OPEN);
+    Bind(wxEVT_MENU, &MainFrame::OnSave, this, wxID_SAVE);
+    Bind(wxEVT_MENU, &MainFrame::OnSaveAs, this, wxID_SAVEAS);
     Bind(wxEVT_MENU, &MainFrame::OnCloseTab, this, wxID_CLOSE);
     Bind(wxEVT_MENU, &MainFrame::OnAbout, this, wxID_ABOUT);
 }
@@ -42,6 +63,9 @@ MainFrame::MainFrame()
 void MainFrame::BuildMenus() {
     auto* file = new wxMenu();
     file->Append(wxID_NEW, "&New\tCtrl+N", "Create a new tab");
+    file->Append(wxID_OPEN, "&Open…\tCtrl+O", "Open one or more Ren'Py scripts");
+    file->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current script");
+    file->Append(wxID_SAVEAS, "Save &As…\tCtrl+Shift+S", "Save the current script under a new name");
     file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
     file->AppendSeparator();
     file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
@@ -88,6 +112,19 @@ void MainFrame::OnQuit(wxCommandEvent&) {
 void MainFrame::OnNewTab(wxCommandEvent&) {
     notebook_->NewTab();
 }
+
+void MainFrame::OnOpen(wxCommandEvent&) {
+    wxFileDialog dialog(this, "Open Ren'Py scripts", wxEmptyString, wxEmptyString,
+                        "Ren'Py scripts (*.rpy)|*.rpy", wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
+    if (dialog.ShowModal() != wxID_OK) return;
+    wxArrayString paths;
+    dialog.GetPaths(paths);
+    notebook_->OpenFiles({paths.begin(), paths.end()});
+}
+
+void MainFrame::OnSave(wxCommandEvent&) { notebook_->SaveCurrent(); }
+
+void MainFrame::OnSaveAs(wxCommandEvent&) { notebook_->SaveCurrentAs(); }
 
 void MainFrame::OnCloseTab(wxCommandEvent&) {
     notebook_->CloseCurrentTab();
