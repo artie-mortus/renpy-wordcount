@@ -1,5 +1,7 @@
 #include "ui/main_frame.h"
 
+#include <algorithm>
+
 #include <wx/aboutdlg.h>
 #include <wx/display.h>
 #include <wx/dnd.h>
@@ -14,6 +16,15 @@ namespace {
 
 constexpr int kDefaultWidth = 1100;
 constexpr int kDefaultHeight = 750;
+enum MenuId {
+    kToggleWrap = wxID_HIGHEST + 1,
+    kFontIncrease,
+    kFontDecrease,
+    kFontReset,
+    kThemeSystem,
+    kThemeLight,
+    kThemeDark,
+};
 
 class ScriptDropTarget final : public wxFileDropTarget {
 public:
@@ -43,8 +54,9 @@ bool IsGeometryVisible(const wxRect& rectangle) {
 MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, "Say Count", wxDefaultPosition, wxSize(kDefaultWidth, kDefaultHeight)) {
     SetMinSize(wxSize(400, 300));
+    editor_settings_ = settings_.LoadEditor();
     BuildMenus();
-    notebook_ = new EditorNotebook(this);
+    notebook_ = new EditorNotebook(this, editor_settings_);
     SetDropTarget(new ScriptDropTarget(notebook_));
     CreateStatusBar();
     SetStatusText("Ready");
@@ -58,6 +70,9 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnSaveAs, this, wxID_SAVEAS);
     Bind(wxEVT_MENU, &MainFrame::OnCloseTab, this, wxID_CLOSE);
     Bind(wxEVT_MENU, &MainFrame::OnAbout, this, wxID_ABOUT);
+    Bind(wxEVT_MENU, &MainFrame::OnToggleWrap, this, kToggleWrap);
+    Bind(wxEVT_MENU, &MainFrame::OnFontSize, this, kFontIncrease, kFontReset);
+    Bind(wxEVT_MENU, &MainFrame::OnTheme, this, kThemeSystem, kThemeDark);
 }
 
 void MainFrame::BuildMenus() {
@@ -72,6 +87,18 @@ void MainFrame::BuildMenus() {
 
     auto* edit = new wxMenu();
     auto* view = new wxMenu();
+    view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
+    view->Check(kToggleWrap, editor_settings_.word_wrap);
+    view->AppendSeparator();
+    view->Append(kFontIncrease, "Increase Font Size\tCtrl+=");
+    view->Append(kFontDecrease, "Decrease Font Size\tCtrl+-");
+    view->Append(kFontReset, "Reset Font Size\tCtrl+0");
+    auto* theme = new wxMenu();
+    theme->AppendRadioItem(kThemeSystem, "System");
+    theme->AppendRadioItem(kThemeLight, "Light");
+    theme->AppendRadioItem(kThemeDark, "Dark");
+    theme->Check(kThemeSystem + static_cast<int>(editor_settings_.theme), true);
+    view->AppendSubMenu(theme, "Theme");
 
     auto* help = new wxMenu();
     help->Append(wxID_ABOUT, "&About", "About Say Count");
@@ -125,6 +152,27 @@ void MainFrame::OnOpen(wxCommandEvent&) {
 void MainFrame::OnSave(wxCommandEvent&) { notebook_->SaveCurrent(); }
 
 void MainFrame::OnSaveAs(wxCommandEvent&) { notebook_->SaveCurrentAs(); }
+
+void MainFrame::OnToggleWrap(wxCommandEvent& event) {
+    editor_settings_.word_wrap = event.IsChecked();
+    notebook_->SetWordWrap(editor_settings_.word_wrap);
+    settings_.SaveEditor(editor_settings_);
+}
+
+void MainFrame::OnFontSize(wxCommandEvent& event) {
+    if (event.GetId() == kFontIncrease) ++editor_settings_.font_size;
+    else if (event.GetId() == kFontDecrease) --editor_settings_.font_size;
+    else editor_settings_.font_size = 16;
+    editor_settings_.font_size = std::clamp(editor_settings_.font_size, 10, 32);
+    notebook_->SetFontSize(editor_settings_.font_size);
+    settings_.SaveEditor(editor_settings_);
+}
+
+void MainFrame::OnTheme(wxCommandEvent& event) {
+    editor_settings_.theme = static_cast<app::EditorTheme>(event.GetId() - kThemeSystem);
+    notebook_->SetTheme(editor_settings_.theme);
+    settings_.SaveEditor(editor_settings_);
+}
 
 void MainFrame::OnCloseTab(wxCommandEvent&) {
     notebook_->CloseCurrentTab();

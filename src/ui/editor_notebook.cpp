@@ -1,10 +1,13 @@
 #include "ui/editor_notebook.h"
 
+#include <algorithm>
+
 #include <wx/file.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/msgdlg.h>
 #include <wx/stc/stc.h>
+#include <wx/settings.h>
 
 namespace say_count::ui {
 namespace {
@@ -18,9 +21,9 @@ wxString NormalizeTabs(wxString text) {
 
 }  // namespace
 
-EditorNotebook::EditorNotebook(wxWindow* parent)
+EditorNotebook::EditorNotebook(wxWindow* parent, const app::EditorSettings& settings)
     : wxAuiNotebook(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                    wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS) {
+                    wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS), settings_(settings) {
     Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &EditorNotebook::OnPageClose, this);
     Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSED, &EditorNotebook::OnPageClosed, this);
     NewTab();
@@ -28,6 +31,7 @@ EditorNotebook::EditorNotebook(wxWindow* parent)
 
 void EditorNotebook::NewTab() {
     auto* editor = new wxStyledTextCtrl(this, wxID_ANY);
+    ConfigureEditor(editor);
     const wxString title = wxString::Format("scene-%u.rpy", next_untitled_number_++);
     editor->SetName(title);
     editor->SetSavePoint();
@@ -73,6 +77,7 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
         }
 
         auto* editor = new wxStyledTextCtrl(this, wxID_ANY);
+        ConfigureEditor(editor);
         editor->SetText(NormalizeTabs(content));
         SetFilePath(editor, absolute_path);
         editor->SetSavePoint();
@@ -83,6 +88,44 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
         opened = true;
     }
     return opened;
+}
+
+void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
+    editor->SetMarginType(0, wxSTC_MARGIN_NUMBER);
+    editor->SetMarginWidth(0, editor->TextWidth(wxSTC_STYLE_LINENUMBER, "00000") + 8);
+    editor->SetCaretLineVisible(true);
+    editor->SetWrapMode(settings_.word_wrap ? wxSTC_WRAP_WORD : wxSTC_WRAP_NONE);
+    const bool dark = settings_.theme == app::EditorTheme::Dark ||
+                      (settings_.theme == app::EditorTheme::System && wxSystemSettings::GetAppearance().IsDark());
+    const wxColour foreground(dark ? "#f2e9d6" : "#241a2e");
+    const wxColour background(dark ? "#1a142c" : "#fffaea");
+    const wxColour margin(dark ? "#211a33" : "#f5e9c9");
+    editor->StyleSetFont(wxSTC_STYLE_DEFAULT,
+                         wxFont(settings_.font_size, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    editor->StyleSetForeground(wxSTC_STYLE_DEFAULT, foreground);
+    editor->StyleSetBackground(wxSTC_STYLE_DEFAULT, background);
+    editor->StyleClearAll();
+    editor->StyleSetForeground(wxSTC_STYLE_LINENUMBER, dark ? wxColour("#9a91a7") : wxColour("#756a77"));
+    editor->StyleSetBackground(wxSTC_STYLE_LINENUMBER, margin);
+    editor->SetCaretForeground(foreground);
+    editor->SetCaretLineBackground(dark ? wxColour("#281f3d") : wxColour("#f5e9c9"));
+    editor->SetSelBackground(true, dark ? wxColour("#6b542d") : wxColour("#ead39c"));
+}
+
+void EditorNotebook::SetWordWrap(bool enabled) {
+    settings_.word_wrap = enabled;
+    for (size_t i = 0; i < GetPageCount(); ++i)
+        EditorAt(i)->SetWrapMode(enabled ? wxSTC_WRAP_WORD : wxSTC_WRAP_NONE);
+}
+
+void EditorNotebook::SetFontSize(int size) {
+    settings_.font_size = std::clamp(size, 10, 32);
+    for (size_t i = 0; i < GetPageCount(); ++i) ConfigureEditor(EditorAt(i));
+}
+
+void EditorNotebook::SetTheme(app::EditorTheme theme) {
+    settings_.theme = theme;
+    for (size_t i = 0; i < GetPageCount(); ++i) ConfigureEditor(EditorAt(i));
 }
 
 bool EditorNotebook::SaveEditor(wxStyledTextCtrl* editor, const wxString& path) {

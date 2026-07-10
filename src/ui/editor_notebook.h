@@ -5,6 +5,8 @@
 
 #include <vector>
 
+#include "app/settings.h"
+
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
 
@@ -12,7 +14,7 @@ namespace say_count::ui {
 
 class EditorNotebook final : public wxAuiNotebook {
 public:
-    explicit EditorNotebook(wxWindow* parent);
+    EditorNotebook(wxWindow* parent, const app::EditorSettings& settings);
 
     void NewTab();
     bool OpenFiles(const std::vector<wxString>& paths);
@@ -20,6 +22,9 @@ public:
     bool SaveCurrentAs();
     void CloseCurrentTab();
     bool ConfirmCloseAll();
+    void SetWordWrap(bool enabled);
+    void SetFontSize(int size);
+    void SetTheme(app::EditorTheme theme);
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;
@@ -27,12 +32,14 @@ private:
     void SetFilePath(wxStyledTextCtrl* editor, const wxString& path);
     bool SaveEditor(wxStyledTextCtrl* editor, const wxString& path);
     bool ConfirmDiscard(size_t index);
+    void ConfigureEditor(wxStyledTextCtrl* editor);
     void UpdateTabLabel(wxStyledTextCtrl* editor);
     void OnPageClose(wxAuiNotebookEvent& event);
     void OnPageClosed(wxAuiNotebookEvent& event);
     void OnSavePointChanged(wxStyledTextEvent& event);
 
     unsigned int next_untitled_number_ = 1;
+    app::EditorSettings settings_;
 };
 
 }  // namespace say_count::ui

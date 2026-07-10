@@ -23,9 +23,13 @@ private:
     void OnQuit(wxCommandEvent& event);
     void OnSave(wxCommandEvent& event);
     void OnSaveAs(wxCommandEvent& event);
+    void OnToggleWrap(wxCommandEvent& event);
+    void OnFontSize(wxCommandEvent& event);
+    void OnTheme(wxCommandEvent& event);
 
     app::Settings settings_;
     EditorNotebook* notebook_ = nullptr;
+    app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
 };
 
