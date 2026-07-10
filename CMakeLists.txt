@@ -10,6 +10,7 @@ find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base stc aui adv html xml)
 include(${wxWidgets_USE_FILE})
 
 add_library(say_count_core STATIC
+    src/core/tokenizer.cpp
     src/core/version.cpp
 )
 target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -35,7 +36,10 @@ if(BUILD_TESTING)
     )
     FetchContent_MakeAvailable(Catch2)
 
-    add_executable(say-count-tests tests/core_smoke_test.cpp)
+    add_executable(say-count-tests
+        tests/core_smoke_test.cpp
+        tests/tokenizer_test.cpp
+    )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 
     include(Catch)
