@@ -15,6 +15,17 @@ struct CountedLine {
     std::size_t words = 0;
     std::string scene;
     bool is_menu_choice = false;
+    std::string raw;
+    std::string alias;
+    bool unknown_speaker = false;
+    bool is_extend = false;
+};
+
+struct ParserWarning {
+    std::string type;
+    std::size_t line_number = 0;
+    std::string file;
+    std::string message;
 };
 
 struct ScriptAnalysis {
@@ -24,6 +35,7 @@ struct ScriptAnalysis {
     std::vector<CountedLine> counted;
     std::map<std::string, std::string> character_names;
     std::map<std::string, std::string> speaker_colors;
+    std::vector<ParserWarning> warnings;
 };
 
 struct NamedScript {
@@ -33,6 +45,8 @@ struct NamedScript {
 
 struct AnalysisOptions {
     bool count_menu_choices = false;
+    std::string file_name;
+    std::size_t long_line_words = 35;
 };
 
 std::string clean_renpy_text(std::string_view text);

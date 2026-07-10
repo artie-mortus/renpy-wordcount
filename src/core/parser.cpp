@@ -3,9 +3,11 @@
 #include "core/tokenizer.h"
 #include "core/unicode_word_ranges.h"
 
+#include <algorithm>
 #include <cctype>
 #include <regex>
 #include <sstream>
+#include <optional>
 #include <unordered_set>
 
 namespace say_count {
@@ -71,6 +73,47 @@ std::string label_name(const TokenizedLine& line) {
     if (paren != std::string::npos) value.resize(paren);
     while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.pop_back();
     return value;
+}
+
+std::string_view trim_view(std::string_view value) {
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.remove_prefix(1);
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.remove_suffix(1);
+    return value;
+}
+
+std::size_t raw_indentation(std::string_view value) {
+    std::size_t result = 0;
+    while (result < value.size() && (value[result] == ' ' || value[result] == '\t')) ++result;
+    return result;
+}
+
+bool opens_ignored_block(std::string_view code) {
+    static const std::regex block(
+        R"(^(?:init(?:\s+-?\d+)?\s*:|(?:init(?:\s+-?\d+)?\s+)?python\b[^:]*:|(?:screen|transform|style|image)\b[^:]*:)$)");
+    return std::regex_match(code.begin(), code.end(), block);
+}
+
+bool identifier(char c, bool first) {
+    const auto byte = static_cast<unsigned char>(c);
+    return first ? (std::isalpha(byte) || c == '_') : (std::isalnum(byte) || c == '_');
+}
+
+bool monologue_prefix(std::string_view before, std::string& alias) {
+    before = trim_view(before);
+    if (before.empty()) return true;
+    std::size_t offset = 0;
+    bool first_word = true;
+    while (offset < before.size()) {
+        if (!identifier(before[offset], true)) return false;
+        const auto begin = offset++;
+        while (offset < before.size() && identifier(before[offset], false)) ++offset;
+        if (first_word) alias = std::string(before.substr(begin, offset - begin));
+        first_word = false;
+        while (offset < before.size() && std::isspace(static_cast<unsigned char>(before[offset]))) ++offset;
+    }
+    std::string lowered = alias;
+    for (char& c : lowered) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return !ignored.count(lowered);
 }
 
 void parse_characters(std::string_view script, std::map<std::string, std::string>& names,
@@ -163,6 +206,45 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
     std::string current_scene = "No label";
     std::string current_global;
     std::string last_speaker;
+    std::size_t skip_indent = std::string_view::npos;
+    struct Monologue { std::string alias; std::size_t start_line; std::vector<std::string> lines; };
+    std::optional<Monologue> monologue;
+
+    auto warn = [&](std::string type, std::size_t line, std::string message) {
+        result.warnings.push_back({std::move(type), line, options.file_name, std::move(message)});
+    };
+    auto record = [&](std::size_t number, std::string alias, std::string text, std::string raw,
+                      bool menu_choice, bool is_extend) {
+        const auto words = count_words(text);
+        if (!words) return;
+        const bool unknown = !alias.empty() && !menu_choice && !is_extend && !names.count(alias);
+        std::string speaker = menu_choice ? "menu choice" : alias.empty() ? "narrator" : alias;
+        if (is_extend && !last_speaker.empty()) speaker = last_speaker;
+        else if (const auto found = names.find(alias); found != names.end()) speaker = found->second;
+        if (!is_extend && !menu_choice) last_speaker = speaker;
+        result.counted.push_back({number, speaker, clean_renpy_text(text), words, current_scene,
+                                  menu_choice, std::move(raw), alias, unknown, is_extend});
+        result.total_words += words;
+        if (unknown) warn("speaker", number, "Unknown speaker alias \"" + alias +
+                          "\". Add define " + alias + " = Character(...).");
+        if (words > options.long_line_words)
+            warn("length", number, "Long dialogue line: " + std::to_string(words) + " words.");
+    };
+    auto flush_monologue = [&] {
+        std::vector<std::string> paragraph;
+        std::size_t paragraph_start = 0;
+        auto flush = [&] {
+            std::string text;
+            for (const auto& part : paragraph) { if (!text.empty()) text.push_back(' '); text += part; }
+            record(monologue->start_line + paragraph_start, monologue->alias, text, text, false, false);
+            paragraph.clear();
+        };
+        for (std::size_t i = 0; i < monologue->lines.size(); ++i) {
+            if (trim_view(monologue->lines[i]).empty()) flush();
+            else { if (paragraph.empty()) paragraph_start = i; paragraph.push_back(monologue->lines[i]); }
+        }
+        flush();
+    };
     std::size_t start = 0;
     std::size_t line_number = 1;
     while (start <= script.size()) {
@@ -170,14 +252,59 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
         auto raw = script.substr(start, newline == std::string_view::npos ? script.size() - start : newline - start);
         if (!raw.empty() && raw.back() == '\r') raw.remove_suffix(1);
         ++result.script_lines;
+        if (monologue) {
+            const auto close = raw.find("\"\"\"");
+            if (close == std::string_view::npos) monologue->lines.emplace_back(raw);
+            else {
+                monologue->lines.emplace_back(raw.substr(0, close));
+                flush_monologue();
+                monologue.reset();
+            }
+            if (newline == std::string_view::npos) break;
+            start = newline + 1;
+            ++line_number;
+            continue;
+        }
         const auto token = tokenize_line(raw, line_number);
+        const auto code = trim_view(token.code);
+        if (skip_indent != std::string_view::npos) {
+            if (code.empty() || raw_indentation(raw) > skip_indent) {
+                if (newline == std::string_view::npos) break;
+                start = newline + 1; ++line_number; continue;
+            }
+            skip_indent = std::string_view::npos;
+        }
         if (token.type == LineType::Label) {
             auto name = label_name(token);
             if (!name.empty() && name.front() == '.' && !current_global.empty()) name = current_global + name;
             else if (!name.empty() && name.front() != '.') current_global = name;
             current_scene = name;
-        } else if (token.type == LineType::Dialogue || token.type == LineType::Narration) {
-            const std::string alias = token.type == LineType::Narration ? "" : token.keyword;
+        } else if (opens_ignored_block(code)) {
+            skip_indent = raw_indentation(raw);
+        } else {
+            const auto triple = code.find("\"\"\"");
+            std::string triple_alias;
+            if (triple != std::string_view::npos && (code.empty() || code.front() != '$') &&
+                monologue_prefix(code.substr(0, triple), triple_alias)) {
+                auto rest = code.substr(triple + 3);
+                const auto close = rest.find("\"\"\"");
+                monologue = Monologue{triple_alias, line_number, {}};
+                monologue->lines.emplace_back(rest.substr(0, close));
+                if (close != std::string_view::npos) { flush_monologue(); monologue.reset(); }
+            } else {
+                const bool unclosed_quote = std::any_of(token.quoted.begin(), token.quoted.end(),
+                    [](const QuotedSegment& segment) { return !segment.closed; });
+                if (unclosed_quote) {
+                warn("quote", line_number, "Unmatched quote; line may be ignored.");
+                }
+                const bool has_closed_quote = std::any_of(token.quoted.begin(), token.quoted.end(),
+                    [](const QuotedSegment& segment) { return segment.closed; });
+                const bool narration = token.type == LineType::Malformed && has_closed_quote &&
+                    token.quoted.front().begin == 0;
+                const bool dialogue = token.type == LineType::Malformed && has_closed_quote &&
+                    token.quoted.front().begin != 0;
+                if (token.type == LineType::Dialogue || token.type == LineType::Narration || dialogue || narration) {
+            const std::string alias = narration || token.type == LineType::Narration ? "" : token.keyword;
             const bool menu_choice = token.type == LineType::Narration && !token.quoted.empty() &&
                 token.quoted.front().begin == 0 && token.quoted.front().closed &&
                 [&] {
@@ -191,24 +318,22 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
             if (!ignored.count(alias) && (!menu_choice || options.count_menu_choices)) {
                 std::string combined;
                 for (const auto& quote : token.quoted) {
+                    if (!quote.closed) continue;
                     if (!combined.empty()) combined.push_back(' ');
                     combined += quote.text;
                 }
-                const auto words = count_words(combined);
-                if (words) {
-                    std::string speaker = menu_choice ? "menu choice" : alias.empty() ? "narrator" : alias;
-                    if (alias == "extend" && !last_speaker.empty()) speaker = last_speaker;
-                    else if (const auto found = names.find(alias); found != names.end()) speaker = found->second;
-                    if (alias != "extend" && !menu_choice) last_speaker = speaker;
-                    result.counted.push_back({line_number, speaker, clean_renpy_text(combined), words,
-                                              current_scene, menu_choice});
-                    result.total_words += words;
-                }
+                record(line_number, alias, combined, std::string(raw), menu_choice, alias == "extend");
+            }
+            }
             }
         }
         if (newline == std::string_view::npos) break;
         start = newline + 1;
         ++line_number;
+    }
+    if (monologue) {
+        warn("quote", monologue->start_line, "Unclosed \"\"\" monologue.");
+        flush_monologue();
     }
     result.dialogue_lines = result.counted.size();
     return result;
@@ -229,11 +354,14 @@ ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts, Analysis
     merged.character_names = names;
     merged.speaker_colors = colors;
     for (const auto& script : scripts) {
-        auto item = analyze_with_characters(script.content, names, colors, options);
+        auto file_options = options;
+        file_options.file_name = script.name;
+        auto item = analyze_with_characters(script.content, names, colors, file_options);
         merged.total_words += item.total_words;
         merged.dialogue_lines += item.dialogue_lines;
         merged.script_lines += item.script_lines;
         merged.counted.insert(merged.counted.end(), item.counted.begin(), item.counted.end());
+        merged.warnings.insert(merged.warnings.end(), item.warnings.begin(), item.warnings.end());
     }
     return merged;
 }

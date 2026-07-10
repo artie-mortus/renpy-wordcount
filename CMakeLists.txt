@@ -86,4 +86,15 @@ if(BUILD_TESTING)
             -DCOUNT_MENU_CHOICES=ON
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
     )
+    foreach(parity_fixture IN ITEMS ignored-blocks monologues)
+        add_test(
+            NAME parser-parity-${parity_fixture}
+            COMMAND ${CMAKE_COMMAND}
+                -DNODE=${NODE_EXECUTABLE}
+                -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+                -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+                -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/${parity_fixture}.rpy
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+        )
+    endforeach()
 endif()
