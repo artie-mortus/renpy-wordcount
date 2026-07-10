@@ -4,6 +4,8 @@
 #include <wx/display.h>
 #include <wx/menu.h>
 
+#include "ui/editor_notebook.h"
+
 namespace say_count::ui {
 namespace {
 
@@ -25,17 +27,23 @@ MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, "Say Count", wxDefaultPosition, wxSize(kDefaultWidth, kDefaultHeight)) {
     SetMinSize(wxSize(400, 300));
     BuildMenus();
+    notebook_ = new EditorNotebook(this);
     CreateStatusBar();
     SetStatusText("Ready");
     RestoreWindow();
 
     Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
     Bind(wxEVT_MENU, &MainFrame::OnQuit, this, wxID_EXIT);
+    Bind(wxEVT_MENU, &MainFrame::OnNewTab, this, wxID_NEW);
+    Bind(wxEVT_MENU, &MainFrame::OnCloseTab, this, wxID_CLOSE);
     Bind(wxEVT_MENU, &MainFrame::OnAbout, this, wxID_ABOUT);
 }
 
 void MainFrame::BuildMenus() {
     auto* file = new wxMenu();
+    file->Append(wxID_NEW, "&New\tCtrl+N", "Create a new tab");
+    file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
+    file->AppendSeparator();
     file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
 
     auto* edit = new wxMenu();
@@ -74,7 +82,15 @@ void MainFrame::RestoreWindow() {
 }
 
 void MainFrame::OnQuit(wxCommandEvent&) {
-    Close(true);
+    Close();
+}
+
+void MainFrame::OnNewTab(wxCommandEvent&) {
+    notebook_->NewTab();
+}
+
+void MainFrame::OnCloseTab(wxCommandEvent&) {
+    notebook_->CloseCurrentTab();
 }
 
 void MainFrame::OnAbout(wxCommandEvent&) {
@@ -86,6 +102,10 @@ void MainFrame::OnAbout(wxCommandEvent&) {
 }
 
 void MainFrame::OnClose(wxCloseEvent& event) {
+    if (event.CanVeto() && !notebook_->ConfirmCloseAll()) {
+        event.Veto();
+        return;
+    }
     const bool maximized = IsMaximized();
     if (!maximized && !IsIconized()) {
         normal_geometry_ = GetRect();
