@@ -11,8 +11,8 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 
 - [x] Step 1.1 — Main window and application lifecycle · mini · ≤450,000 tok — done 2026-07-10, commit `044a962`
 - [x] Step 1.2 — Notebook and editor tabs · mini · ≤500,000 tok — done 2026-07-10, commit `f0f55a0`
-- [x] Step 1.3 — File opening and saving · mini · ≤600,000 tok — done 2026-07-10, commit `5d4b8d0`
-- [x] Step 1.4 — Basic editor configuration · mini · ≤450,000 tok — done 2026-07-10
+- [x] Step 1.3 — File opening and saving · mini · ≤600,000 tok — done 2026-07-10, commit `0df78a0`
+- [x] Step 1.4 — Basic editor configuration · mini · ≤450,000 tok — done 2026-07-10, commit `d89b86d`
 
 ## Phase 2 — Tokenizer and parser
 
