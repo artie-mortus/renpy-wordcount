@@ -19,6 +19,7 @@ Native C++17 / wxWidgets rewrite of Say Count (Ren'Py script word counter). The 
 
 - One step per session, dispatched to Codex CLI (`codex exec -m gpt-5.6-sol -c model_reasoning_effort=low --sandbox workspace-write`), then reviewed by Claude. See the plan repo's `CLAUDE.md` for the full orchestration rules.
 - Codex sandbox limits (observed): no network (Catch2 FetchContent fails — run configure outside sandbox) and `.git` mounted read-only (Claude commits on Codex's behalf).
+- Model name is `gpt-5.6-sol` — `gpt-6-sol` does not exist on this account and 400s. Account models: `gpt-5.5`, `gpt-5.6-sol` (config default already `gpt-5.6-sol` + low effort).
 - `wip:` commits during a step; squash to one commit at step end; then update `STATUS.md` (≤40 lines) and tick the step in `CHECKLIST.md` with the commit hash.
 - Record architectural choices in `DECISIONS.md`; tick features in `PARITY-CHECKLIST.md` as they land.
 
