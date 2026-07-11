@@ -20,7 +20,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 14 | counts dialogue/narration words, not labels, definitions, jumps, variables, comments, or scene commands | Pending |
 | 15 | optional menu choice counting (including conditioned choices) | Pending |
 | 16 | `extend` lines attributed to the previous speaker | Pending |
-| 17 | speaker breakdown with talk-time balance bars | Pending |
+| 17 | speaker breakdown with talk-time balance bars | Done — Step 3.3 (`414ab59`): dockable panel, words-desc ordering, swatches, percentages, balance bars |
 | 18 | per-character and per-scene dialogue word and line targets | Pending |
 | 19 | uses `define e = Character("Eileen")` names instead of `e` aliases | Pending |
 | 20 | total word and line target progress | Pending |
