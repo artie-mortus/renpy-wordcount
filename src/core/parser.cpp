@@ -512,7 +512,15 @@ std::string analysis_json(const ScriptAnalysis& analysis) {
         if (field++) out << ',';
         out << '\"' << json_escape(speaker) << "\":\"" << json_escape(color) << '\"';
     }
-    out << "}}";
+    out << "},\"warnings\":[";
+    for (std::size_t i = 0; i < analysis.warnings.size(); ++i) {
+        if (i) out << ',';
+        const auto& warning = analysis.warnings[i];
+        out << "{\"type\":\"" << json_escape(warning.type) << "\",\"file\":\""
+            << json_escape(warning.file) << "\",\"lineNumber\":" << warning.line_number
+            << ",\"message\":\"" << json_escape(warning.message) << "\"}";
+    }
+    out << "]}";
     return out.str();
 }
 

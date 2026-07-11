@@ -1,18 +1,15 @@
 # Status
 
-- Completed: Steps 0.1 through 2.5, Step 2.6A, and Step 2.6B.
-- Step 2.6B: project analysis resolves cross-file character definitions and caches unchanged per-file analysis results.
-- Project cache invalidates on file content, merged character definitions/colors, menu-count mode, and long-line threshold changes; closed-file entries are pruned.
-- Project `count_menu_choices` now remains covered at both script and project levels.
-- Project lint reports duplicate labels, missing jump/call targets, malformed labels/statements, and empty blocks.
-- Lint and dialogue analysis qualify local labels against the current global label; `call screen` is not treated as a label reference.
-- Python block contents remain opaque to project lint, including jump-like and label-like text.
-- Writer warnings are suppressed for `gui.rpy`, `options.rpy`, `screens.rpy`, and `say_count_runtime.rpy`, including path/case variants; those files still participate in label resolution.
-- Added Catch2 translations for all fixtures assigned to 2.6B and JS/native JSON parity for local-label qualification.
-- Route analysis and branch totals remain untouched for their later phase; symbol collection/rename fixtures remain out of scope.
-- Verified (2026-07-11): `cmake --build build -j` succeeded.
-- Review fix (2026-07-11): bare `label:` lines now emit the malformed-label syntax warning (`^label\b`, matching JS `analysis.js:70`); divergence confirmed against the live JS parser and covered by a regression test.
-- Verified (2026-07-11): `ctest --test-dir build --output-on-failure` passed 29/29 tests, including seven JS/native parity cases.
-- Verified (2026-07-11): `git diff --check` passed; reference JavaScript repository was not modified.
-- Known issues: none for Step 2.6B.
-- Next step: 2.6C parity closeout.
+- Completed: Steps 0.1 through 2.6, including Step 2.6C parity closeout.
+- Audited all 20 `test/parser.test.js` fixtures: 16 map to Catch2 coverage and four are explicitly deferred.
+- Deferred route-analysis fixtures to Phase 7 Steps 7.1/7.2 and symbol collection/rename fixtures to Step 5.7; no later-step features were implemented.
+- JavaScript and native parity dumps now append byte-identical warning objects with ordered `type`, `file`, `lineNumber`, and `message` fields.
+- The JavaScript dump uses the real `analysis.js` project linter, so parity covers parser warnings and project lint rather than totals alone.
+- Added warning parity fixtures for duplicate labels, missing targets, malformed labels, missing colons, empty blocks, unmatched quotes, unknown speakers, long lines, and support-file suppression/label participation through `FIXTURE2`.
+- Existing parity JSON keys and counted-line output remain unchanged.
+- Updated the parser behavior inventory with an exact JavaScript-to-Catch2 translation-status table.
+- Recorded Step 2.6 fixture deferrals and warning-parity output decisions in `DECISIONS.md`.
+- Verified (2026-07-11): `cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j` succeeded.
+- Verified (2026-07-11): `ctest --test-dir build --output-on-failure` passed 32/32 tests; all ten parity diffs were empty.
+- Known issues: none for Step 2.6C.
+- Next step: 2.7 syntax highlighting.

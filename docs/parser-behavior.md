@@ -123,32 +123,33 @@ speakers, quoted spans as strings, and the suffix after the parser's code part a
 a comment. Output escaping and highlight cache behavior are UI concerns rather
 than parser behavior.
 
-## JavaScript fixture coverage map
+## JavaScript fixture translation status
 
-Every fixture in `test/parser.test.js` is represented below.
+Every `test()` in `test/parser.test.js` is mapped to its Catch2 translation or
+an explicit later-step deferral. Catch2 names are quoted exactly.
 
-| Fixture | Contract section(s) |
+| JavaScript fixture name | Catch2 test name or deferral |
 |---|---|
-| dialogue and non-dialogue classification | Normal line classification |
-| menu choices and unknown aliases | Normal line classification |
-| word count and Ren'Py markup | Text preprocessing and words |
-| character names and colors | Character definitions and colors |
-| labels, extend, and warnings | Script state; Results and warnings |
-| ignored Ren'Py code blocks | Script state, labels, and blocks |
-| monologue dialogue | Triple-quoted monologues |
-| cross-file definitions and cached results | Character definitions and colors |
-| cache invalidation | Character definitions and colors |
-| project menu-choice totals | Normal line classification |
-| duplicate labels and missing targets | Results and warnings |
-| local labels and `call screen` | Script state; Results and warnings |
-| local labels in analysis and routes | Script state; Route dependencies |
-| malformed statements and empty blocks | Results and warnings |
-| jump-like Python text | Script state; Results and warnings |
-| warning-filtered support files | Results and warnings |
-| route menu and conditional branches | Route dependencies |
-| inline branch word totals | Route dependencies |
-| symbol collection and rename preview | Out of parser scope; later project tooling |
-| symbol cache refresh and closed files | Out of parser scope; later project tooling |
+| `classifyLine counts dialogue and ignores non-dialogue` | `parser counts dialogue and narration but ignores code` |
+| `classifyLine handles menu choices and unknown aliases` | `menu choices can be ignored or counted`; `parser reports quote speaker and long-line warnings` |
+| `countWords and cleanRenpyText handle RenPy text markup` | `word cleaning matches simple JavaScript fixtures` |
+| `parseCharacterNames and parseCharacterColors extract aliases and colors` | `character definitions resolve names and colors` |
+| `analyzeScript attributes labels, extend lines, and warnings` | `parser counts dialogue and narration but ignores code`; `extend inherits the previous speaker`; `parser reports quote speaker and long-line warnings` |
+| `analyzeScript ignores RenPy code blocks` | `parser ignores indented RenPy implementation blocks` |
+| `analyzeScript counts RenPy monologue dialogue` | `parser counts RenPy triple-quoted monologues` |
+| `analyzeProject resolves cross-file defines and reuses cached file results` | `project character definitions resolve across files`; `project analysis resolves definitions and invalidates changed inputs` |
+| `analyzeProject invalidates caches for content and define changes` | `project analysis resolves definitions and invalidates changed inputs` |
+| `analyzeProject countMenuChoices changes menu totals` | `project analysis option counts menu choices` |
+| `analyzeProject reports duplicate labels and missing flow targets` | `project lint resolves global and local flow targets` |
+| `project lint understands local labels and call screen` | `project lint resolves global and local flow targets` |
+| `analysis and routes qualify local labels` | `project lint resolves global and local flow targets` (analysis/local-scene assertions; route implementation remains Phase 7 work) |
+| `project lint reports malformed statements and empty blocks` | `project lint reports malformed statements and empty blocks` |
+| `project lint ignores jump-like text inside Python blocks` | `project lint ignores Python contents` |
+| `warnings ignore RenPy support files but still check authored scripts` | `project warnings exclude generated RenPy support files` |
+| `route analysis records inline menu and conditional branches` | Deferred to Phase 7, Step 7.1 |
+| `branch totals report dialogue inside menu choices and conditions` | Deferred to Phase 7, Step 7.2 |
+| `RenPy symbol collection and rename preview stay in supported contexts` | Deferred to Step 5.7 |
+| `RenPy symbol collection refreshes changed files and drops closed files` | Deferred to Step 5.7 |
 
 The five `test/highlight.test.js` fixtures cover safe HTML escaping/template
 composition, escaped dialogue markup, keyword/code/comment/speaker styling, line

@@ -1,5 +1,8 @@
 import fs from 'node:fs';
-import Parser from '../../words-til-vn/parser.js';
+
+globalThis.window = globalThis;
+await import('../../words-til-vn/analysis.js');
+const { default: Parser } = await import('../../words-til-vn/parser.js');
 
 const ignoredStarters = new Set([
   'define', 'default', 'image', 'scene', 'show', 'hide', 'play', 'stop', 'queue',
@@ -8,7 +11,7 @@ const ignoredStarters = new Set([
   'camera', 'old', 'new', 'translate', 'menu', 'pass', 'set', 'zorder', 'onlayer',
 ]);
 
-const parser = Parser.create({ ignoredStarters });
+const parser = Parser.create({ ignoredStarters, lintProject: globalThis.SayCountAnalysis.lintProject });
 const countMenuChoices = process.argv[2] === '--count-menu-choices';
 const files = process.argv.slice(countMenuChoices ? 3 : 2).map(name => ({ name, content: fs.readFileSync(name, 'utf8') }));
 const options = { countMenuChoices };
@@ -21,5 +24,7 @@ const output = {
     ({ lineNumber, speaker, text, words, scene, isMenuChoice: Boolean(isMenuChoice) })),
   characterNames: Object.fromEntries([...(result.characterNames || [])].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
   speakerColors: Object.fromEntries([...(result.speakerColors || [])].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)),
+  warnings: result.warnings.map(({ type, file, lineNumber, message }) =>
+    ({ type, file, lineNumber, message })),
 };
 process.stdout.write(`${JSON.stringify(output)}\n`);

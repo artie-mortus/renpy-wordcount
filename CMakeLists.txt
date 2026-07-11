@@ -97,4 +97,33 @@ if(BUILD_TESTING)
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
         )
     endforeach()
+    add_test(
+        NAME parser-parity-warning-lint
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/warning-lint.rpy
+            -DFIXTURE2=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/warning-lint-helper.rpy
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
+    add_test(
+        NAME parser-parity-warning-parser
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/warning-parser.rpy
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
+    add_test(
+        NAME parser-parity-warning-support-files
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/warning-support/script.rpy
+            -DFIXTURE2=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/warning-support/gui.rpy
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
 endif()
