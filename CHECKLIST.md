@@ -22,7 +22,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 2.4 — Character definitions and display names · full · ≤650,000 tok — done 2026-07-10, commit recorded by the Step 2.4 completion commit
 - [x] Step 2.5 — Menus and conditioned choices · full · ≤700,000 tok — done 2026-07-10, commit recorded by the Step 2.5 completion commit
 - [x] Step 2.6 — Complete parser fixture translation · full · ≤1,000,000 tok — done 2026-07-11: 2.6A `cef918c`, 2.6B `8725ec7`, 2.6C `a4fa8a8` (route/symbol fixtures deferred to 7.1/7.2/5.7 per DECISIONS.md)
-- [x] Step 2.7 — Syntax highlighting · mini · ≤750,000 tok — done 2026-07-11, commit noted below
+- [x] Step 2.7 — Syntax highlighting · mini · ≤750,000 tok — done 2026-07-11, commit `ddc9ea1`
 
 ## Phase 3 — Core analysis and statistics
 
