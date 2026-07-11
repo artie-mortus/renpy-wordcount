@@ -153,3 +153,68 @@ TEST_CASE("parser counts RenPy triple-quoted monologues") {
     REQUIRE(extended.counted.size() == 2);
     CHECK(extended.counted[1].speaker == "e");
 }
+
+TEST_CASE("project analysis resolves definitions and invalidates changed inputs") {
+    const std::vector<say_count::NamedScript> files = {
+        {"defs.rpy", "define e = Character(\"Eileen\")"}, {"scene.rpy", "label start:\ne \"Hello.\""}};
+    const auto first = say_count::analyze_project(files);
+    const auto second = say_count::analyze_project(files);
+    REQUIRE(first.counted.size() == 1);
+    CHECK(first.counted[0].speaker == "Eileen");
+    CHECK(second.counted[0].speaker == "Eileen");
+    CHECK(std::none_of(first.warnings.begin(), first.warnings.end(), [](const auto& w) { return w.type == "speaker"; }));
+    CHECK(say_count::analyze_project({files[0], {"scene.rpy", files[1].content + "\ne \"Again.\""}}).total_words != first.total_words);
+    const auto no_define = say_count::analyze_project({{"defs.rpy", ""}, files[1]});
+    CHECK(std::any_of(no_define.warnings.begin(), no_define.warnings.end(), [](const auto& w) { return w.type == "speaker"; }));
+}
+
+TEST_CASE("project analysis option counts menu choices") {
+    const std::vector<say_count::NamedScript> files = {{"menu.rpy", "menu:\n    \"Choice text\":\n        \"Narration.\""}};
+    CHECK(say_count::analyze_project(files).total_words == 1);
+    const auto counted = say_count::analyze_project(files, say_count::AnalysisOptions{true});
+    CHECK(counted.total_words == 3);
+    CHECK(std::any_of(counted.counted.begin(), counted.counted.end(), [](const auto& line) { return line.is_menu_choice; }));
+}
+
+TEST_CASE("project lint resolves global and local flow targets") {
+    const auto broken = say_count::analyze_project({{"a.rpy", "label start:\njump missing\nlabel start:\n    \"Hi.\""}});
+    CHECK(std::any_of(broken.warnings.begin(), broken.warnings.end(), [](const auto& w) { return w.type == "duplicate-label"; }));
+    CHECK(std::any_of(broken.warnings.begin(), broken.warnings.end(), [](const auto& w) { return w.type == "missing-label" && w.message.find("missing") != std::string::npos; }));
+
+    const auto local = say_count::analyze_project({{"story.rpy", "label start:\n    call screen inventory\n    jump .done\n\nlabel .done:\n    return"}});
+    CHECK(std::none_of(local.warnings.begin(), local.warnings.end(), [](const auto& w) { return w.type == "missing-label"; }));
+    const auto scenes = say_count::analyze_project({{"story.rpy", "label start:\n    \"Opening.\"\n    jump .ending\nlabel .ending:\n    \"Finish.\""}});
+    REQUIRE(scenes.counted.size() == 2);
+    CHECK(scenes.counted[0].scene == "start");
+    CHECK(scenes.counted[1].scene == "start.ending");
+}
+
+TEST_CASE("project lint reports malformed statements and empty blocks") {
+    const auto result = say_count::analyze_project({{"broken.rpy", "label broken\njump\nif flag\nlabel empty:\nlabel next:\n    return"}});
+    CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.type == "syntax" && w.message.find("label") != std::string::npos; }));
+    CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.type == "syntax" && w.message.find("requires a target") != std::string::npos; }));
+    CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.type == "syntax" && w.message.find("colon") != std::string::npos; }));
+    CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.type == "empty-block" && w.line_number == 4; }));
+}
+
+TEST_CASE("project lint flags bare label statements like the JS parser") {
+    const auto result = say_count::analyze_project({{"edge.rpy", "label:\nlabel start:\n    return"}});
+    CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) {
+        return w.type == "syntax" && w.line_number == 1 && w.message.find("label") != std::string::npos; }));
+}
+
+TEST_CASE("project lint ignores Python contents") {
+    const auto result = say_count::analyze_project({{"python.rpy", "init python:\n    jump nowhere\n    label also_not_renpy\nlabel start:\n    return"}});
+    CHECK(std::none_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.type == "missing-label" || w.type == "syntax"; }));
+}
+
+TEST_CASE("project warnings exclude generated RenPy support files") {
+    const auto result = say_count::analyze_project({
+        {"gui.rpy", "label broken\njump"}, {"options.rpy", "q \"Unknown speaker.\""},
+        {"screens.rpy", "if broken"}, {"script.rpy", "label start:\n    q \"Warn here.\""},
+        {"chapter_two.rpy", "label malformed"}});
+    CHECK(std::none_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) {
+        return w.file == "gui.rpy" || w.file == "options.rpy" || w.file == "screens.rpy"; }));
+    CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.file == "script.rpy"; }));
+    CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.file == "chapter_two.rpy"; }));
+}

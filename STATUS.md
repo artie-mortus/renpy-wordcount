@@ -1,24 +1,18 @@
 # Status
 
-- Completed: Steps 0.1 through 2.5 plus Step 2.6A — parser fixture translation remains in progress.
-- Step 2.6A: added parser warnings (quote, unknown speaker, long line), ignored-block/dedent handling, and same-line/multiline/unclosed triple-quoted monologues with paragraph splitting and `extend` inheritance. Added direct fixture translations and JS/native parity cases for blocks and monologues.
-- Step 2.5: detects plain and conditioned menu choices, ignores them by default or counts them as `menu choice` via `AnalysisOptions` / `--count-menu-choices`, and preserves source line and qualified-label context. JSON parity now exposes the menu-choice flag.
-- Step 2.4: parses `Character(...)` definitions (define/default/bare and optional `renpy.`), resolves aliases to display names across ordered project files, extracts 3–8 digit hex speaker colors, preserves unknown aliases safely, and exposes deterministic character data through JSON parity output.
-- Step 2.3: counts dialogue/narration, ignores configured Ren'Py code starters, tracks source lines and qualified labels, implements `extend`, and exposes `say-count --dump-json`. Added a Node/native ctest parity harness and a Unicode 17.0 L*/N* word scanner with vendored generated ranges.
-- Step 2.2: added a dependency-free Ren'Py line tokenizer with source line/indentation metadata, quote-aware comment splitting, escaped-quote segments, requested statement classifications, and safe malformed-input classification. Word counting remains Step 2.3 work.
-- Step 2.1: documented the complete JavaScript parser contract and fixture mapping in `docs/parser-behavior.md`; selected a dependency-free UTF-8 scanner with vendored Unicode L*/N* category ranges for exact word-count semantics. No parser implementation was added.
-- Step 1.4: five-digit line-number margin; current-line highlight; word-wrap toggle; 10–32px font controls (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`); system/light/dark editor themes; atomic persistence alongside window settings.
-- Step 1.3: multi-select `.rpy` open; Save / Save As; absolute file paths tracked per tab; repeat opens select the existing tab; frame-wide `.rpy` drag/drop; tabs normalized to four spaces on load; UTF-8 reads/writes.
-- Step 1.2: client-filling `wxAuiNotebook`; one plain `wxStyledTextCtrl` per tab; New (`Ctrl+N`) / Close Tab (`Ctrl+W`) / notebook close buttons; save-point dirty dots (` ●`); discard/cancel warnings for dirty tab close and app close; one tab always remains.
-- Parity alignment with JS app during review: untitled tabs named `scene-N.rpy` (JS editor-ui.js:292) and dirty dot `●` (editor-ui.js:257).
-- Settings live in `~/.local/share/say-count/settings.json` via reusable `app::Settings` (wx 3.2 ignores `FileLayout_XDG` for `GetUserDataDir`, resolved manually); `say_count_core` stays wx-free.
-- Verified (2026-07-10): build + ctest green (1/1), `git diff --check` clean; live GUI controls persisted and restored 18px font, word wrap, and dark theme in an isolated XDG settings directory.
-- Review: subagent code review found no issues; JS tab-behavior spec extracted for parity.
-- Known issues: none.
-- Verified (2026-07-10): every `test/parser.test.js` fixture maps to a documented behavior; reference JavaScript repository remains unchanged.
-- Verified (2026-07-10): debug build and ctest green (5/5), including tokenizer forms, escaped quotes/comments, indentation, and malformed input; `git diff --check` clean.
-- Verified (2026-07-10): debug build and ctest green (9/9); native and JavaScript JSON dumps match on the current simple-dialogue parity fixture; Unicode word tests cover accented, CJK, full-width numeric, curly apostrophe, and emoji cases; reference JS remains unchanged.
-- Verified (2026-07-10): debug build and ctest green (13/13); JS/native parity matches for same-file and cross-file character data; unit coverage includes `None`, unknown aliases, colors, and later-definition overwrite behavior; cavecrew review found no correctness defects.
-- Verified (2026-07-10): debug build and ctest green (16/16); JS/native parity matches with menu counting both disabled and enabled; direct tests cover totals, conditioned choices, line numbers, and label context.
-- Verified (2026-07-10): debug build and ctest green (21/21), including six JS/native parity cases; cavecrew review found two malformed-quote divergences, both fixed with regression coverage; reference JS remains unchanged.
-- Next step: 2.6B — project parser lint, local labels, and remaining project fixtures; then 2.6C parity closeout.
+- Completed: Steps 0.1 through 2.5, Step 2.6A, and Step 2.6B.
+- Step 2.6B: project analysis resolves cross-file character definitions and caches unchanged per-file analysis results.
+- Project cache invalidates on file content, merged character definitions/colors, menu-count mode, and long-line threshold changes; closed-file entries are pruned.
+- Project `count_menu_choices` now remains covered at both script and project levels.
+- Project lint reports duplicate labels, missing jump/call targets, malformed labels/statements, and empty blocks.
+- Lint and dialogue analysis qualify local labels against the current global label; `call screen` is not treated as a label reference.
+- Python block contents remain opaque to project lint, including jump-like and label-like text.
+- Writer warnings are suppressed for `gui.rpy`, `options.rpy`, `screens.rpy`, and `say_count_runtime.rpy`, including path/case variants; those files still participate in label resolution.
+- Added Catch2 translations for all fixtures assigned to 2.6B and JS/native JSON parity for local-label qualification.
+- Route analysis and branch totals remain untouched for their later phase; symbol collection/rename fixtures remain out of scope.
+- Verified (2026-07-11): `cmake --build build -j` succeeded.
+- Review fix (2026-07-11): bare `label:` lines now emit the malformed-label syntax warning (`^label\b`, matching JS `analysis.js:70`); divergence confirmed against the live JS parser and covered by a regression test.
+- Verified (2026-07-11): `ctest --test-dir build --output-on-failure` passed 29/29 tests, including seven JS/native parity cases.
+- Verified (2026-07-11): `git diff --check` passed; reference JavaScript repository was not modified.
+- Known issues: none for Step 2.6B.
+- Next step: 2.6C parity closeout.

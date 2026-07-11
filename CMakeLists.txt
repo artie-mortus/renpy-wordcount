@@ -86,7 +86,7 @@ if(BUILD_TESTING)
             -DCOUNT_MENU_CHOICES=ON
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
     )
-    foreach(parity_fixture IN ITEMS ignored-blocks monologues)
+    foreach(parity_fixture IN ITEMS ignored-blocks monologues local-labels)
         add_test(
             NAME parser-parity-${parity_fixture}
             COMMAND ${CMAKE_COMMAND}

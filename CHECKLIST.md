@@ -21,7 +21,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 2.3 — Core dialogue counting · full · ≤750,000 tok — done 2026-07-10, commit recorded by the Step 2.3 completion commit
 - [x] Step 2.4 — Character definitions and display names · full · ≤650,000 tok — done 2026-07-10, commit recorded by the Step 2.4 completion commit
 - [x] Step 2.5 — Menus and conditioned choices · full · ≤700,000 tok — done 2026-07-10, commit recorded by the Step 2.5 completion commit
-- [~] Step 2.6 — Complete parser fixture translation · full · ≤1,000,000 tok — 2.6A done 2026-07-10; 2.6B/C pending
+- [~] Step 2.6 — Complete parser fixture translation · full · ≤1,000,000 tok — 2.6A done 2026-07-10; 2.6B done 2026-07-11, commit `d6ce591`; 2.6C pending
 - [ ] Step 2.7 — Syntax highlighting · mini · ≤750,000 tok
 
 ## Phase 3 — Core analysis and statistics

@@ -8,6 +8,8 @@
 #include <regex>
 #include <sstream>
 #include <optional>
+#include <unordered_map>
+#include <mutex>
 #include <unordered_set>
 
 namespace say_count {
@@ -149,6 +151,100 @@ void parse_characters(std::string_view script, std::map<std::string, std::string
         if (newline == std::string_view::npos) break;
         start = newline + 1;
     }
+}
+
+bool should_warn_for_file(std::string_view name) {
+    const auto slash = name.find_last_of("/\\");
+    std::string base(name.substr(slash == std::string_view::npos ? 0 : slash + 1));
+    for (char& c : base) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    static const std::unordered_set<std::string> support = {
+        "gui.rpy", "options.rpy", "screens.rpy", "say_count_runtime.rpy"};
+    return !support.count(base);
+}
+
+std::string qualify_label(std::string name, const std::string& global) {
+    if (!name.empty() && name.front() == '.' && !global.empty()) return global + name;
+    return name;
+}
+
+void lint_project(ScriptAnalysis& analysis, const std::vector<NamedScript>& scripts) {
+    struct Location { std::string file; std::size_t line; };
+    struct Reference { std::string type, target, display, file; std::size_t line; };
+    struct Pending { std::size_t indent, line; std::string kind; };
+    std::map<std::string, Location> labels;
+    std::vector<Reference> references;
+    auto warning = [&](std::string type, const std::string& file, std::size_t line, std::string message) {
+        analysis.warnings.push_back({std::move(type), line, file, std::move(message)});
+    };
+    static const std::regex label_re(R"(^label\s+(\.?[A-Za-z_][\w.]*)(?:\s*\([^)]*\))?\s*:\s*$)");
+    static const std::regex python_re(R"(^(?:init(?:\s+[-+]?\d+)?\s+)?python\s*:\s*$)");
+    static const std::regex reference_re(R"(^(jump|call)\s+(\.?[A-Za-z_][\w.]*)\b)");
+    static const std::regex malformed_label_re(R"(^label\b)");
+    static const std::regex block_re(R"(^(menu|if|elif|else|while|for)\b)");
+    static const std::regex choice_re(R"re(^(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')(?:\s+if\b.+)?\s*:\s*$)re");
+
+    for (const auto& file : scripts) {
+        std::string global;
+        std::optional<std::size_t> python_indent;
+        std::vector<Pending> pending;
+        std::size_t start = 0, line = 1;
+        while (start <= file.content.size()) {
+            const auto newline = file.content.find('\n', start);
+            auto raw = std::string_view(file.content).substr(start, newline == std::string::npos ? file.content.size() - start : newline - start);
+            if (!raw.empty() && raw.back() == '\r') raw.remove_suffix(1);
+            const auto token = tokenize_line(raw, line);
+            const std::string code(trim_view(token.code));
+            if (!code.empty()) {
+                std::size_t indent = 0;
+                for (char c : raw) { if (c == ' ') ++indent; else if (c == '\t') indent += 4; else break; }
+                while (!pending.empty()) {
+                    const auto item = pending.back(); pending.pop_back();
+                    if (indent > item.indent) break;
+                    warning("empty-block", file.name, item.line,
+                            "Empty " + item.kind + " block; add a statement or \"pass\".");
+                }
+                if (python_indent && indent > *python_indent) {
+                    // Python contents are opaque to Ren'Py project lint.
+                } else {
+                    python_indent.reset();
+                    std::smatch match;
+                    if (std::regex_match(code, match, python_re)) {
+                        python_indent = indent; pending.push_back({indent, line, "python"});
+                    } else if (std::regex_match(code, match, label_re)) {
+                        const std::string raw_name = match[1].str();
+                        const std::string name = qualify_label(raw_name, global);
+                        if (raw_name.front() != '.') global = raw_name;
+                        if (const auto found = labels.find(name); found != labels.end())
+                            warning("duplicate-label", file.name, line, "Duplicate label \"" + name +
+                                "\"; first defined in " + found->second.file + " line " + std::to_string(found->second.line) + ".");
+                        else labels[name] = {file.name, line};
+                        pending.push_back({indent, line, "label"});
+                    } else if (std::regex_search(code, match, malformed_label_re)) {
+                        warning("syntax", file.name, line, "Malformed label declaration; expected `label name:`.");
+                    } else if (code == "jump" || code == "call") {
+                        warning("syntax", file.name, line, code + " requires a target.");
+                    } else if (std::regex_search(code, match, reference_re)) {
+                        const std::string target = match[2].str();
+                        if (target != "expression" && target != "screen")
+                            references.push_back({match[1].str(), qualify_label(target, global), target, file.name, line});
+                    }
+                    if (std::regex_search(code, match, block_re)) {
+                        const std::string kind = match[1].str();
+                        if (code.back() != ':') warning("syntax", file.name, line, kind + " statement is missing a trailing colon.");
+                        else pending.push_back({indent, line, kind});
+                    } else if (std::regex_match(code, choice_re)) pending.push_back({indent, line, "menu choice"});
+                }
+            }
+            if (newline == std::string::npos) break;
+            start = newline + 1; ++line;
+        }
+        for (const auto& item : pending)
+            warning("empty-block", file.name, item.line, "Empty " + item.kind + " block; add a statement or \"pass\".");
+    }
+    for (const auto& ref : references) if (!labels.count(ref.target))
+        warning("missing-label", ref.file, ref.line, "Unknown " + ref.type + " target \"" + ref.display + "\".");
+    analysis.warnings.erase(std::remove_if(analysis.warnings.begin(), analysis.warnings.end(),
+        [](const ParserWarning& value) { return !should_warn_for_file(value.file); }), analysis.warnings.end());
 }
 
 }  // namespace
@@ -353,16 +449,42 @@ ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts, Analysis
     ScriptAnalysis merged;
     merged.character_names = names;
     merged.speaker_colors = colors;
+    std::ostringstream character_key;
+    for (const auto& [alias, name] : names) character_key << alias.size() << ':' << alias << name.size() << ':' << name;
+    for (const auto& [speaker, color] : colors) character_key << speaker.size() << ':' << speaker << color.size() << ':' << color;
+    struct CacheEntry {
+        std::string content, characters;
+        bool menu = false;
+        std::size_t long_line_words = 0;
+        ScriptAnalysis result;
+    };
+    static std::mutex cache_mutex;
+    static std::unordered_map<std::string, CacheEntry> cache;
+    const std::lock_guard<std::mutex> lock(cache_mutex);
+    std::unordered_set<std::string> open;
     for (const auto& script : scripts) {
+        open.insert(script.name);
         auto file_options = options;
         file_options.file_name = script.name;
-        auto item = analyze_with_characters(script.content, names, colors, file_options);
+        auto found = cache.find(script.name);
+        if (found == cache.end() || found->second.content != script.content ||
+            found->second.characters != character_key.str() || found->second.menu != options.count_menu_choices ||
+            found->second.long_line_words != options.long_line_words) {
+            CacheEntry entry{script.content, character_key.str(), options.count_menu_choices,
+                             options.long_line_words, analyze_with_characters(script.content, names, colors, file_options)};
+            found = cache.insert_or_assign(script.name, std::move(entry)).first;
+        }
+        const auto& item = found->second.result;
         merged.total_words += item.total_words;
         merged.dialogue_lines += item.dialogue_lines;
         merged.script_lines += item.script_lines;
         merged.counted.insert(merged.counted.end(), item.counted.begin(), item.counted.end());
         merged.warnings.insert(merged.warnings.end(), item.warnings.begin(), item.warnings.end());
     }
+    for (auto it = cache.begin(); it != cache.end();) {
+        if (!open.count(it->first)) it = cache.erase(it); else ++it;
+    }
+    lint_project(merged, scripts);
     return merged;
 }
 
