@@ -15,6 +15,7 @@ namespace say_count::ui {
 namespace {
 
 constexpr const char* kFilePathProperty = "say-count-file-path";
+constexpr int kAnalysisDelayMs = 120;
 enum EditorStyle { kDefault, kComment, kKeyword, kLabel, kSpeaker, kString, kPython, kStatement };
 
 wxString NormalizeTabs(wxString text) {
@@ -24,11 +25,15 @@ wxString NormalizeTabs(wxString text) {
 
 }  // namespace
 
-EditorNotebook::EditorNotebook(wxWindow* parent, const app::EditorSettings& settings)
+EditorNotebook::EditorNotebook(wxWindow* parent, const app::EditorSettings& settings,
+                               AnalysisHandler analysis_handler)
     : wxAuiNotebook(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                    wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS), settings_(settings) {
+                    wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS),
+      settings_(settings), analysis_handler_(std::move(analysis_handler)), analysis_timer_(this) {
     Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &EditorNotebook::OnPageClose, this);
     Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSED, &EditorNotebook::OnPageClosed, this);
+    Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &EditorNotebook::OnPageChanged, this);
+    Bind(wxEVT_TIMER, &EditorNotebook::OnAnalysisTimer, this, analysis_timer_.GetId());
     NewTab();
 }
 
@@ -43,6 +48,7 @@ void EditorNotebook::NewTab() {
     editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
     AddPage(editor, title, true);
     editor->SetFocus();
+    AnalyzeActive();
 }
 
 wxString EditorNotebook::FilePath(wxStyledTextCtrl* editor) const {
@@ -90,6 +96,7 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
         editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
         AddPage(editor, editor->GetName(), true);
         editor->SetFocus();
+        AnalyzeActive();
         opened = true;
     }
     return opened;
@@ -192,6 +199,24 @@ void EditorNotebook::OnModified(wxStyledTextEvent& event) {
         RefreshSpeakers(editor);
         editor->Colourise(0, -1);
     }
+    analysis_timer_.StartOnce(kAnalysisDelayMs);
+    event.Skip();
+}
+
+void EditorNotebook::AnalyzeActive() {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor || !analysis_handler_) return;
+    analysis_handler_(analyze_script(editor->GetText().ToStdString()));
+}
+
+void EditorNotebook::OnAnalysisTimer(wxTimerEvent&) {
+    AnalyzeActive();
+}
+
+void EditorNotebook::OnPageChanged(wxAuiNotebookEvent& event) {
+    analysis_timer_.Stop();
+    AnalyzeActive();
     event.Skip();
 }
 

@@ -1,6 +1,7 @@
 #include "ui/main_frame.h"
 
 #include <algorithm>
+#include <string>
 
 #include <wx/aboutdlg.h>
 #include <wx/display.h>
@@ -56,10 +57,15 @@ MainFrame::MainFrame()
     SetMinSize(wxSize(400, 300));
     editor_settings_ = settings_.LoadEditor();
     BuildMenus();
-    notebook_ = new EditorNotebook(this, editor_settings_);
-    SetDropTarget(new ScriptDropTarget(notebook_));
     CreateStatusBar();
-    SetStatusText("Ready");
+    notebook_ = new EditorNotebook(this, editor_settings_, [this](const ScriptAnalysis& analysis) {
+        // wxString::Format aborts on %zu; compose the text without varargs.
+        const std::string text = std::to_string(analysis.total_words) + " dialogue words \xc2\xb7 " +
+                                 std::to_string(analysis.dialogue_lines) + " dialogue lines \xc2\xb7 " +
+                                 std::to_string(analysis.reading_minutes) + " min reading time";
+        SetStatusText(wxString::FromUTF8(text));
+    });
+    SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
 
     Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
