@@ -1,16 +1,19 @@
 #pragma once
 
 #include <wx/frame.h>
+#include <wx/aui/framemanager.h>
 
 #include "app/settings.h"
 
 namespace say_count::ui {
 
 class EditorNotebook;
+class SpeakerStatsPanel;
 
 class MainFrame final : public wxFrame {
 public:
     MainFrame();
+    ~MainFrame() override;
 
 private:
     void BuildMenus();
@@ -29,6 +32,8 @@ private:
 
     app::Settings settings_;
     EditorNotebook* notebook_ = nullptr;
+    SpeakerStatsPanel* speaker_stats_ = nullptr;
+    wxAuiManager manager_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
 };
