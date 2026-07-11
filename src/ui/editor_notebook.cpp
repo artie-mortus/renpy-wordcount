@@ -1,4 +1,6 @@
 #include "ui/editor_notebook.h"
+#include "core/parser.h"
+#include "core/tokenizer.h"
 
 #include <algorithm>
 
@@ -13,6 +15,7 @@ namespace say_count::ui {
 namespace {
 
 constexpr const char* kFilePathProperty = "say-count-file-path";
+enum EditorStyle { kDefault, kComment, kKeyword, kLabel, kSpeaker, kString, kPython, kStatement };
 
 wxString NormalizeTabs(wxString text) {
     text.Replace("\t", "    ");
@@ -35,6 +38,7 @@ void EditorNotebook::NewTab() {
     const wxString title = wxString::Format("scene-%u.rpy", next_untitled_number_++);
     editor->SetName(title);
     editor->SetSavePoint();
+    RefreshSpeakers(editor);
     editor->Bind(wxEVT_STC_SAVEPOINTLEFT, &EditorNotebook::OnSavePointChanged, this);
     editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
     AddPage(editor, title, true);
@@ -79,6 +83,7 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
         auto* editor = new wxStyledTextCtrl(this, wxID_ANY);
         ConfigureEditor(editor);
         editor->SetText(NormalizeTabs(content));
+        RefreshSpeakers(editor);
         SetFilePath(editor, absolute_path);
         editor->SetSavePoint();
         editor->Bind(wxEVT_STC_SAVEPOINTLEFT, &EditorNotebook::OnSavePointChanged, this);
@@ -91,6 +96,11 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
 }
 
 void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
+    editor->SetLexer(wxSTC_LEX_CONTAINER);
+    editor->Unbind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);
+    editor->Bind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);
+    editor->Unbind(wxEVT_STC_MODIFIED, &EditorNotebook::OnModified, this);
+    editor->Bind(wxEVT_STC_MODIFIED, &EditorNotebook::OnModified, this);
     editor->SetMarginType(0, wxSTC_MARGIN_NUMBER);
     editor->SetMarginWidth(0, editor->TextWidth(wxSTC_STYLE_LINENUMBER, "00000") + 8);
     editor->SetCaretLineVisible(true);
@@ -105,11 +115,84 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->StyleSetForeground(wxSTC_STYLE_DEFAULT, foreground);
     editor->StyleSetBackground(wxSTC_STYLE_DEFAULT, background);
     editor->StyleClearAll();
+    editor->StyleSetForeground(kComment, dark ? wxColour("#8f9a85") : wxColour("#68765f"));
+    editor->StyleSetItalic(kComment, true);
+    editor->StyleSetForeground(kKeyword, dark ? wxColour("#e7a86e") : wxColour("#9b3f38"));
+    editor->StyleSetBold(kKeyword, true);
+    editor->StyleSetForeground(kLabel, dark ? wxColour("#f2ca72") : wxColour("#7b4f00"));
+    editor->StyleSetBold(kLabel, true);
+    editor->StyleSetForeground(kSpeaker, dark ? wxColour("#77d6c3") : wxColour("#087b70"));
+    editor->StyleSetBold(kSpeaker, true);
+    editor->StyleSetForeground(kString, dark ? wxColour("#b8d98b") : wxColour("#43752c"));
+    editor->StyleSetForeground(kPython, dark ? wxColour("#d8a7e8") : wxColour("#7c3b92"));
+    editor->StyleSetForeground(kStatement, dark ? wxColour("#91bdec") : wxColour("#2f62a0"));
     editor->StyleSetForeground(wxSTC_STYLE_LINENUMBER, dark ? wxColour("#9a91a7") : wxColour("#756a77"));
     editor->StyleSetBackground(wxSTC_STYLE_LINENUMBER, margin);
     editor->SetCaretForeground(foreground);
     editor->SetCaretLineBackground(dark ? wxColour("#281f3d") : wxColour("#f5e9c9"));
     editor->SetSelBackground(true, dark ? wxColour("#6b542d") : wxColour("#ead39c"));
+    editor->Colourise(0, -1);
+}
+
+void EditorNotebook::RefreshSpeakers(wxStyledTextCtrl* editor) {
+    auto& aliases = speakers_[editor];
+    aliases.clear();
+    const auto analysis = analyze_script(editor->GetText().ToStdString());
+    for (const auto& [alias, name] : analysis.character_names) {
+        (void)name;
+        aliases.insert(alias);
+    }
+}
+
+void EditorNotebook::OnStyleNeeded(wxStyledTextEvent& event) {
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
+    if (!editor) return;
+    const int requested = event.GetPosition();
+    const int start_line = editor->LineFromPosition(editor->GetEndStyled());
+    const int end_line = editor->LineFromPosition(requested);
+    const int start = editor->PositionFromLine(start_line);
+    const int end = end_line + 1 < editor->GetLineCount() ? editor->PositionFromLine(end_line + 1)
+                                                         : editor->GetTextLength();
+    editor->StartStyling(start);
+    int cursor = start;
+    for (int line_number = start_line; line_number <= end_line; ++line_number) {
+        const int line_start = editor->PositionFromLine(line_number);
+        const int line_end = editor->GetLineEndPosition(line_number);
+        const std::string line = editor->GetTextRange(line_start, line_end).ToStdString();
+        const auto spans = highlight_line(line, speakers_[editor]);
+        int local = 0;
+        for (const auto& span : spans) {
+            if (static_cast<int>(span.begin) > local)
+                editor->SetStyling(static_cast<int>(span.begin) - local, kDefault);
+            editor->SetStyling(static_cast<int>(span.end - span.begin),
+                               static_cast<int>(span.token_class));
+            local = static_cast<int>(span.end);
+        }
+        if (line_end - line_start > local) editor->SetStyling(line_end - line_start - local, kDefault);
+        const int next = line_number + 1 < editor->GetLineCount() ? editor->PositionFromLine(line_number + 1) : line_end;
+        if (next > line_end) editor->SetStyling(next - line_end, kDefault);
+        cursor = next;
+    }
+    (void)cursor;
+}
+
+void EditorNotebook::OnModified(wxStyledTextEvent& event) {
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
+    if (!editor) return;
+    // Style updates also raise wxEVT_STC_MODIFIED; reacting to them would recurse
+    // through Colourise. Only text edits can change speaker definitions.
+    if ((event.GetModificationType() & (wxSTC_MOD_INSERTTEXT | wxSTC_MOD_DELETETEXT)) == 0) {
+        event.Skip();
+        return;
+    }
+    const wxString changed = event.GetText();
+    const int line_number = editor->LineFromPosition(std::max(0, event.GetPosition()));
+    const wxString current = editor->GetLine(line_number);
+    if (changed.Find("Character") != wxNOT_FOUND || current.Find("Character") != wxNOT_FOUND) {
+        RefreshSpeakers(editor);
+        editor->Colourise(0, -1);
+    }
+    event.Skip();
 }
 
 void EditorNotebook::SetWordWrap(bool enabled) {
@@ -219,6 +302,7 @@ void EditorNotebook::OnPageClose(wxAuiNotebookEvent& event) {
         return;
     }
 
+    speakers_.erase(EditorAt(static_cast<size_t>(selection)));
     event.Skip();
 }
 

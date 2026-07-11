@@ -22,7 +22,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 2.4 — Character definitions and display names · full · ≤650,000 tok — done 2026-07-10, commit recorded by the Step 2.4 completion commit
 - [x] Step 2.5 — Menus and conditioned choices · full · ≤700,000 tok — done 2026-07-10, commit recorded by the Step 2.5 completion commit
 - [x] Step 2.6 — Complete parser fixture translation · full · ≤1,000,000 tok — done 2026-07-11: 2.6A `cef918c`, 2.6B `8725ec7`, 2.6C `a4fa8a8` (route/symbol fixtures deferred to 7.1/7.2/5.7 per DECISIONS.md)
-- [ ] Step 2.7 — Syntax highlighting · mini · ≤750,000 tok
+- [x] Step 2.7 — Syntax highlighting · mini · ≤750,000 tok — done 2026-07-11, commit noted below
 
 ## Phase 3 — Core analysis and statistics
 
@@ -96,7 +96,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 
 ## Milestone gates
 
-- [ ] M1 daily-driver editor usable (end of Phase 1 + 2.7)
-- [ ] M2 parity harness green — correctness anchor (end of Phase 2)
+- [x] M1 daily-driver editor usable (end of Phase 1 + 2.7) — reached 2026-07-11
+- [x] M2 parity harness green — correctness anchor (end of Phase 2) — reached 2026-07-11: ten JS/native parity tests, all diffs empty
 - [ ] Core parity (end of Phase 7)
 - [ ] Release (end of Phase 9; Phase 8 deferred, optional)

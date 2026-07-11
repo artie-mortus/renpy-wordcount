@@ -4,7 +4,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 
 | # | Feature | Status |
 |---:|---|---|
-| 1 | live Ren'Py editor with line numbers, syntax highlighting, and file tabs | Pending |
+| 1 | live Ren'Py editor with line numbers, syntax highlighting, and file tabs | Done — tabs (Step 1.2), line numbers (Step 1.4), syntax highlighting (Step 2.7) |
 | 2 | run the project from a chosen source line through the local save server | Pending |
 | 3 | Production desk with normal run, current-line warp, Interactive Director, stop/restart controls, live status, and a persistent launch log | Pending |
 | 4 | reusable JSON state presets applied before startup (generates `say_count_runtime.rpy` in the connected game folder) | Pending |

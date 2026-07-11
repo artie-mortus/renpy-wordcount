@@ -159,4 +159,65 @@ TokenizedLine tokenize_line(std::string_view line, std::size_t line_number) {
     return result;
 }
 
+std::vector<HighlightSpan> highlight_line(
+    std::string_view line, const std::unordered_set<std::string>& speaker_aliases) {
+    std::vector<HighlightSpan> spans;
+    const auto hash = comment_start(line);
+    const auto code_end = hash == std::string_view::npos ? line.size() : hash;
+    const auto code = line.substr(0, code_end);
+    std::size_t first = 0;
+    while (first < code.size() && ascii_space(code[first])) ++first;
+
+    if (first < code.size() && code[first] == '$') {
+        spans.push_back({first, code_end, HighlightClass::Python});
+    } else {
+        std::size_t word_end = first;
+        if (word_end < code.size() && identifier_start(code[word_end])) {
+            ++word_end;
+            while (word_end < code.size() && identifier_continue(code[word_end])) ++word_end;
+        }
+        const auto word = code.substr(first, word_end - first);
+        // Keyword set mirrors the JS highlighter (highlight.js:41): the parser's
+        // ignored starters plus "extend", matched case-insensitively.
+        static const std::unordered_set<std::string_view> keywords{
+            "define", "default", "image", "scene", "show", "hide", "play", "stop", "queue",
+            "window", "with", "jump", "call", "return", "if", "elif", "else", "while", "for",
+            "init", "label", "transform", "python", "screen", "style", "voice", "pause",
+            "camera", "old", "new", "translate", "menu", "pass", "set", "zorder", "onlayer",
+            "extend"};
+        std::string lowered(word);
+        for (char& c : lowered) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        HighlightClass leading = HighlightClass::Default;
+        if (lowered == "label") leading = HighlightClass::Label;
+        else if (keywords.count(lowered) != 0) leading = HighlightClass::Keyword;
+        else if (speaker_aliases.count(std::string(word)) != 0) leading = HighlightClass::Speaker;
+        if (leading != HighlightClass::Default) spans.push_back({first, word_end, leading});
+
+        const auto tokenized = tokenize_line(line, 0);
+        const auto quotes = quoted_segments(code);
+        const bool statement = tokenized.type == LineType::Scene || tokenized.type == LineType::Show ||
+                               tokenized.type == LineType::Play || tokenized.type == LineType::Jump ||
+                               tokenized.type == LineType::Call || tokenized.type == LineType::Menu ||
+                               tokenized.type == LineType::Define;
+        if (statement && word_end < code_end) {
+            std::size_t position = word_end;
+            for (const auto& quoted : quotes) {
+                if (quoted.begin > position)
+                    spans.push_back({position, quoted.begin, HighlightClass::Statement});
+                position = quoted.closed ? quoted.end + 1 : code_end;
+            }
+            if (position < code_end) spans.push_back({position, code_end, HighlightClass::Statement});
+        }
+        for (const auto& quoted : quotes) {
+            const auto end = quoted.closed ? quoted.end + 1 : code_end;
+            spans.push_back({quoted.begin, end, HighlightClass::String});
+        }
+    }
+    std::sort(spans.begin(), spans.end(), [](const HighlightSpan& left, const HighlightSpan& right) {
+        return left.begin < right.begin;
+    });
+    if (hash != std::string_view::npos) spans.push_back({hash, line.size(), HighlightClass::Comment});
+    return spans;
+}
+
 }  // namespace say_count

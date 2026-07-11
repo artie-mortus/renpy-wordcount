@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 namespace say_count {
@@ -45,5 +46,16 @@ struct TokenizedLine {
 };
 
 TokenizedLine tokenize_line(std::string_view line, std::size_t line_number);
+
+enum class HighlightClass { Default, Comment, Keyword, Label, Speaker, String, Python, Statement };
+
+struct HighlightSpan {
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    HighlightClass token_class = HighlightClass::Default;
+};
+
+std::vector<HighlightSpan> highlight_line(
+    std::string_view line, const std::unordered_set<std::string>& speaker_aliases = {});
 
 }  // namespace say_count
