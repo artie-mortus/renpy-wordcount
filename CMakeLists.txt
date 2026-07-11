@@ -40,6 +40,7 @@ if(BUILD_TESTING)
     add_executable(say-count-tests
         tests/core_smoke_test.cpp
         tests/parser_test.cpp
+        tests/analysis_test.cpp
         tests/tokenizer_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
@@ -86,7 +87,7 @@ if(BUILD_TESTING)
             -DCOUNT_MENU_CHOICES=ON
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
     )
-    foreach(parity_fixture IN ITEMS ignored-blocks monologues local-labels)
+    foreach(parity_fixture IN ITEMS ignored-blocks monologues local-labels average-tenth)
         add_test(
             NAME parser-parity-${parity_fixture}
             COMMAND ${CMAKE_COMMAND}
@@ -97,6 +98,17 @@ if(BUILD_TESTING)
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
         )
     endforeach()
+    add_test(
+        NAME parser-parity-analysis
+        COMMAND ${CMAKE_COMMAND}
+            -DNODE=${NODE_EXECUTABLE}
+            -DJS_DUMP=${CMAKE_CURRENT_SOURCE_DIR}/tools/parity-dump.mjs
+            -DNATIVE_DUMP=$<TARGET_FILE:say-count>
+            -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/analysis-aggregates.rpy
+            -DFIXTURE2=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/analysis-definitions.rpy
+            -DCOUNT_MENU_CHOICES=ON
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
+    )
     add_test(
         NAME parser-parity-warning-lint
         COMMAND ${CMAKE_COMMAND}

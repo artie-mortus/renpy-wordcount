@@ -28,10 +28,20 @@ struct ParserWarning {
     std::string message;
 };
 
+struct AggregateStats {
+    std::string name;
+    std::size_t words = 0;
+    std::size_t lines = 0;
+};
+
 struct ScriptAnalysis {
     std::size_t total_words = 0;
     std::size_t dialogue_lines = 0;
     std::size_t script_lines = 0;
+    double average_words = 0;
+    std::size_t reading_minutes = 0;
+    std::vector<AggregateStats> speakers;
+    std::vector<AggregateStats> scenes;
     std::vector<CountedLine> counted;
     std::map<std::string, std::string> character_names;
     std::map<std::string, std::string> speaker_colors;

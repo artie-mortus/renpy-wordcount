@@ -10,6 +10,9 @@
 #include <optional>
 #include <unordered_map>
 #include <mutex>
+#include <array>
+#include <charconv>
+#include <cmath>
 #include <unordered_set>
 
 namespace say_count {
@@ -50,6 +53,15 @@ std::pair<std::uint32_t, std::size_t> decode_utf8(std::string_view text, std::si
         return {0, 1};
     }
     return {point, length};
+}
+
+// Shortest round-trip decimal form, matching JSON.stringify for the
+// magnitudes averageWords can take (JS only switches notation outside
+// [1e-6, 1e21), unreachable for a words-per-line ratio).
+std::string json_number(double value) {
+    std::array<char, 32> buffer;
+    const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+    return std::string(buffer.data(), result.ptr);
 }
 
 std::string json_escape(std::string_view value) {
@@ -321,6 +333,13 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
         result.counted.push_back({number, speaker, clean_renpy_text(text), words, current_scene,
                                   menu_choice, std::move(raw), alias, unknown, is_extend});
         result.total_words += words;
+        auto add = [words](std::vector<AggregateStats>& values, const std::string& name) {
+            auto found = std::find_if(values.begin(), values.end(), [&](const auto& item) { return item.name == name; });
+            if (found == values.end()) values.push_back({name, words, 1});
+            else { found->words += words; ++found->lines; }
+        };
+        add(result.speakers, speaker);
+        add(result.scenes, current_scene);
         if (unknown) warn("speaker", number, "Unknown speaker alias \"" + alias +
                           "\". Add define " + alias + " = Character(...).");
         if (words > options.long_line_words)
@@ -375,6 +394,8 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
             if (!name.empty() && name.front() == '.' && !current_global.empty()) name = current_global + name;
             else if (!name.empty() && name.front() != '.') current_global = name;
             current_scene = name;
+            if (std::none_of(result.scenes.begin(), result.scenes.end(), [&](const auto& item) { return item.name == name; }))
+                result.scenes.push_back({name, 0, 0});
         } else if (opens_ignored_block(code)) {
             skip_indent = raw_indentation(raw);
         } else {
@@ -432,6 +453,10 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
         flush_monologue();
     }
     result.dialogue_lines = result.counted.size();
+    result.average_words = result.dialogue_lines
+        ? static_cast<double>(result.total_words) / static_cast<double>(result.dialogue_lines) : 0.0;
+    result.reading_minutes = result.total_words
+        ? std::max<std::size_t>(1, static_cast<std::size_t>(std::floor(result.total_words / 200.0 + 0.5))) : 0;
     return result;
 }
 
@@ -480,18 +505,47 @@ ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts, Analysis
         merged.script_lines += item.script_lines;
         merged.counted.insert(merged.counted.end(), item.counted.begin(), item.counted.end());
         merged.warnings.insert(merged.warnings.end(), item.warnings.begin(), item.warnings.end());
+        auto merge = [](std::vector<AggregateStats>& target, const std::vector<AggregateStats>& source) {
+            for (const auto& stats : source) {
+                auto found = std::find_if(target.begin(), target.end(), [&](const auto& item) { return item.name == stats.name; });
+                if (found == target.end()) target.push_back(stats);
+                else { found->words += stats.words; found->lines += stats.lines; }
+            }
+        };
+        merge(merged.speakers, item.speakers);
+        merge(merged.scenes, item.scenes);
     }
     for (auto it = cache.begin(); it != cache.end();) {
         if (!open.count(it->first)) it = cache.erase(it); else ++it;
     }
     lint_project(merged, scripts);
+    merged.average_words = merged.dialogue_lines
+        ? static_cast<double>(merged.total_words) / static_cast<double>(merged.dialogue_lines) : 0.0;
+    merged.reading_minutes = merged.total_words
+        ? std::max<std::size_t>(1, static_cast<std::size_t>(std::floor(merged.total_words / 200.0 + 0.5))) : 0;
     return merged;
 }
 
 std::string analysis_json(const ScriptAnalysis& analysis) {
     std::ostringstream out;
     out << "{\"totalWords\":" << analysis.total_words << ",\"dialogueLines\":" << analysis.dialogue_lines
-        << ",\"scriptLines\":" << analysis.script_lines << ",\"counted\":[";
+        << ",\"scriptLines\":" << analysis.script_lines
+        << ",\"averageWords\":" << json_number(analysis.average_words)
+        << ",\"readingMinutes\":" << analysis.reading_minutes << ",\"speakers\":[";
+    for (std::size_t i = 0; i < analysis.speakers.size(); ++i) {
+        if (i) out << ',';
+        const auto& stats = analysis.speakers[i];
+        out << "{\"speaker\":\"" << json_escape(stats.name) << "\",\"words\":" << stats.words
+            << ",\"lines\":" << stats.lines << '}';
+    }
+    out << "],\"scenes\":[";
+    for (std::size_t i = 0; i < analysis.scenes.size(); ++i) {
+        if (i) out << ',';
+        const auto& stats = analysis.scenes[i];
+        out << "{\"scene\":\"" << json_escape(stats.name) << "\",\"words\":" << stats.words
+            << ",\"lines\":" << stats.lines << '}';
+    }
+    out << "],\"counted\":[";
     for (std::size_t i = 0; i < analysis.counted.size(); ++i) {
         if (i) out << ',';
         const auto& item = analysis.counted[i];
