@@ -1,15 +1,14 @@
 # Status
 
-- Completed: Steps 0.1 through 3.3.
-- Live single-document analysis remains debounced at 120 ms and follows the active editor tab.
-- Added a dockable right-side Speaker Statistics panel using `wxAuiManager`.
-- Each speaker row shows the resolved name, color swatch, words, lines, rounded percentage, and a proportional balance bar.
-- Speaker rows use JavaScript parity ordering: stable descending word count, preserving first-seen order for ties.
-- Empty scripts show `No dialogue yet.`; panel content updates on edits, tab changes, new tabs, and opened files.
-- Core remains wx-free and unchanged; no scene/label targets, counted-lines browser, exports, or later-step features were added.
-- Verified (2026-07-11): `cmake --build /home/artemis/Projects/say-count-native/build -j` succeeded.
-- Verified (2026-07-11): `ctest --test-dir /home/artemis/Projects/say-count-native/build --output-on-failure` passed 42/42 tests; parity diffs were empty.
-- Review fix (2026-07-11): the counts line concatenated a narrow `" words · "` literal (non-ASCII `·`) onto `wxString`, which converts through the locale — same pitfall that crashed 3.2; composed via `std::string` + `wxString::FromUTF8` instead.
-- Verified (2026-07-11): live GUI review — empty tab showed "No dialogue yet."; two-speaker script showed Eileen "24 words · 2 lines · 92%" above Lucy "2 words · 1 lines · 8%" with correct swatch colors and proportional balance bars (matches JS ordering and Math.round percentages).
-- Known issues: none.
-- Next step: Phase 3, Step 3.4 — scene and label statistics.
+- Completed: Steps 0.1 through 3.4.
+- The dockable statistics pane now shows project, character, and scene/label totals.
+- Character rows keep the 3.3 swatch, percentage, and balance bar, stably sorted by descending words; scenes retain parser first-seen order and empty labels are omitted from the UI.
+- Project, character, and scene targets support word and line goals; blank, invalid, zero, and negative values mean unset.
+- Targets persist in `targets.ini` next to `settings.json` (manually resolved XDG dir — `GetUserDataDir` returns legacy `~/.say-count`, same trap as Step 1.4) and reload on launch.
+- Progress reports unset, remaining, reached, or over-target state; bars and displayed percentages cap at 100%, matching JavaScript.
+- Core scene aggregates preserve `No label`, qualify local labels, retain empty labels, and merge project labels in file order.
+- Core remains wx-free; dump JSON schema and `.rpy` parsing behavior are unchanged.
+- Review fixes (2026-07-11): UTF-8 `·` composed via `std::string`+`FromUTF8` (locale pitfall again); restored 3.3 swatch/percent/balance rows; `wxWeakRef` guards + change-detection in target save handlers; targets map no longer polluted by `operator[]`; persistence path fixed (was silently failing to write).
+- Verified (2026-07-11): build + ctest 44/44, parity diffs empty; live GUI — sections render, `start.beach` qualified, over/left/reached/unset target states correct, live edit updates panel, target persists across relaunch.
+- Known issues: pre-existing (Step 1.3 era, not 3.4) — one SIGSEGV core dump shows `EditorNotebook::ConfirmCloseAll` crashing at `SetSelection` when quit is re-triggered while the discard-changes modal is open; not reproducible in normal flows.
+- Next step: Phase 3, Step 3.5 — counted-lines browser.

@@ -53,6 +53,28 @@ TEST_CASE("analysis aggregates speakers and labels in first-seen order") {
     CHECK(result.scenes[1].words == 4);
 }
 
+TEST_CASE("analysis preserves empty labels and qualifies local scene totals") {
+    const auto result = say_count::analyze_script(
+        "\"Before label.\"\nlabel start:\nlabel .quiet:\nlabel .talk:\n"
+        "\"One two.\"\ne \"Three.\"\nlabel ending:\n\"Four five six.\"");
+    REQUIRE(result.scenes.size() == 5);
+    CHECK(result.scenes[0].name == "No label"); CHECK(result.scenes[0].words == 2); CHECK(result.scenes[0].lines == 1);
+    CHECK(result.scenes[1].name == "start"); CHECK(result.scenes[1].words == 0); CHECK(result.scenes[1].lines == 0);
+    CHECK(result.scenes[2].name == "start.quiet"); CHECK(result.scenes[2].words == 0); CHECK(result.scenes[2].lines == 0);
+    CHECK(result.scenes[3].name == "start.talk"); CHECK(result.scenes[3].words == 3); CHECK(result.scenes[3].lines == 2);
+    CHECK(result.scenes[4].name == "ending"); CHECK(result.scenes[4].words == 3); CHECK(result.scenes[4].lines == 1);
+}
+
+TEST_CASE("project scene totals merge same labels in file order") {
+    const auto result = say_count::analyze_project({
+        {"one.rpy", "label shared:\n\"One two.\"\nlabel empty:"},
+        {"two.rpy", "label shared:\n\"Three four five.\"\nlabel later:\n\"Six.\""}});
+    REQUIRE(result.scenes.size() == 3);
+    CHECK(result.scenes[0].name == "shared"); CHECK(result.scenes[0].words == 5); CHECK(result.scenes[0].lines == 2);
+    CHECK(result.scenes[1].name == "empty"); CHECK(result.scenes[1].words == 0); CHECK(result.scenes[1].lines == 0);
+    CHECK(result.scenes[2].name == "later"); CHECK(result.scenes[2].words == 1); CHECK(result.scenes[2].lines == 1);
+}
+
 TEST_CASE("analysis menu choices participate in non-narration aggregates only when enabled") {
     const std::string script = "label start:\nmenu:\n    \"Choose these words\":\n        \"Narrated response.\"";
     const auto ignored = say_count::analyze_script(script);

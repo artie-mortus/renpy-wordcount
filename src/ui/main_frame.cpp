@@ -60,7 +60,8 @@ MainFrame::MainFrame()
     editor_settings_ = settings_.LoadEditor();
     BuildMenus();
     CreateStatusBar();
-    speaker_stats_ = new SpeakerStatsPanel(this);
+    speaker_stats_ = new SpeakerStatsPanel(
+        this, wxFileName(settings_.path()).GetPath() + wxFILE_SEP_PATH + "targets.ini");
     notebook_ = new EditorNotebook(this, editor_settings_, [this](const ScriptAnalysis& analysis) {
         // wxString::Format aborts on %zu; compose the text without varargs.
         const std::string text = std::to_string(analysis.total_words) + " dialogue words \xc2\xb7 " +

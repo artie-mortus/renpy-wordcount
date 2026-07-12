@@ -21,12 +21,12 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 15 | optional menu choice counting (including conditioned choices) | Pending |
 | 16 | `extend` lines attributed to the previous speaker | Pending |
 | 17 | speaker breakdown with talk-time balance bars | Done — Step 3.3 (`414ab59`): dockable panel, words-desc ordering, swatches, percentages, balance bars |
-| 18 | per-character and per-scene dialogue word and line targets | Pending |
+| 18 | per-character and per-scene dialogue word and line targets | Done (Step 3.4) |
 | 19 | uses `define e = Character("Eileen")` names instead of `e` aliases | Pending |
-| 20 | total word and line target progress | Pending |
+| 20 | total word and line target progress | Done (Step 3.4) |
 | 21 | reading-time estimate (~200 wpm) and words-written-this-session counter | Pending |
 | 22 | version diff: paste an old script to see words added or cut per speaker | Pending |
-| 23 | scene/label breakdown | Pending |
+| 23 | scene/label breakdown | Done (Step 3.4) |
 | 24 | counted-line speaker/search filters | Pending |
 | 25 | CSV/JSON stats export | Pending |
 | 26 | complete project import/export, including files, targets, and settings | Pending |
