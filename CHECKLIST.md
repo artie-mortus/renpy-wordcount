@@ -37,7 +37,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 ## Phase 4 — Editor productivity features
 
 - [x] Step 4.1 — Outline panel · mini · ≤750,000 tok — done 2026-07-12, commit `714b429`
-- [ ] Step 4.2 — Basic autocomplete · full · ≤750,000 tok — **HIGH REASONING REQUIRED**
+- [x] Step 4.2 — Basic autocomplete · full · ≤750,000 tok — done 2026-07-12, commit `c113a1b`
 - [ ] Step 4.3 — Asset-aware autocomplete · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 4.4 — Find in current file · mini · ≤700,000 tok
 - [ ] Step 4.5 — Find across files · mini · ≤800,000 tok
