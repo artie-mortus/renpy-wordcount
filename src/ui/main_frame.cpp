@@ -161,6 +161,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_SIZE, &MainFrame::OnSize, this);
     Bind(wxEVT_MENU, &MainFrame::OnConnectProject, this, kConnectProject);
     Bind(wxEVT_MENU, &MainFrame::OnRecentProject, this, kRecentProjectFirst, kRecentProjectLast);
+    Bind(wxEVT_FSWATCHER, &MainFrame::OnFileSystemEvent, this);
 }
 
 MainFrame::~MainFrame() {
@@ -249,6 +250,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     for (const auto& script : discovered->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
     if (!notebook_->OpenProjectFiles(paths)) return false;
     project_ = std::move(discovered);
+    external_conflicts_.clear();
     std::vector<std::string> recent;
     recent.reserve(recent_projects_.size());
     for (const auto& path : recent_projects_) recent.push_back(path.ToStdString());
@@ -262,7 +264,90 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     SetStatusText(wxString::FromUTF8("Connected " + project_->root + " — " +
         std::to_string(project_->scripts.size()) + " script" +
         (project_->scripts.size() == 1 ? "" : "s")));
+    StartProjectWatcher();
     return true;
+}
+
+void MainFrame::StartProjectWatcher() {
+    if (!project_) return;
+    if (!project_watcher_) {
+        project_watcher_ = std::make_unique<wxFileSystemWatcher>();
+        project_watcher_->SetOwner(this);
+    } else {
+        project_watcher_->RemoveAll();
+    }
+    const wxFileName scripts_root(wxString::FromUTF8(project_->scripts_root));
+    if (!project_watcher_->AddTree(scripts_root, wxFSW_EVENT_CREATE | wxFSW_EVENT_DELETE |
+        wxFSW_EVENT_RENAME | wxFSW_EVENT_MODIFY | wxFSW_EVENT_WARNING | wxFSW_EVENT_ERROR)) {
+        SetStatusText("Project connected, but external file watching could not start");
+    }
+}
+
+void MainFrame::RefreshProjectDiscovery() {
+    if (!project_) return;
+    auto refreshed = discover_project_folder(project_->root);
+    if (!refreshed) return;
+    std::vector<wxString> paths;
+    paths.reserve(refreshed->scripts.size());
+    for (const auto& script : refreshed->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
+    notebook_->OpenProjectFiles(paths);
+    project_ = std::move(refreshed);
+}
+
+void MainFrame::HandleExternalScriptChange(const wxString& path) {
+    const auto result = notebook_->ReloadExternalFile(path);
+    const wxFileName file(path);
+    const std::string key = file.GetFullPath().ToStdString();
+    if (result == ExternalFileResult::Reloaded) {
+        external_conflicts_.erase(key);
+        SetStatusText("Reloaded external changes to " + file.GetFullName());
+    } else if (result == ExternalFileResult::Dirty) {
+        if (external_conflicts_.insert(key).second) wxBell();
+        SetStatusText(file.GetFullName() + " changed externally; local unsaved edits were kept");
+    } else if (result == ExternalFileResult::NotOpen && wxFileName::FileExists(path)) {
+        notebook_->OpenFiles({path});
+    } else if (result == ExternalFileResult::Unchanged) {
+        external_conflicts_.erase(key);
+    } else if (result == ExternalFileResult::Failed) {
+        SetStatusText("Could not read external changes to " + file.GetFullName());
+    }
+}
+
+void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {
+    if (!project_) return;
+    if (event.IsError()) {
+        SetStatusText("Project watcher warning: " + event.GetErrorDescription());
+        return;
+    }
+    const int change = event.GetChangeType();
+    const wxFileName path = event.GetPath();
+    const wxFileName new_path = event.GetNewPath();
+    const bool script = path.GetExt().CmpNoCase("rpy") == 0;
+    const bool new_script = new_path.GetExt().CmpNoCase("rpy") == 0;
+
+    if ((change & wxFSW_EVENT_RENAME) != 0) {
+        if (new_script && wxFileName::FileExists(new_path.GetFullPath())) {
+            HandleExternalScriptChange(new_path.GetFullPath());
+        }
+        RefreshProjectDiscovery();
+        StartProjectWatcher();
+        return;
+    }
+    if ((change & wxFSW_EVENT_CREATE) != 0) {
+        if (script && wxFileName::FileExists(path.GetFullPath()))
+            HandleExternalScriptChange(path.GetFullPath());
+        RefreshProjectDiscovery();
+        if (wxFileName::DirExists(path.GetFullPath())) StartProjectWatcher();
+        return;
+    }
+    if ((change & wxFSW_EVENT_DELETE) != 0) {
+        if (script) SetStatusText(path.GetFullName() + " was deleted externally; its open tab was preserved");
+        RefreshProjectDiscovery();
+        return;
+    }
+    if (!script || (change & wxFSW_EVENT_MODIFY) == 0) return;
+
+    HandleExternalScriptChange(path.GetFullPath());
 }
 
 void MainFrame::OnConnectProject(wxCommandEvent&) {

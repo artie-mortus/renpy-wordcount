@@ -69,4 +69,11 @@ std::vector<std::string> update_recent_projects(const std::vector<std::string>& 
     return result;
 }
 
+ExternalChangeDecision classify_external_change(std::string_view local_content,
+                                                std::string_view disk_content,
+                                                bool local_dirty) {
+    if (local_content == disk_content) return ExternalChangeDecision::Unchanged;
+    return local_dirty ? ExternalChangeDecision::Conflict : ExternalChangeDecision::Reload;
+}
+
 }  // namespace say_count

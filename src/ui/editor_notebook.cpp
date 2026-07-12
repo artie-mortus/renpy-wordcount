@@ -126,6 +126,40 @@ bool EditorNotebook::OpenProjectFiles(const std::vector<wxString>& paths) {
     return true;
 }
 
+ExternalFileResult EditorNotebook::ReloadExternalFile(const wxString& path) {
+    const wxString absolute_path = wxFileName(path).GetAbsolutePath();
+    wxStyledTextCtrl* editor = nullptr;
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        auto* candidate = EditorAt(index);
+        if (candidate && FilePath(candidate) == absolute_path) { editor = candidate; break; }
+    }
+    if (!editor) return ExternalFileResult::NotOpen;
+    if (!wxFileName::FileExists(absolute_path)) return ExternalFileResult::Missing;
+    wxFile file(absolute_path);
+    wxString content;
+    if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8)) return ExternalFileResult::Failed;
+    content = NormalizeTabs(content);
+    const std::string local = editor->GetText().ToStdString();
+    const std::string disk = content.ToStdString();
+    const auto decision = classify_external_change(local, disk, editor->GetModify());
+    if (decision == ExternalChangeDecision::Unchanged) return ExternalFileResult::Unchanged;
+    if (decision == ExternalChangeDecision::Conflict) return ExternalFileResult::Dirty;
+
+    const int selection_start = editor->GetSelectionStart();
+    const int selection_end = editor->GetSelectionEnd();
+    const int first_visible = editor->GetFirstVisibleLine();
+    editor->SetText(content);
+    editor->SetSelection(std::min(selection_start, editor->GetTextLength()),
+                         std::min(selection_end, editor->GetTextLength()));
+    editor->SetFirstVisibleLine(std::min(first_visible, editor->GetLineCount() - 1));
+    editor->SetSavePoint();
+    RefreshSpeakers(editor);
+    editor->Colourise(0, -1);
+    RefreshCompletionIndex();
+    analysis_timer_.StartOnce(kAnalysisDelayMs);
+    return ExternalFileResult::Reloaded;
+}
+
 void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->SetLexer(wxSTC_LEX_CONTAINER);
     editor->Unbind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);

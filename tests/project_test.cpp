@@ -38,3 +38,13 @@ TEST_CASE("recent projects move current root to front and enforce cap") {
     REQUIRE(say_count::update_recent_projects(recent, "/four", 2) ==
             std::vector<std::string>{"/four", "/two"});
 }
+
+TEST_CASE("external changes reload only clean documents") {
+    using say_count::ExternalChangeDecision;
+    REQUIRE(say_count::classify_external_change("same", "same", true) ==
+            ExternalChangeDecision::Unchanged);
+    REQUIRE(say_count::classify_external_change("old", "new", false) ==
+            ExternalChangeDecision::Reload);
+    REQUIRE(say_count::classify_external_change("local draft", "disk revision", true) ==
+            ExternalChangeDecision::Conflict);
+}

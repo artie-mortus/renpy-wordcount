@@ -16,6 +16,7 @@
 #include "core/find_replace.h"
 #include "core/diagnostics.h"
 #include "core/editor_commands.h"
+#include "core/project.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
@@ -28,6 +29,8 @@ struct FindStatus {
     std::size_t current = 0;
     std::size_t total = 0;
 };
+
+enum class ExternalFileResult { NotOpen, Unchanged, Reloaded, Dirty, Missing, Failed };
 
 class EditorNotebook final : public wxAuiNotebook {
 public:
@@ -64,6 +67,7 @@ public:
     void SetDiagnosticsHandler(DiagnosticsHandler handler);
     void SelectDiagnostic(const Diagnostic& diagnostic);
     void ToggleComments();
+    ExternalFileResult ReloadExternalFile(const wxString& path);
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;

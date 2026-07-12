@@ -2,6 +2,7 @@
 
 #include <wx/frame.h>
 #include <wx/aui/framemanager.h>
+#include <wx/fswatcher.h>
 
 #include "app/settings.h"
 #include "core/parser.h"
@@ -9,6 +10,8 @@
 #include "core/project.h"
 
 #include <optional>
+#include <memory>
+#include <unordered_set>
 
 class wxPanel;
 class wxTextCtrl;
@@ -39,6 +42,9 @@ private:
     void PositionFocusPill();
     void RebuildRecentProjectsMenu();
     bool ConnectProjectFolder(const wxString& selected_path);
+    void StartProjectWatcher();
+    void RefreshProjectDiscovery();
+    void HandleExternalScriptChange(const wxString& path);
     void RestoreWindow();
     void OnAbout(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -66,6 +72,7 @@ private:
     void OnSize(wxSizeEvent& event);
     void OnConnectProject(wxCommandEvent& event);
     void OnRecentProject(wxCommandEvent& event);
+    void OnFileSystemEvent(wxFileSystemWatcherEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -97,6 +104,8 @@ private:
     wxString focus_perspective_;
     std::optional<ProjectFolder> project_;
     std::vector<wxString> recent_projects_;
+    std::unique_ptr<wxFileSystemWatcher> project_watcher_;
+    std::unordered_set<std::string> external_conflicts_;
 };
 
 }  // namespace say_count::ui
