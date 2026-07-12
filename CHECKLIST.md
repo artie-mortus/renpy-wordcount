@@ -42,7 +42,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 4.4 — Find in current file · mini · ≤700,000 tok — done 2026-07-12, commit `73e3d28`
 - [x] Step 4.5 — Find across files · mini · ≤800,000 tok — done 2026-07-12, commit `8a0f748`
 - [x] Step 4.6 — Diagnostics engine · full · ≤900,000 tok — done 2026-07-12, commit `5ebb4cc`
-- [ ] Step 4.7 — Diagnostics UI · mini · ≤650,000 tok
+- [x] Step 4.7 — Diagnostics UI · mini · ≤650,000 tok — done 2026-07-12, commit `c808b3a`
 - [ ] Step 4.8 — Editing commands and shortcuts · mini · ≤750,000 tok
 - [ ] Step 4.9 — Focus mode · mini · ≤400,000 tok
 
