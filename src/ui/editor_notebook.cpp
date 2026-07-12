@@ -18,6 +18,12 @@ namespace {
 constexpr const char* kFilePathProperty = "say-count-file-path";
 constexpr int kAnalysisDelayMs = 120;
 constexpr int kFindIndicator = 8;
+constexpr int kDiagnosticErrorIndicator = 9;
+constexpr int kDiagnosticWarningIndicator = 10;
+constexpr int kDiagnosticNoticeIndicator = 11;
+constexpr int kDiagnosticErrorMarker = 20;
+constexpr int kDiagnosticWarningMarker = 21;
+constexpr int kDiagnosticNoticeMarker = 22;
 constexpr std::size_t kMaxHighlightedMatches = 2000;
 enum EditorStyle { kDefault, kComment, kKeyword, kLabel, kSpeaker, kString, kPython, kStatement };
 
@@ -117,10 +123,20 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->Bind(wxEVT_STC_CHARADDED, &EditorNotebook::OnCharAdded, this);
     editor->Unbind(wxEVT_STC_AUTOCOMP_COMPLETED, &EditorNotebook::OnAutoCompCompleted, this);
     editor->Bind(wxEVT_STC_AUTOCOMP_COMPLETED, &EditorNotebook::OnAutoCompCompleted, this);
+    editor->Unbind(wxEVT_STC_DWELLSTART, &EditorNotebook::OnDwellStart, this);
+    editor->Bind(wxEVT_STC_DWELLSTART, &EditorNotebook::OnDwellStart, this);
+    editor->Unbind(wxEVT_STC_DWELLEND, &EditorNotebook::OnDwellEnd, this);
+    editor->Bind(wxEVT_STC_DWELLEND, &EditorNotebook::OnDwellEnd, this);
+    editor->SetMouseDwellTime(350);
     editor->AutoCompSetIgnoreCase(true);
     editor->AutoCompSetMaxHeight(8);
     editor->SetMarginType(0, wxSTC_MARGIN_NUMBER);
     editor->SetMarginWidth(0, editor->TextWidth(wxSTC_STYLE_LINENUMBER, "00000") + 8);
+    editor->SetMarginType(1, wxSTC_MARGIN_SYMBOL);
+    editor->SetMarginMask(1, (1 << kDiagnosticErrorMarker) |
+                             (1 << kDiagnosticWarningMarker) |
+                             (1 << kDiagnosticNoticeMarker));
+    editor->SetMarginWidth(1, 14);
     editor->SetCaretLineVisible(true);
     editor->SetWrapMode(settings_.word_wrap ? wxSTC_WRAP_WORD : wxSTC_WRAP_NONE);
     const bool dark = settings_.theme == app::EditorTheme::Dark ||
@@ -153,6 +169,15 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->IndicatorSetForeground(kFindIndicator, dark ? wxColour("#f2ca72") : wxColour("#d49a13"));
     editor->IndicatorSetAlpha(kFindIndicator, 80);
     editor->IndicatorSetOutlineAlpha(kFindIndicator, 180);
+    editor->IndicatorSetStyle(kDiagnosticErrorIndicator, wxSTC_INDIC_SQUIGGLE);
+    editor->IndicatorSetForeground(kDiagnosticErrorIndicator, wxColour("#d64545"));
+    editor->IndicatorSetStyle(kDiagnosticWarningIndicator, wxSTC_INDIC_SQUIGGLE);
+    editor->IndicatorSetForeground(kDiagnosticWarningIndicator, wxColour("#d49a13"));
+    editor->IndicatorSetStyle(kDiagnosticNoticeIndicator, wxSTC_INDIC_SQUIGGLE);
+    editor->IndicatorSetForeground(kDiagnosticNoticeIndicator, wxColour("#4186c9"));
+    editor->MarkerDefine(kDiagnosticErrorMarker, wxSTC_MARK_CIRCLE, wxColour("#ffffff"), wxColour("#d64545"));
+    editor->MarkerDefine(kDiagnosticWarningMarker, wxSTC_MARK_CIRCLE, wxColour("#ffffff"), wxColour("#d49a13"));
+    editor->MarkerDefine(kDiagnosticNoticeMarker, wxSTC_MARK_CIRCLE, wxColour("#ffffff"), wxColour("#4186c9"));
     editor->Colourise(0, -1);
 }
 
@@ -276,12 +301,90 @@ void EditorNotebook::OnAutoCompCompleted(wxStyledTextEvent& event) {
     event.Skip();
 }
 
+void EditorNotebook::OnDwellStart(wxStyledTextEvent& event) {
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
+    if (!editor || event.GetPosition() < 0) return;
+    const int page = GetPageIndex(editor);
+    if (page == wxNOT_FOUND) return;
+    const std::size_t line = static_cast<std::size_t>(editor->LineFromPosition(event.GetPosition()) + 1);
+    std::string message;
+    for (const auto& diagnostic : diagnostics_) {
+        if (diagnostic.file_index != static_cast<std::size_t>(page) || diagnostic.line_number != line) continue;
+        if (!message.empty()) message += "\n";
+        message += diagnostic.message;
+    }
+    if (!message.empty()) editor->CallTipShow(event.GetPosition(), wxString::FromUTF8(message));
+}
+
+void EditorNotebook::OnDwellEnd(wxStyledTextEvent& event) {
+    if (auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject())) editor->CallTipCancel();
+}
+
 void EditorNotebook::AnalyzeActive() {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || !analysis_handler_) return;
     const wxString source = editor->GetText();
     analysis_handler_(source, analyze_script(source.ToStdString()));
+    RefreshDiagnostics();
+}
+
+void EditorNotebook::SetDiagnosticsHandler(DiagnosticsHandler handler) {
+    diagnostics_handler_ = std::move(handler);
+    RefreshDiagnostics();
+}
+
+void EditorNotebook::RefreshDiagnostics() {
+    diagnostics_ = diagnose_project(ProjectScripts());
+    ApplyDiagnostics();
+    if (diagnostics_handler_) diagnostics_handler_(diagnostics_);
+}
+
+void EditorNotebook::ApplyDiagnostics() {
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        auto* editor = EditorAt(index);
+        if (!editor) continue;
+        for (const int indicator : {kDiagnosticErrorIndicator, kDiagnosticWarningIndicator,
+                                    kDiagnosticNoticeIndicator}) {
+            editor->SetIndicatorCurrent(indicator);
+            editor->IndicatorClearRange(0, editor->GetTextLength());
+        }
+        for (const int marker : {kDiagnosticErrorMarker, kDiagnosticWarningMarker,
+                                 kDiagnosticNoticeMarker}) editor->MarkerDeleteAll(marker);
+    }
+    for (const auto& diagnostic : diagnostics_) {
+        if (diagnostic.file_index >= GetPageCount()) continue;
+        auto* editor = EditorAt(diagnostic.file_index);
+        if (!editor) continue;
+        int indicator = kDiagnosticWarningIndicator;
+        int marker = kDiagnosticWarningMarker;
+        if (diagnostic.severity == DiagnosticSeverity::Error) {
+            indicator = kDiagnosticErrorIndicator; marker = kDiagnosticErrorMarker;
+        } else if (diagnostic.severity == DiagnosticSeverity::Notice) {
+            indicator = kDiagnosticNoticeIndicator; marker = kDiagnosticNoticeMarker;
+        }
+        if (diagnostic.position < static_cast<std::size_t>(editor->GetTextLength())) {
+            editor->SetIndicatorCurrent(indicator);
+            editor->IndicatorFillRange(static_cast<int>(diagnostic.position),
+                                       static_cast<int>(std::min<std::size_t>(
+                                           diagnostic.length, editor->GetTextLength() - diagnostic.position)));
+        }
+        if (diagnostic.line_number > 0 && diagnostic.line_number <= static_cast<std::size_t>(editor->GetLineCount()))
+            editor->MarkerAdd(static_cast<int>(diagnostic.line_number - 1), marker);
+    }
+}
+
+void EditorNotebook::SelectDiagnostic(const Diagnostic& diagnostic) {
+    if (diagnostic.file_index >= GetPageCount()) return;
+    SetSelection(diagnostic.file_index);
+    auto* editor = EditorAt(diagnostic.file_index);
+    if (!editor) return;
+    const std::size_t end = std::min<std::size_t>(diagnostic.position + diagnostic.length,
+                                                 editor->GetTextLength());
+    editor->SetSelection(static_cast<int>(std::min<std::size_t>(diagnostic.position, end)),
+                         static_cast<int>(end));
+    editor->EnsureCaretVisible();
+    editor->SetFocus();
 }
 
 void EditorNotebook::JumpToLine(std::size_t line_number) {
@@ -628,6 +731,8 @@ void EditorNotebook::OnPageClosed(wxAuiNotebookEvent& event) {
     RefreshCompletionIndex();
     if (GetPageCount() == 0) {
         NewTab();
+    } else {
+        AnalyzeActive();
     }
     event.Skip();
 }

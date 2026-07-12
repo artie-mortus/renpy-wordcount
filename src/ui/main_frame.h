@@ -19,6 +19,7 @@ namespace say_count::ui {
 class EditorNotebook;
 class SpeakerStatsPanel;
 class OutlinePanel;
+class DiagnosticsPanel;
 struct FindStatus;
 
 class MainFrame final : public wxFrame {
@@ -59,6 +60,7 @@ private:
     EditorNotebook* notebook_ = nullptr;
     SpeakerStatsPanel* speaker_stats_ = nullptr;
     OutlinePanel* outline_ = nullptr;
+    DiagnosticsPanel* diagnostics_ = nullptr;
     wxPanel* find_bar_ = nullptr;
     wxTextCtrl* find_input_ = nullptr;
     wxTextCtrl* replace_input_ = nullptr;

@@ -14,6 +14,7 @@
 #include "core/parser.h"
 #include "core/autocomplete.h"
 #include "core/find_replace.h"
+#include "core/diagnostics.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
@@ -30,6 +31,7 @@ class EditorNotebook final : public wxAuiNotebook {
 public:
     using AnalysisHandler = std::function<void(const wxString&, const ScriptAnalysis&)>;
     using FindStatusHandler = std::function<void(const FindStatus&)>;
+    using DiagnosticsHandler = std::function<void(const std::vector<Diagnostic>&)>;
 
     EditorNotebook(wxWindow* parent, const app::EditorSettings& settings,
                    AnalysisHandler analysis_handler);
@@ -56,6 +58,8 @@ public:
     void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);
+    void SetDiagnosticsHandler(DiagnosticsHandler handler);
+    void SelectDiagnostic(const Diagnostic& diagnostic);
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;
@@ -72,12 +76,16 @@ private:
     void OnModified(wxStyledTextEvent& event);
     void OnCharAdded(wxStyledTextEvent& event);
     void OnAutoCompCompleted(wxStyledTextEvent& event);
+    void OnDwellStart(wxStyledTextEvent& event);
+    void OnDwellEnd(wxStyledTextEvent& event);
     void OnPageChanged(wxAuiNotebookEvent& event);
     void OnAnalysisTimer(wxTimerEvent& event);
     void AnalyzeActive();
     void RefreshSpeakers(wxStyledTextCtrl* editor);
     void RefreshCompletionIndex();
     FindStatus RefreshFindHighlights();
+    void RefreshDiagnostics();
+    void ApplyDiagnostics();
 
     unsigned int next_untitled_number_ = 1;
     app::EditorSettings settings_;
@@ -89,6 +97,8 @@ private:
     std::string find_query_;
     FindOptions find_options_;
     FindStatusHandler find_status_handler_;
+    std::vector<Diagnostic> diagnostics_;
+    DiagnosticsHandler diagnostics_handler_;
 };
 
 }  // namespace say_count::ui

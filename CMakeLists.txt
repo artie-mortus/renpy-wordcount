@@ -24,6 +24,7 @@ add_executable(say-count
     src/app/main.cpp
     src/app/settings.cpp
     src/ui/editor_notebook.cpp
+    src/ui/diagnostics_panel.cpp
     src/ui/main_frame.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp

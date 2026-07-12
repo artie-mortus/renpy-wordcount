@@ -24,6 +24,7 @@
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
 #include "ui/outline_panel.h"
+#include "ui/diagnostics_panel.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -84,6 +85,7 @@ MainFrame::MainFrame()
     speaker_stats_ = new SpeakerStatsPanel(
         this, wxFileName(settings_.path()).GetPath() + wxFILE_SEP_PATH + "targets.ini");
     outline_ = new OutlinePanel(this);
+    diagnostics_ = new DiagnosticsPanel(this);
     notebook_ = new EditorNotebook(this, editor_settings_, [this](const wxString& source, const ScriptAnalysis& analysis) {
         analysis_ = analysis;
         // wxString::Format aborts on %zu; compose the text without varargs.
@@ -96,6 +98,12 @@ MainFrame::MainFrame()
     });
     BuildFindBar();
     BuildFindResults();
+    notebook_->SetDiagnosticsHandler([this](const std::vector<Diagnostic>& diagnostics) {
+        diagnostics_->SetDiagnostics(diagnostics);
+    });
+    diagnostics_->SetJumpHandler([this](const Diagnostic& diagnostic) {
+        notebook_->SelectDiagnostic(diagnostic);
+    });
     notebook_->SetFindStatusHandler([this](const FindStatus& status) { UpdateFindStatus(status); });
     speaker_stats_->SetLineJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
@@ -104,6 +112,8 @@ MainFrame::MainFrame()
                          .PaneBorder(false).DockFixed(true).Resizable(false).BestSize(-1, 44).Hide());
     manager_.AddPane(find_results_, wxAuiPaneInfo().Bottom().Name("find-results").Caption("Find Results")
                          .BestSize(-1, 190).MinSize(300, 110).CloseButton(false).Hide());
+    manager_.AddPane(diagnostics_, wxAuiPaneInfo().Bottom().Name("diagnostics").Caption("Diagnostics")
+                         .BestSize(-1, 190).MinSize(320, 110).CloseButton(true).MaximizeButton(true));
     manager_.AddPane(speaker_stats_, wxAuiPaneInfo().Right().Name("speaker-statistics")
                          .Caption("Speaker Statistics").BestSize(320, 500).MinSize(240, 180)
                          .CloseButton(true).MaximizeButton(true));
