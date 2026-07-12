@@ -37,11 +37,11 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 ## Phase 4 — Editor productivity features
 
 - [x] Step 4.1 — Outline panel · mini · ≤750,000 tok — done 2026-07-12, commit `714b429`
-- [ ] Step 4.2 — Basic autocomplete · full · ≤750,000 tok
-- [ ] Step 4.3 — Asset-aware autocomplete · full · ≤850,000 tok
+- [ ] Step 4.2 — Basic autocomplete · full · ≤750,000 tok — **HIGH REASONING REQUIRED**
+- [ ] Step 4.3 — Asset-aware autocomplete · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 4.4 — Find in current file · mini · ≤700,000 tok
 - [ ] Step 4.5 — Find across files · mini · ≤800,000 tok
-- [ ] Step 4.6 — Diagnostics engine · full · ≤900,000 tok
+- [ ] Step 4.6 — Diagnostics engine · full · ≤900,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 4.7 — Diagnostics UI · mini · ≤650,000 tok
 - [ ] Step 4.8 — Editing commands and shortcuts · mini · ≤750,000 tok
 - [ ] Step 4.9 — Focus mode · mini · ≤400,000 tok
@@ -50,18 +50,18 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 
 - [ ] Step 5.1 — Project folder model · mini · ≤700,000 tok
 - [ ] Step 5.2 — External file watching · mini · ≤650,000 tok
-- [ ] Step 5.3 — Conflict review · full · ≤800,000 tok
+- [ ] Step 5.3 — Conflict review · full · ≤800,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 5.4 — Snapshot storage · mini · ≤700,000 tok
 - [ ] Step 5.5 — Snapshot restore and comparison · mini · ≤700,000 tok
-- [ ] Step 5.6 — Import and export compatibility · full · ≤900,000 tok
-- [ ] Step 5.7 — Safe symbol renaming · full · ≤900,000 tok
+- [ ] Step 5.6 — Import and export compatibility · full · ≤900,000 tok — **HIGH REASONING REQUIRED**
+- [ ] Step 5.7 — Safe symbol renaming · full · ≤900,000 tok — **HIGH REASONING REQUIRED**
 
 ## Phase 6 — Ren'Py integration
 
 - [ ] Step 6.1 — Ren'Py SDK detection and settings · mini · ≤550,000 tok
 - [ ] Step 6.2 — Launch and stop Ren'Py · mini · ≤800,000 tok
-- [ ] Step 6.3 — Warp and Interactive Director · full · ≤750,000 tok
-- [ ] Step 6.4 — Runtime state presets · full · ≤850,000 tok
+- [ ] Step 6.3 — Warp and Interactive Director · full · ≤750,000 tok — **HIGH REASONING REQUIRED**
+- [ ] Step 6.4 — Runtime state presets · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 6.5 — Lint integration · mini · ≤650,000 tok
 - [ ] Step 6.6 — Translation and dialogue commands · mini · ≤650,000 tok
 - [ ] Step 6.7 — Asset browser · mini · ≤850,000 tok
@@ -69,11 +69,11 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 
 ## Phase 7 — Routes and flow map
 
-- [ ] Step 7.1 — Route graph data model · full · ≤850,000 tok
-- [ ] Step 7.2 — Route walker · full · ≤950,000 tok
+- [ ] Step 7.1 — Route graph data model · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
+- [ ] Step 7.2 — Route walker · full · ≤950,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 7.3 — Route details UI · mini · ≤650,000 tok
-- [ ] Step 7.4 — Basic flow map rendering · full · ≤850,000 tok
-- [ ] Step 7.5 — Flow map layout and interaction · full · ≤1,000,000 tok
+- [ ] Step 7.4 — Basic flow map rendering · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
+- [ ] Step 7.5 — Flow map layout and interaction · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED**
 
 ## Phase 8 — Long-tail production tools (deferred)
 
@@ -92,7 +92,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [ ] Step 9.2 — Static or portable wxWidgets build · mini · ≤800,000 tok
 - [ ] Step 9.3 — Linux desktop integration · mini · ≤500,000 tok
 - [ ] Step 9.4 — AppImage · mini · ≤700,000 tok
-- [ ] Step 9.5 — Final parity audit · full · ≤1,000,000 tok
+- [ ] Step 9.5 — Final parity audit · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED**
 
 ## Milestone gates
 

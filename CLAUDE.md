@@ -23,6 +23,12 @@ Native C++17 / wxWidgets rewrite of Say Count (Ren'Py script word counter). The 
 - `wip:` commits during a step; squash to one commit at step end; then update `STATUS.md` (≤40 lines) and tick the step in `CHECKLIST.md` with the commit hash.
 - Record architectural choices in `DECISIONS.md`; tick features in `PARITY-CHECKLIST.md` as they land.
 
+## Reasoning-level gate
+
+Before starting a step, inspect its entry in `CHECKLIST.md`. If it contains **HIGH REASONING REQUIRED**, do not implement it with low reasoning. Stop and warn the user to restart or rerun the step with high reasoning. Do not treat a request such as "do next step" as permission to bypass this gate.
+
+Steps requiring high reasoning: 4.2, 4.3, 4.6, 5.3, 5.6, 5.7, 6.3, 6.4, 7.1, 7.2, 7.4, 7.5, and 9.5.
+
 ## Build and test
 
 ```bash
