@@ -207,7 +207,8 @@ void EditorNotebook::AnalyzeActive() {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || !analysis_handler_) return;
-    analysis_handler_(analyze_script(editor->GetText().ToStdString()));
+    const wxString source = editor->GetText();
+    analysis_handler_(source, analyze_script(source.ToStdString()));
 }
 
 void EditorNotebook::JumpToLine(std::size_t line_number) {

@@ -10,6 +10,7 @@ namespace say_count::ui {
 
 class EditorNotebook;
 class SpeakerStatsPanel;
+class OutlinePanel;
 
 class MainFrame final : public wxFrame {
 public:
@@ -35,6 +36,7 @@ private:
     app::Settings settings_;
     EditorNotebook* notebook_ = nullptr;
     SpeakerStatsPanel* speaker_stats_ = nullptr;
+    OutlinePanel* outline_ = nullptr;
     wxAuiManager manager_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;

@@ -11,6 +11,7 @@ include(${wxWidgets_USE_FILE})
 
 add_library(say_count_core STATIC
     src/core/parser.cpp
+    src/core/outline.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
 )
@@ -21,6 +22,7 @@ add_executable(say-count
     src/app/settings.cpp
     src/ui/editor_notebook.cpp
     src/ui/main_frame.cpp
+    src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
 )
 target_link_libraries(say-count PRIVATE say_count_core ${wxWidgets_LIBRARIES})
@@ -43,6 +45,7 @@ if(BUILD_TESTING)
         tests/parser_test.cpp
         tests/analysis_test.cpp
         tests/tokenizer_test.cpp
+        tests/outline_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp
     )

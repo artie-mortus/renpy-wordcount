@@ -15,6 +15,7 @@
 
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
+#include "ui/outline_panel.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -69,7 +70,8 @@ MainFrame::MainFrame()
     CreateStatusBar();
     speaker_stats_ = new SpeakerStatsPanel(
         this, wxFileName(settings_.path()).GetPath() + wxFILE_SEP_PATH + "targets.ini");
-    notebook_ = new EditorNotebook(this, editor_settings_, [this](const ScriptAnalysis& analysis) {
+    outline_ = new OutlinePanel(this);
+    notebook_ = new EditorNotebook(this, editor_settings_, [this](const wxString& source, const ScriptAnalysis& analysis) {
         analysis_ = analysis;
         // wxString::Format aborts on %zu; compose the text without varargs.
         const std::string text = std::to_string(analysis.total_words) + " dialogue words \xc2\xb7 " +
@@ -77,12 +79,16 @@ MainFrame::MainFrame()
                                  std::to_string(analysis.reading_minutes) + " min reading time";
         SetStatusText(wxString::FromUTF8(text));
         speaker_stats_->SetAnalysis(analysis);
+        outline_->SetDocument(source, analysis);
     });
     speaker_stats_->SetLineJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
+    outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     manager_.AddPane(notebook_, wxAuiPaneInfo().CenterPane().Name("editor"));
     manager_.AddPane(speaker_stats_, wxAuiPaneInfo().Right().Name("speaker-statistics")
                          .Caption("Speaker Statistics").BestSize(320, 500).MinSize(240, 180)
                          .CloseButton(true).MaximizeButton(true));
+    manager_.AddPane(outline_, wxAuiPaneInfo().Left().Name("outline").Caption("Outline")
+                         .BestSize(280, 500).MinSize(200, 160).CloseButton(true).MaximizeButton(true));
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();

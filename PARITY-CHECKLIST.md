@@ -44,7 +44,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 38 | collapsible side panels (fold state remembered), focus mode with floating word-count pill, draggable editor/stats divider | Pending |
 | 39 | tabs: dirty dot when a file differs from what's on disk, inline rename on double-click | Pending |
 | 40 | snapshots: automatic backup every 10 minutes plus manual "Snapshot now"; restore or diff any point (last 50 kept) | Pending |
-| 41 | outline panel: labels with word counts, menu choices, and jumps/calls — click to navigate; jumps to missing labels shown in red | Pending |
+| 41 | outline panel: labels with word counts, menu choices, and jumps/calls — click to navigate; jumps to missing labels shown in red | Done (Step 4.1) |
 | 42 | routes panel: walks jumps/calls/fall-through from `start` for shortest/longest route word counts and reading time, ending and branch-point counts, and unreachable labels (click to jump) | Pending |
 | 43 | branch-aware route details: shows dialogue words inside each inline menu choice and conditional block | Pending |
 | 44 | flow map: SVG story graph of labels — gold border marks `start`, red marks endings, dashed red curves are loops back, dashed boxes are unreachable; click a box to jump | Pending |

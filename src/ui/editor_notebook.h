@@ -20,7 +20,7 @@ namespace say_count::ui {
 
 class EditorNotebook final : public wxAuiNotebook {
 public:
-    using AnalysisHandler = std::function<void(const ScriptAnalysis&)>;
+    using AnalysisHandler = std::function<void(const wxString&, const ScriptAnalysis&)>;
 
     EditorNotebook(wxWindow* parent, const app::EditorSettings& settings,
                    AnalysisHandler analysis_handler);
