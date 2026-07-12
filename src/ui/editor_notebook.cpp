@@ -114,6 +114,18 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
     return opened;
 }
 
+bool EditorNotebook::OpenProjectFiles(const std::vector<wxString>& paths) {
+    if (paths.empty()) return true;
+    const bool opened = OpenFiles(paths);
+    if (!opened) return false;
+    for (size_t index = GetPageCount(); index-- > 0;) {
+        auto* editor = EditorAt(index);
+        if (GetPageCount() > 1 && editor && FilePath(editor).empty() && !editor->GetModify() &&
+            editor->GetText().empty()) DeletePage(index);
+    }
+    return true;
+}
+
 void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->SetLexer(wxSTC_LEX_CONTAINER);
     editor->Unbind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);

@@ -1,10 +1,10 @@
 # Status
 
-- Completed: Steps 0.1 through 4.9 (Phase 4 complete).
-- View → Focus Mode (Ctrl+Shift+F) saves the full wxAUI perspective and hides every managed pane except the editor.
-- Leaving focus mode reloads the exact saved perspective, restoring prior visibility, docking positions, sizes, and find/diagnostics state.
-- A floating bottom-right pill shows the active document's live dialogue-word count and refits/repositions on edits and frame resizing.
-- The pill is unmanaged by wxAUI, so it cannot contaminate the serialized layout being preserved.
-- Verified (2026-07-12): `cmake --build build -j` succeeded; `ctest --test-dir build --output-on-failure` passed 67/67, including all editing-command coverage and parser parity tests.
+- Completed: Steps 0.1 through 5.1.
+- File → Connect Project Folder accepts either a Ren'Py root or `game/` folder and tracks canonical project/scripts roots independently from open tabs.
+- Discovery recursively finds and sorts `.rpy` files, opens every script, and removes only untouched blank placeholder tabs.
+- The recent-project submenu persists up to eight deduplicated roots in the existing atomic settings file.
+- Project-wide search, autocomplete, and diagnostics immediately cover every discovered script because the folder model populates the shared open-document model.
+- Verified (2026-07-12): `cmake --build build -j` succeeded; `ctest --test-dir build --output-on-failure` passed 69/69, including recursive root/game discovery, ordering, recent-list behavior, and parser parity tests.
 - Known issues: pre-existing Step 1.3-era re-entrant quit/discard-modal `ConfirmCloseAll` crash remains; not reproducible in normal flows.
-- Next step: Phase 5, Step 5.1 — project folder model.
+- Next step: Phase 5, Step 5.2 — external file watching.

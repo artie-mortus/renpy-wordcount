@@ -10,6 +10,7 @@
 #include <wx/filename.h>
 #include <wx/file.h>
 #include <wx/datetime.h>
+#include <wx/dirdlg.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include <wx/button.h>
@@ -53,6 +54,9 @@ enum MenuId {
     kToggleComment,
     kShortcutSheet,
     kFocusMode,
+    kConnectProject,
+    kRecentProjectFirst,
+    kRecentProjectLast = kRecentProjectFirst + 7,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -85,6 +89,7 @@ MainFrame::MainFrame()
       manager_(this) {
     SetMinSize(wxSize(400, 300));
     editor_settings_ = settings_.LoadEditor();
+    recent_projects_ = settings_.LoadRecentProjects();
     BuildMenus();
     CreateStatusBar();
     speaker_stats_ = new SpeakerStatsPanel(
@@ -154,6 +159,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnShowShortcuts, this, kShortcutSheet);
     Bind(wxEVT_MENU, &MainFrame::OnToggleFocus, this, kFocusMode);
     Bind(wxEVT_SIZE, &MainFrame::OnSize, this);
+    Bind(wxEVT_MENU, &MainFrame::OnConnectProject, this, kConnectProject);
+    Bind(wxEVT_MENU, &MainFrame::OnRecentProject, this, kRecentProjectFirst, kRecentProjectLast);
 }
 
 MainFrame::~MainFrame() {
@@ -167,6 +174,11 @@ void MainFrame::BuildMenus() {
     file->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current script");
     file->Append(wxID_SAVEAS, "Save &As…\tCtrl+Shift+S", "Save the current script under a new name");
     file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
+    file->AppendSeparator();
+    file->Append(kConnectProject, "Connect Project &Folder…", "Open every Ren'Py script in a project");
+    recent_projects_menu_ = new wxMenu();
+    file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
+    RebuildRecentProjectsMenu();
     file->AppendSeparator();
     auto* export_menu = new wxMenu();
     export_menu->Append(kExportCsv, "Speaker statistics (CSV)…");
@@ -208,6 +220,61 @@ void MainFrame::BuildMenus() {
     menu_bar->Append(view, "&View");
     menu_bar->Append(help, "&Help");
     SetMenuBar(menu_bar);
+}
+
+void MainFrame::RebuildRecentProjectsMenu() {
+    if (!recent_projects_menu_) return;
+    while (recent_projects_menu_->GetMenuItemCount() != 0)
+        recent_projects_menu_->Destroy(recent_projects_menu_->FindItemByPosition(0));
+    if (recent_projects_.empty()) {
+        auto* item = recent_projects_menu_->Append(wxID_ANY, "(None)");
+        item->Enable(false);
+        return;
+    }
+    const std::size_t count = std::min<std::size_t>(recent_projects_.size(), 8);
+    for (std::size_t index = 0; index < count; ++index)
+        recent_projects_menu_->Append(kRecentProjectFirst + static_cast<int>(index), recent_projects_[index]);
+}
+
+bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
+    std::string error;
+    auto discovered = discover_project_folder(selected_path.ToStdString(), &error);
+    if (!discovered) {
+        wxMessageBox(wxString::FromUTF8(error), "Project connection failed",
+                     wxOK | wxICON_ERROR, this);
+        return false;
+    }
+    std::vector<wxString> paths;
+    paths.reserve(discovered->scripts.size());
+    for (const auto& script : discovered->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
+    if (!notebook_->OpenProjectFiles(paths)) return false;
+    project_ = std::move(discovered);
+    std::vector<std::string> recent;
+    recent.reserve(recent_projects_.size());
+    for (const auto& path : recent_projects_) recent.push_back(path.ToStdString());
+    recent = update_recent_projects(recent, project_->root, 8);
+    recent_projects_.clear();
+    for (const auto& path : recent) recent_projects_.push_back(wxString::FromUTF8(path));
+    settings_.SaveRecentProjects(recent_projects_);
+    RebuildRecentProjectsMenu();
+    const wxFileName root(wxString::FromUTF8(project_->root));
+    SetTitle("Say Count — " + root.GetFullName());
+    SetStatusText(wxString::FromUTF8("Connected " + project_->root + " — " +
+        std::to_string(project_->scripts.size()) + " script" +
+        (project_->scripts.size() == 1 ? "" : "s")));
+    return true;
+}
+
+void MainFrame::OnConnectProject(wxCommandEvent&) {
+    wxDirDialog dialog(this, "Choose a Ren'Py project or game folder", wxEmptyString,
+                       wxDD_DIR_MUST_EXIST);
+    if (dialog.ShowModal() == wxID_OK) ConnectProjectFolder(dialog.GetPath());
+}
+
+void MainFrame::OnRecentProject(wxCommandEvent& event) {
+    const int index = event.GetId() - kRecentProjectFirst;
+    if (index >= 0 && static_cast<std::size_t>(index) < recent_projects_.size())
+        ConnectProjectFolder(recent_projects_[static_cast<std::size_t>(index)]);
 }
 
 void MainFrame::BuildFindBar() {

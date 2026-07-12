@@ -40,6 +40,7 @@ public:
 
     void NewTab();
     bool OpenFiles(const std::vector<wxString>& paths);
+    bool OpenProjectFiles(const std::vector<wxString>& paths);
     bool SaveCurrent();
     bool SaveCurrentAs();
     void CloseCurrentTab();

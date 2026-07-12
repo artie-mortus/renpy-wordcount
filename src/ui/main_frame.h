@@ -6,6 +6,9 @@
 #include "app/settings.h"
 #include "core/parser.h"
 #include "core/find_replace.h"
+#include "core/project.h"
+
+#include <optional>
 
 class wxPanel;
 class wxTextCtrl;
@@ -13,6 +16,7 @@ class wxCheckBox;
 class wxStaticText;
 class wxDataViewListCtrl;
 class wxDataViewEvent;
+class wxMenu;
 
 namespace say_count::ui {
 
@@ -33,6 +37,8 @@ private:
     void BuildFindResults();
     void BuildFocusPill();
     void PositionFocusPill();
+    void RebuildRecentProjectsMenu();
+    bool ConnectProjectFolder(const wxString& selected_path);
     void RestoreWindow();
     void OnAbout(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -58,6 +64,8 @@ private:
     void OnShowShortcuts(wxCommandEvent& event);
     void OnToggleFocus(wxCommandEvent& event);
     void OnSize(wxSizeEvent& event);
+    void OnConnectProject(wxCommandEvent& event);
+    void OnRecentProject(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -79,6 +87,7 @@ private:
     wxDataViewListCtrl* find_results_ = nullptr;
     wxPanel* focus_pill_ = nullptr;
     wxStaticText* focus_count_ = nullptr;
+    wxMenu* recent_projects_menu_ = nullptr;
     std::vector<ProjectFindMatch> project_matches_;
     wxAuiManager manager_;
     app::EditorSettings editor_settings_;
@@ -86,6 +95,8 @@ private:
     ScriptAnalysis analysis_;
     bool focus_mode_ = false;
     wxString focus_perspective_;
+    std::optional<ProjectFolder> project_;
+    std::vector<wxString> recent_projects_;
 };
 
 }  // namespace say_count::ui

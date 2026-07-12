@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <algorithm>
+#include <cctype>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -51,6 +52,49 @@ std::optional<std::string> ReadFile(const wxString& path) {
     return contents.str();
 }
 
+std::string JsonEscape(const std::string& value) {
+    std::string escaped;
+    for (const char c : value) {
+        if (c == '\\' || c == '"') { escaped.push_back('\\'); escaped.push_back(c); }
+        else if (c == '\n') escaped += "\\n";
+        else if (c == '\r') escaped += "\\r";
+        else if (c == '\t') escaped += "\\t";
+        else escaped.push_back(c);
+    }
+    return escaped;
+}
+
+std::vector<wxString> ReadStringArray(const std::string& json, const char* key) {
+    std::vector<wxString> values;
+    const auto key_position = json.find(std::string("\"") + key + "\"");
+    if (key_position == std::string::npos) return values;
+    const auto open = json.find('[', key_position);
+    if (open == std::string::npos) return values;
+    for (std::size_t index = open + 1; index < json.size();) {
+        while (index < json.size() && std::isspace(static_cast<unsigned char>(json[index]))) ++index;
+        if (index >= json.size() || json[index] == ']') break;
+        if (json[index] == ',') { ++index; continue; }
+        if (json[index] != '"') break;
+        ++index;
+        std::string value;
+        bool escaped = false;
+        for (; index < json.size(); ++index) {
+            const char c = json[index];
+            if (escaped) {
+                if (c == 'n') value.push_back('\n');
+                else if (c == 'r') value.push_back('\r');
+                else if (c == 't') value.push_back('\t');
+                else value.push_back(c);
+                escaped = false;
+            } else if (c == '\\') escaped = true;
+            else if (c == '"') { ++index; break; }
+            else value.push_back(c);
+        }
+        values.push_back(wxString::FromUTF8(value));
+    }
+    return values;
+}
+
 }  // namespace
 
 Settings::Settings() {
@@ -94,14 +138,24 @@ EditorSettings Settings::LoadEditor() const {
 }
 
 bool Settings::SaveWindow(const WindowSettings& window) const {
-    return Write(window, LoadEditor());
+    return Write(window, LoadEditor(), LoadRecentProjects());
 }
 
 bool Settings::SaveEditor(const EditorSettings& editor) const {
-    return Write(LoadWindow(), editor);
+    return Write(LoadWindow(), editor, LoadRecentProjects());
 }
 
-bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSettings& editor) const {
+std::vector<wxString> Settings::LoadRecentProjects() const {
+    const auto contents = ReadFile(path_);
+    return contents ? ReadStringArray(*contents, "recentProjects") : std::vector<wxString>{};
+}
+
+bool Settings::SaveRecentProjects(const std::vector<wxString>& projects) const {
+    return Write(LoadWindow(), LoadEditor(), projects);
+}
+
+bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSettings& editor,
+                     const std::vector<wxString>& recent_projects) const {
     if (!wxFileName::DirExists(directory_) && !wxFileName::Mkdir(directory_, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL)) {
         wxLogWarning("Could not create settings directory: %s", directory_);
         return false;
@@ -125,7 +179,13 @@ bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSe
            << "    \"fontSize\": " << editor.font_size << ",\n"
            << "    \"wordWrap\": " << (editor.word_wrap ? "true" : "false") << ",\n"
            << "    \"theme\": \"" << theme << "\"\n"
-           << "  }\n}\n";
+           << "  },\n"
+           << "  \"recentProjects\": [";
+    for (std::size_t index = 0; index < recent_projects.size(); ++index) {
+        if (index) output << ", ";
+        output << "\"" << JsonEscape(recent_projects[index].ToStdString()) << "\"";
+    }
+    output << "]\n}\n";
     output.close();
     if (!output) {
         wxLogWarning("Could not write settings file: %s", path_);

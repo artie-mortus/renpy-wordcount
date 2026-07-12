@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
 #include <wx/gdicmn.h>
 #include <wx/string.h>
@@ -29,10 +30,13 @@ public:
     EditorSettings LoadEditor() const;
     bool SaveWindow(const WindowSettings& window) const;
     bool SaveEditor(const EditorSettings& editor) const;
+    std::vector<wxString> LoadRecentProjects() const;
+    bool SaveRecentProjects(const std::vector<wxString>& projects) const;
     const wxString& path() const { return path_; }
 
 private:
-    bool Write(const std::optional<WindowSettings>& window, const EditorSettings& editor) const;
+    bool Write(const std::optional<WindowSettings>& window, const EditorSettings& editor,
+               const std::vector<wxString>& recent_projects) const;
     wxString directory_;
     wxString path_;
 };

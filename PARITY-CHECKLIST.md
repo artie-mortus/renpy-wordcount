@@ -16,7 +16,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 10 | accessibility audit for untranslated controls, missing image-button descriptions, and visually encoded character voices | Pending |
 | 11 | automatic playthrough coverage captured from launched games, plus manual label coverage | Pending |
 | 12 | persistent continuity notes for characters, locations, timeline, relationships, inventory, and story facts | Pending |
-| 13 | multi-file projects: import several `.rpy` files, totals across all | Pending |
+| 13 | multi-file projects: import several `.rpy` files, totals across all | Partial — multi-file open and recursive project-folder model done (Steps 1.3/5.1); combined main statistics pending |
 | 14 | counts dialogue/narration words, not labels, definitions, jumps, variables, comments, or scene commands | Pending |
 | 15 | optional menu choice counting (including conditioned choices) | Pending |
 | 16 | `extend` lines attributed to the previous speaker | Pending |
@@ -52,7 +52,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 46 | autocomplete while typing: speaker aliases at line start, label names after `jump`/`call` (arrows to pick, Tab/Enter to accept, Esc to dismiss) | Done (Step 4.2) |
 | 47 | Ren'Py-aware autocomplete for image names after `show`, audio paths after `play`, screen names after `call screen`, and declared variables after `$` | Done (Step 4.3) |
 | 48 | inline editor diagnostics for syntax, unresolved-label, quote, speaker, and long-line checks | Done — engine (Step 4.6), squiggles/gutter/tooltips/panel (Step 4.7) |
-| 49 | project-wide text search across every `.rpy` file in the connected game folder (or all open tabs offline) | Done for all open tabs (Step 4.5); connected-folder coverage follows folder sync |
+| 49 | project-wide text search across every `.rpy` file in the connected game folder (or all open tabs offline) | Done — open tabs (Step 4.5), recursively connected folder (Step 5.1) |
 | 50 | folder-sync conflict review with a side-by-side local/disk comparison before choosing a version | Pending |
 | 51 | safe project-wide character-alias and label rename with an affected-line preview before applying | Pending |
 | 52 | prose panel: vocabulary size, average sentence length per speaker, and overused words/phrases as clickable chips that open find | Pending |
