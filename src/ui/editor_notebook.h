@@ -34,6 +34,7 @@ public:
     void SetWordWrap(bool enabled);
     void SetFontSize(int size);
     void SetTheme(app::EditorTheme theme);
+    void JumpToLine(std::size_t line_number);
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;

@@ -7,6 +7,8 @@
 #include <wx/fileconf.h>
 #include <wx/filename.h>
 #include <wx/gauge.h>
+#include <wx/choice.h>
+#include <wx/listctrl.h>
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/statline.h>
@@ -74,13 +76,46 @@ void SpeakerStatsPanel::SetAnalysis(const ScriptAnalysis& analysis) {
     Rebuild();
 }
 
+void SpeakerStatsPanel::SetLineJumpHandler(std::function<void(std::size_t)> handler) {
+    line_jump_handler_ = std::move(handler);
+}
+
+void SpeakerStatsPanel::RefreshCountedLines() {
+    if (!counted_lines_) return;
+    counted_lines_->DeleteAllItems();
+    const wxString speaker = speaker_filter_->GetStringSelection();
+    const wxString text = text_filter_->GetValue().Strip(wxString::both).Lower();
+    const wxString label = label_filter_->GetValue().Strip(wxString::both).Lower();
+    long row = 0;
+    for (std::size_t index = 0; index < analysis_.counted.size(); ++index) {
+        const auto& item = analysis_.counted[index];
+        if (speaker_filter_->GetSelection() > 0 && wxString::FromUTF8(item.speaker) != speaker) continue;
+        if (!text.empty() && !wxString::FromUTF8(item.text).Lower().Contains(text) &&
+            !wxString::FromUTF8(item.raw).Lower().Contains(text)) continue;
+        if (!label.empty() && !wxString::FromUTF8(item.scene).Lower().Contains(label)) continue;
+        const long inserted = counted_lines_->InsertItem(
+            row++, wxString::FromUTF8(std::to_string(item.line_number)));
+        counted_lines_->SetItem(inserted, 1, wxString::FromUTF8(item.speaker));
+        counted_lines_->SetItem(inserted, 2, wxString::FromUTF8(item.scene));
+        counted_lines_->SetItem(inserted, 3, wxString::FromUTF8(item.text));
+        counted_lines_->SetItemData(inserted, static_cast<long>(index));
+    }
+}
+
 SpeakerStatsPanel::Targets SpeakerStatsPanel::ReadTargets(wxTextCtrl* words,
                                                            wxTextCtrl* lines) const {
     return {Positive(words), Positive(lines)};
 }
 
 void SpeakerStatsPanel::Rebuild() {
+    const wxString selected_speaker = speaker_filter_ ? speaker_filter_->GetStringSelection() : wxString{};
+    const wxString text_query = text_filter_ ? text_filter_->GetValue() : wxString{};
+    const wxString label_query = label_filter_ ? label_filter_->GetValue() : wxString{};
     content_->Clear(true);
+    speaker_filter_ = nullptr;
+    text_filter_ = nullptr;
+    label_filter_ = nullptr;
+    counted_lines_ = nullptr;
     auto add_heading = [&](const wxString& text) {
         auto* label = new wxStaticText(this, wxID_ANY, text);
         label->SetFont(label->GetFont().Bold());
@@ -181,6 +216,47 @@ void SpeakerStatsPanel::Rebuild() {
                 nullptr, -1);
     }
     if (!any_scene) content_->Add(new wxStaticText(this, wxID_ANY, "No labels with dialogue yet."), 0, wxALL, 12);
+
+    add_heading("Counted lines");
+    auto* filters = new wxBoxSizer(wxVERTICAL);
+    wxArrayString speakers;
+    speakers.Add("All speakers");
+    std::vector<std::string> names;
+    for (const auto& speaker : analysis_.speakers) names.push_back(speaker.name);
+    std::sort(names.begin(), names.end());
+    for (const auto& name : names) speakers.Add(wxString::FromUTF8(name));
+    speaker_filter_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, speakers);
+    speaker_filter_->SetSelection(0);
+    if (!selected_speaker.empty()) {
+        const int selection = speaker_filter_->FindString(selected_speaker);
+        if (selection != wxNOT_FOUND) speaker_filter_->SetSelection(selection);
+    }
+    text_filter_ = new wxTextCtrl(this, wxID_ANY, {}, wxDefaultPosition, wxDefaultSize);
+    text_filter_->SetHint("Filter text");
+    text_filter_->SetValue(text_query);
+    label_filter_ = new wxTextCtrl(this, wxID_ANY, {}, wxDefaultPosition, wxDefaultSize);
+    label_filter_->SetHint("Filter label");
+    label_filter_->SetValue(label_query);
+    filters->Add(speaker_filter_, 0, wxEXPAND | wxBOTTOM, 4);
+    filters->Add(text_filter_, 0, wxEXPAND | wxBOTTOM, 4);
+    filters->Add(label_filter_, 0, wxEXPAND);
+    content_->Add(filters, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 12);
+    counted_lines_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 240),
+                                    wxLC_REPORT | wxLC_SINGLE_SEL);
+    counted_lines_->AppendColumn("Line", wxLIST_FORMAT_LEFT, 52);
+    counted_lines_->AppendColumn("Speaker", wxLIST_FORMAT_LEFT, 90);
+    counted_lines_->AppendColumn("Label", wxLIST_FORMAT_LEFT, 100);
+    counted_lines_->AppendColumn("Text", wxLIST_FORMAT_LEFT, 260);
+    content_->Add(counted_lines_, 0, wxEXPAND | wxALL, 12);
+    speaker_filter_->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) { RefreshCountedLines(); });
+    text_filter_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RefreshCountedLines(); });
+    label_filter_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RefreshCountedLines(); });
+    counted_lines_->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent& event) {
+        const auto index = static_cast<std::size_t>(event.GetData());
+        if (index < analysis_.counted.size() && line_jump_handler_)
+            line_jump_handler_(analysis_.counted[index].line_number);
+    });
+    RefreshCountedLines();
     Layout();
     FitInside();
 }

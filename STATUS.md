@@ -1,14 +1,14 @@
 # Status
 
-- Completed: Steps 0.1 through 3.4.
-- The dockable statistics pane now shows project, character, and scene/label totals.
-- Character rows keep the 3.3 swatch, percentage, and balance bar, stably sorted by descending words; scenes retain parser first-seen order and empty labels are omitted from the UI.
-- Project, character, and scene targets support word and line goals; blank, invalid, zero, and negative values mean unset.
-- Targets persist in `targets.ini` next to `settings.json` (manually resolved XDG dir — `GetUserDataDir` returns legacy `~/.say-count`, same trap as Step 1.4) and reload on launch.
-- Progress reports unset, remaining, reached, or over-target state; bars and displayed percentages cap at 100%, matching JavaScript.
-- Core scene aggregates preserve `No label`, qualify local labels, retain empty labels, and merge project labels in file order.
+- Completed: Steps 0.1 through 3.5.
+- The statistics pane now lists every counted line for the active editor with source line, speaker, label, and dialogue text.
+- Counted lines filter immediately by exact speaker and case-insensitive text/raw-source and label substrings; filter values survive live-analysis rebuilds when still valid.
+- Double-clicking a counted-line row selects, reveals, and focuses its one-based source line in the active editor.
+- Existing project, character, scene/label totals, targets, progress, swatches, percentages, and balance bars remain intact.
 - Core remains wx-free; dump JSON schema and `.rpy` parsing behavior are unchanged.
-- Review fixes (2026-07-11): UTF-8 `·` composed via `std::string`+`FromUTF8` (locale pitfall again); restored 3.3 swatch/percent/balance rows; `wxWeakRef` guards + change-detection in target save handlers; targets map no longer polluted by `operator[]`; persistence path fixed (was silently failing to write).
-- Verified (2026-07-11): build + ctest 44/44, parity diffs empty; live GUI — sections render, `start.beach` qualified, over/left/reached/unset target states correct, live edit updates panel, target persists across relaunch.
-- Known issues: pre-existing (Step 1.3 era, not 3.4) — one SIGSEGV core dump shows `EditorNotebook::ConfirmCloseAll` crashing at `SetSelection` when quit is re-triggered while the discard-changes modal is open; not reproducible in normal flows.
-- Next step: Phase 3, Step 3.5 — counted-lines browser.
+- Verified (2026-07-12): `cmake --build build -j` succeeded; `ctest --test-dir build --output-on-failure` passed 44/44, including all parser parity tests.
+- Verification notes: row identity retains the originating `CountedLine` index while filtering, and jumping consumes its parser-provided one-based `line_number`.
+- Review fix (2026-07-12): text/label filter queries now trimmed before matching, matching JS `renderLineList` (`.trim().toLowerCase()`). JS's 80-row cap intentionally not replicated — `wxListCtrl` handles full lists.
+- Live GUI verified (2026-07-12, xdotool): six fixture rows map to source lines 5/6/7/10/11/14; padded " sunscreen " matches line 6; label "beach" isolates `start.beach` rows; Eileen speaker filter shows 4 rows; double-click jumped editor to line 11 with focus; live edit added row 15 under epilogue with speaker filter preserved.
+- Known issues: pre-existing Step 1.3-era re-entrant quit/discard-modal `ConfirmCloseAll` crash remains; not reproducible in normal flows.
+- Next step: Phase 3, Step 3.6 — statistics export.

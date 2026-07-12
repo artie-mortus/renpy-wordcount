@@ -210,6 +210,17 @@ void EditorNotebook::AnalyzeActive() {
     analysis_handler_(analyze_script(editor->GetText().ToStdString()));
 }
 
+void EditorNotebook::JumpToLine(std::size_t line_number) {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor || line_number == 0) return;
+    const int line = std::min<int>(static_cast<int>(line_number - 1), editor->GetLineCount() - 1);
+    const int position = editor->PositionFromLine(line);
+    editor->GotoPos(position);
+    editor->EnsureVisible(line);
+    editor->SetFocus();
+}
+
 void EditorNotebook::OnAnalysisTimer(wxTimerEvent&) {
     AnalyzeActive();
 }

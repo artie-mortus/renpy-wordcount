@@ -70,6 +70,7 @@ MainFrame::MainFrame()
         SetStatusText(wxString::FromUTF8(text));
         speaker_stats_->SetAnalysis(analysis);
     });
+    speaker_stats_->SetLineJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     manager_.AddPane(notebook_, wxAuiPaneInfo().CenterPane().Name("editor"));
     manager_.AddPane(speaker_stats_, wxAuiPaneInfo().Right().Name("speaker-statistics")
                          .Caption("Speaker Statistics").BestSize(320, 500).MinSize(240, 180)

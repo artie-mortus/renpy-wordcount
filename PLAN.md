@@ -517,7 +517,7 @@ Every future session begins here. Each card preserves the source plan's tasks, t
 
 **Files to read:**
 
-- Native: `/home/artemis/Projects/say-count-native/CMakeLists.txt`, `/home/artemis/Projects/say-count-native/src/core/version.h`, `/home/artemis/Projects/say-count-native/src/core/version.cpp`, `/home/artemis/Projects/say-count-native/src/app/main.cpp`, `/home/artemis/Projects/say-count-native/src/ui/placeholder.cpp`, `/home/artemis/Projects/say-count-native/STATUS.md`, `/home/artemis/Projects/say-count-native/DECISIONS.md`.
+- Native: `/home/artemis/Projects/say-count-native/CMakeLists.txt`, `/home/artemis/Projects/say-count-native/src/core/parser.h`, `/home/artemis/Projects/say-count-native/src/core/parser.cpp`, `/home/artemis/Projects/say-count-native/src/app/main.cpp`, `/home/artemis/Projects/say-count-native/src/ui/main_frame.h`, `/home/artemis/Projects/say-count-native/src/ui/main_frame.cpp`, `/home/artemis/Projects/say-count-native/src/ui/editor_notebook.h`, `/home/artemis/Projects/say-count-native/src/ui/editor_notebook.cpp`, `/home/artemis/Projects/say-count-native/src/ui/speaker_stats_panel.h`, `/home/artemis/Projects/say-count-native/src/ui/speaker_stats_panel.cpp`, `/home/artemis/Projects/say-count-native/STATUS.md`, `/home/artemis/Projects/say-count-native/DECISIONS.md`.
 - Read-only reference: `/home/artemis/Projects/words-til-vn/analysis.js`, `/home/artemis/Projects/words-til-vn/parser.js`, `/home/artemis/Projects/words-til-vn/stats-panels.js`, `/home/artemis/Projects/words-til-vn/app-core.js`, `/home/artemis/Projects/words-til-vn/app.js`, `/home/artemis/Projects/words-til-vn/test/parser.test.js`, `/home/artemis/Projects/words-til-vn/test/snapshots.test.js`.
 
 **Token ceiling / model tier:** 400,000–600,000 tokens · mini model
