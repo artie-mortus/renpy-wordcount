@@ -12,6 +12,7 @@
 
 #include "app/settings.h"
 #include "core/parser.h"
+#include "core/autocomplete.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
@@ -49,6 +50,8 @@ private:
     void OnSavePointChanged(wxStyledTextEvent& event);
     void OnStyleNeeded(wxStyledTextEvent& event);
     void OnModified(wxStyledTextEvent& event);
+    void OnCharAdded(wxStyledTextEvent& event);
+    void OnAutoCompCompleted(wxStyledTextEvent& event);
     void OnPageChanged(wxAuiNotebookEvent& event);
     void OnAnalysisTimer(wxTimerEvent& event);
     void AnalyzeActive();
@@ -59,6 +62,7 @@ private:
     AnalysisHandler analysis_handler_;
     wxTimer analysis_timer_;
     std::unordered_map<wxStyledTextCtrl*, std::unordered_set<std::string>> speakers_;
+    std::unordered_map<wxStyledTextCtrl*, CompletionResult> completions_;
 };
 
 }  // namespace say_count::ui

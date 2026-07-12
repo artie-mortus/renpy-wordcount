@@ -1,6 +1,7 @@
 #include "ui/editor_notebook.h"
 #include "core/parser.h"
 #include "core/tokenizer.h"
+#include "core/autocomplete.h"
 
 #include <algorithm>
 
@@ -108,6 +109,12 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->Bind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);
     editor->Unbind(wxEVT_STC_MODIFIED, &EditorNotebook::OnModified, this);
     editor->Bind(wxEVT_STC_MODIFIED, &EditorNotebook::OnModified, this);
+    editor->Unbind(wxEVT_STC_CHARADDED, &EditorNotebook::OnCharAdded, this);
+    editor->Bind(wxEVT_STC_CHARADDED, &EditorNotebook::OnCharAdded, this);
+    editor->Unbind(wxEVT_STC_AUTOCOMP_COMPLETED, &EditorNotebook::OnAutoCompCompleted, this);
+    editor->Bind(wxEVT_STC_AUTOCOMP_COMPLETED, &EditorNotebook::OnAutoCompCompleted, this);
+    editor->AutoCompSetIgnoreCase(true);
+    editor->AutoCompSetMaxHeight(8);
     editor->SetMarginType(0, wxSTC_MARGIN_NUMBER);
     editor->SetMarginWidth(0, editor->TextWidth(wxSTC_STYLE_LINENUMBER, "00000") + 8);
     editor->SetCaretLineVisible(true);
@@ -200,6 +207,50 @@ void EditorNotebook::OnModified(wxStyledTextEvent& event) {
         editor->Colourise(0, -1);
     }
     analysis_timer_.StartOnce(kAnalysisDelayMs);
+    event.Skip();
+}
+
+void EditorNotebook::OnCharAdded(wxStyledTextEvent& event) {
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
+    if (!editor) return;
+    const std::string source = editor->GetText().ToStdString();
+    auto result = basic_completions(source, static_cast<std::size_t>(editor->GetCurrentPos()));
+    if (result.items.empty()) {
+        editor->AutoCompCancel();
+        completions_.erase(editor);
+        event.Skip();
+        return;
+    }
+    wxString choices;
+    for (const auto& item : result.items) {
+        if (!choices.empty()) choices += '\n';
+        choices += wxString::FromUTF8(item.text);
+    }
+    const int replace_length = static_cast<int>(result.replace_length);
+    completions_[editor] = std::move(result);
+    editor->AutoCompShow(replace_length, choices);
+    event.Skip();
+}
+
+void EditorNotebook::OnAutoCompCompleted(wxStyledTextEvent& event) {
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
+    const auto pending = editor ? completions_.find(editor) : completions_.end();
+    if (!editor || pending == completions_.end()) return;
+    const std::string selected = event.GetText().ToStdString();
+    const auto item = std::find_if(pending->second.items.begin(), pending->second.items.end(),
+                                   [&](const auto& candidate) { return candidate.text == selected; });
+    if (item == pending->second.items.end()) return;
+    const int end = editor->GetCurrentPos();
+    const int start = end - static_cast<int>(selected.size());
+    if (item->insert != selected) {
+        editor->SetTargetStart(start); editor->SetTargetEnd(end);
+        editor->ReplaceTarget(wxString::FromUTF8(item->insert));
+    }
+    if (item->select_start != std::string::npos && item->select_end != std::string::npos) {
+        editor->SetSelection(start + static_cast<int>(item->select_start),
+                             start + static_cast<int>(item->select_end));
+    }
+    completions_.erase(pending);
     event.Skip();
 }
 

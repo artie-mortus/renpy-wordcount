@@ -38,7 +38,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 32 | editor shortcuts: Ctrl+G go to line, Ctrl+/ comment toggle, Alt+↑/↓ move lines, Shift+Alt+↑/↓ duplicate lines, Ctrl+↑/↓ previous/next label, Ctrl+PageUp/PageDown switch tabs, Ctrl+Shift+T reopen closed tab, Ctrl+S save + snapshot, Ctrl+= / Ctrl+− / Ctrl+0 font size — Ctrl+K shows the full cheat sheet | Partial — Ctrl+= / Ctrl+− / Ctrl+0 font size landed (Step 1.4); rest pending |
 | 33 | status bar with line/column, current label (also shown as a breadcrumb in the header), and selected-word count | Pending |
 | 34 | auto-close and selection-wrap for `"` `(` `[`, with type-over for closers and escaped-quote awareness | Pending |
-| 35 | snippets in autocomplete: `label`, `menu`, `define` expand to full blocks with the placeholder selected | Pending |
+| 35 | snippets in autocomplete: `label`, `menu`, `define` expand to full blocks with the placeholder selected | Done (Step 4.2) |
 | 36 | word wrap toggle for long dialogue lines (hides line numbers while on) | Pending |
 | 37 | current-line highlight, adjustable editor font size (persisted) | Pending |
 | 38 | collapsible side panels (fold state remembered), focus mode with floating word-count pill, draggable editor/stats divider | Pending |
@@ -49,7 +49,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 43 | branch-aware route details: shows dialogue words inside each inline menu choice and conditional block | Pending |
 | 44 | flow map: SVG story graph of labels — gold border marks `start`, red marks endings, dashed red curves are loops back, dashed boxes are unreachable; click a box to jump | Pending |
 | 45 | speaker colors: `Character(..., color="#c8ffc8")` tints the alias in the editor and adds swatches to the speaker, balance, and counted-line lists | Pending |
-| 46 | autocomplete while typing: speaker aliases at line start, label names after `jump`/`call` (arrows to pick, Tab/Enter to accept, Esc to dismiss) | Pending |
+| 46 | autocomplete while typing: speaker aliases at line start, label names after `jump`/`call` (arrows to pick, Tab/Enter to accept, Esc to dismiss) | Done (Step 4.2) |
 | 47 | Ren'Py-aware autocomplete for image names after `show`, audio paths after `play`, screen names after `call screen`, and declared variables after `$` | Pending |
 | 48 | inline editor diagnostics for syntax, unresolved-label, quote, speaker, and long-line checks | Partial — core lint engine (syntax, duplicate/missing label, empty block, python opacity, support-file suppression) landed (Step 2.6B); editor UI pending |
 | 49 | project-wide text search across every `.rpy` file in the connected game folder (or all open tabs offline) | Pending |
