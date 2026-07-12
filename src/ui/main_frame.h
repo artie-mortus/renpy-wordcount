@@ -4,6 +4,7 @@
 #include <wx/aui/framemanager.h>
 
 #include "app/settings.h"
+#include "core/parser.h"
 
 namespace say_count::ui {
 
@@ -29,6 +30,7 @@ private:
     void OnToggleWrap(wxCommandEvent& event);
     void OnFontSize(wxCommandEvent& event);
     void OnTheme(wxCommandEvent& event);
+    void OnExport(wxCommandEvent& event);
 
     app::Settings settings_;
     EditorNotebook* notebook_ = nullptr;
@@ -36,6 +38,7 @@ private:
     wxAuiManager manager_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
+    ScriptAnalysis analysis_;
 };
 
 }  // namespace say_count::ui

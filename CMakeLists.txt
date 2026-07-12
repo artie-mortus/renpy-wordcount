@@ -43,6 +43,7 @@ if(BUILD_TESTING)
         tests/parser_test.cpp
         tests/analysis_test.cpp
         tests/tokenizer_test.cpp
+        tests/export_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 

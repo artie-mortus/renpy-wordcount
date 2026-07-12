@@ -8,10 +8,14 @@
 #include <wx/dnd.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
+#include <wx/file.h>
+#include <wx/datetime.h>
 #include <wx/menu.h>
+#include <wx/msgdlg.h>
 
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
+#include "core/version.h"
 
 namespace say_count::ui {
 namespace {
@@ -26,6 +30,9 @@ enum MenuId {
     kThemeSystem,
     kThemeLight,
     kThemeDark,
+    kExportCsv,
+    kExportJson,
+    kExportHtml,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -63,6 +70,7 @@ MainFrame::MainFrame()
     speaker_stats_ = new SpeakerStatsPanel(
         this, wxFileName(settings_.path()).GetPath() + wxFILE_SEP_PATH + "targets.ini");
     notebook_ = new EditorNotebook(this, editor_settings_, [this](const ScriptAnalysis& analysis) {
+        analysis_ = analysis;
         // wxString::Format aborts on %zu; compose the text without varargs.
         const std::string text = std::to_string(analysis.total_words) + " dialogue words \xc2\xb7 " +
                                  std::to_string(analysis.dialogue_lines) + " dialogue lines \xc2\xb7 " +
@@ -90,6 +98,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnToggleWrap, this, kToggleWrap);
     Bind(wxEVT_MENU, &MainFrame::OnFontSize, this, kFontIncrease, kFontReset);
     Bind(wxEVT_MENU, &MainFrame::OnTheme, this, kThemeSystem, kThemeDark);
+    Bind(wxEVT_MENU, &MainFrame::OnExport, this, kExportCsv, kExportHtml);
 }
 
 MainFrame::~MainFrame() {
@@ -103,6 +112,12 @@ void MainFrame::BuildMenus() {
     file->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current script");
     file->Append(wxID_SAVEAS, "Save &As…\tCtrl+Shift+S", "Save the current script under a new name");
     file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
+    file->AppendSeparator();
+    auto* export_menu = new wxMenu();
+    export_menu->Append(kExportCsv, "Speaker statistics (CSV)…");
+    export_menu->Append(kExportJson, "Full statistics (JSON)…");
+    export_menu->Append(kExportHtml, "Standalone report (HTML)…");
+    file->AppendSubMenu(export_menu, "Export &Statistics");
     file->AppendSeparator();
     file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
 
@@ -173,6 +188,30 @@ void MainFrame::OnOpen(wxCommandEvent&) {
 void MainFrame::OnSave(wxCommandEvent&) { notebook_->SaveCurrent(); }
 
 void MainFrame::OnSaveAs(wxCommandEvent&) { notebook_->SaveCurrentAs(); }
+
+void MainFrame::OnExport(wxCommandEvent& event) {
+    wxString filename, wildcard, contents;
+    if (event.GetId() == kExportCsv) {
+        filename = "say-count-speakers.csv"; wildcard = "CSV files (*.csv)|*.csv";
+        contents = wxString::FromUTF8(statistics_csv(analysis_));
+    } else if (event.GetId() == kExportJson) {
+        filename = "say-count-stats.json"; wildcard = "JSON files (*.json)|*.json";
+        contents = wxString::FromUTF8(statistics_json(analysis_));
+    } else {
+        filename = "say-count-report.html"; wildcard = "HTML files (*.html)|*.html";
+        const auto generated = wxDateTime::Now().FormatISOCombined(' ').ToStdString();
+        contents = wxString::FromUTF8(statistics_html(analysis_, "Say Count report", generated));
+    }
+    wxFileDialog dialog(this, "Export statistics", wxEmptyString, filename, wildcard,
+                        wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dialog.ShowModal() != wxID_OK) return;
+    wxFile output(dialog.GetPath(), wxFile::write);
+    if (!output.IsOpened() || !output.Write(contents, wxConvUTF8)) {
+        wxMessageBox("Could not write the export file.", "Export failed", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    SetStatusText("Exported " + dialog.GetPath());
+}
 
 void MainFrame::OnToggleWrap(wxCommandEvent& event) {
     editor_settings_.word_wrap = event.IsChecked();

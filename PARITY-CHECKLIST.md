@@ -28,9 +28,9 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 22 | version diff: paste an old script to see words added or cut per speaker | Pending |
 | 23 | scene/label breakdown | Done (Step 3.4) |
 | 24 | counted-line speaker/search filters | Done (Step 3.5) |
-| 25 | CSV/JSON stats export | Pending |
+| 25 | CSV/JSON stats export | Done (Step 3.6) |
 | 26 | complete project import/export, including files, targets, and settings | Pending |
-| 27 | standalone HTML report export | Pending |
+| 27 | standalone HTML report export | Done (Step 3.6) |
 | 28 | dark mode | Partial — system/light/dark editor themes landed (Step 1.4); app-wide dark mode pending |
 | 29 | import `.rpy` files (multi-select or drag & drop onto the editor), copy script, download `.rpy` | Partial — multi-select open and drag & drop landed (Step 1.3); copy script and download pending |
 | 30 | project folder sync: connect a folder and every `.rpy` in it opens automatically; edits made outside (e.g. VS Code) are picked up while you write | Pending |
@@ -59,4 +59,3 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 53 | local browser autosave | Pending |
 | 54 | optional save folder: pick a directory on your computer (Chrome/Edge) and autosave writes the `.rpy` files there | Pending |
 | 55 | tab characters auto-converted to 4 spaces (Ren'Py rejects tabs); "Fix indents" snaps indentation to multiples of 4 | Pending |
-
