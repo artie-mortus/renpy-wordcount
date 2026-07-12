@@ -48,6 +48,7 @@ void EditorNotebook::NewTab() {
     editor->Bind(wxEVT_STC_SAVEPOINTLEFT, &EditorNotebook::OnSavePointChanged, this);
     editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
     AddPage(editor, title, true);
+    RefreshCompletionIndex();
     editor->SetFocus();
     AnalyzeActive();
 }
@@ -96,6 +97,7 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
         editor->Bind(wxEVT_STC_SAVEPOINTLEFT, &EditorNotebook::OnSavePointChanged, this);
         editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
         AddPage(editor, editor->GetName(), true);
+        RefreshCompletionIndex();
         editor->SetFocus();
         AnalyzeActive();
         opened = true;
@@ -158,6 +160,17 @@ void EditorNotebook::RefreshSpeakers(wxStyledTextCtrl* editor) {
     }
 }
 
+void EditorNotebook::RefreshCompletionIndex() {
+    std::vector<NamedScript> scripts;
+    scripts.reserve(GetPageCount());
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        auto* editor = EditorAt(index);
+        if (!editor) continue;
+        scripts.push_back({editor->GetName().ToStdString(), editor->GetText().ToStdString()});
+    }
+    completion_index_ = build_completion_index(scripts);
+}
+
 void EditorNotebook::OnStyleNeeded(wxStyledTextEvent& event) {
     auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
     if (!editor) return;
@@ -206,6 +219,7 @@ void EditorNotebook::OnModified(wxStyledTextEvent& event) {
         RefreshSpeakers(editor);
         editor->Colourise(0, -1);
     }
+    RefreshCompletionIndex();
     analysis_timer_.StartOnce(kAnalysisDelayMs);
     event.Skip();
 }
@@ -214,7 +228,8 @@ void EditorNotebook::OnCharAdded(wxStyledTextEvent& event) {
     auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
     if (!editor) return;
     const std::string source = editor->GetText().ToStdString();
-    auto result = basic_completions(source, static_cast<std::size_t>(editor->GetCurrentPos()));
+    auto result = project_completions(source, static_cast<std::size_t>(editor->GetCurrentPos()),
+                                      completion_index_);
     if (result.items.empty()) {
         editor->AutoCompCancel();
         completions_.erase(editor);
@@ -390,11 +405,14 @@ void EditorNotebook::OnPageClose(wxAuiNotebookEvent& event) {
         return;
     }
 
-    speakers_.erase(EditorAt(static_cast<size_t>(selection)));
+    auto* editor = EditorAt(static_cast<size_t>(selection));
+    speakers_.erase(editor);
+    completions_.erase(editor);
     event.Skip();
 }
 
 void EditorNotebook::OnPageClosed(wxAuiNotebookEvent& event) {
+    RefreshCompletionIndex();
     if (GetPageCount() == 0) {
         NewTab();
     }

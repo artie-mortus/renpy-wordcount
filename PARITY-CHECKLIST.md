@@ -50,7 +50,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 44 | flow map: SVG story graph of labels — gold border marks `start`, red marks endings, dashed red curves are loops back, dashed boxes are unreachable; click a box to jump | Pending |
 | 45 | speaker colors: `Character(..., color="#c8ffc8")` tints the alias in the editor and adds swatches to the speaker, balance, and counted-line lists | Pending |
 | 46 | autocomplete while typing: speaker aliases at line start, label names after `jump`/`call` (arrows to pick, Tab/Enter to accept, Esc to dismiss) | Done (Step 4.2) |
-| 47 | Ren'Py-aware autocomplete for image names after `show`, audio paths after `play`, screen names after `call screen`, and declared variables after `$` | Pending |
+| 47 | Ren'Py-aware autocomplete for image names after `show`, audio paths after `play`, screen names after `call screen`, and declared variables after `$` | Done (Step 4.3) |
 | 48 | inline editor diagnostics for syntax, unresolved-label, quote, speaker, and long-line checks | Partial — core lint engine (syntax, duplicate/missing label, empty block, python opacity, support-file suppression) landed (Step 2.6B); editor UI pending |
 | 49 | project-wide text search across every `.rpy` file in the connected game folder (or all open tabs offline) | Pending |
 | 50 | folder-sync conflict review with a side-by-side local/disk comparison before choosing a version | Pending |

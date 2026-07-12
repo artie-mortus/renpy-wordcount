@@ -56,6 +56,7 @@ private:
     void OnAnalysisTimer(wxTimerEvent& event);
     void AnalyzeActive();
     void RefreshSpeakers(wxStyledTextCtrl* editor);
+    void RefreshCompletionIndex();
 
     unsigned int next_untitled_number_ = 1;
     app::EditorSettings settings_;
@@ -63,6 +64,7 @@ private:
     wxTimer analysis_timer_;
     std::unordered_map<wxStyledTextCtrl*, std::unordered_set<std::string>> speakers_;
     std::unordered_map<wxStyledTextCtrl*, CompletionResult> completions_;
+    CompletionIndex completion_index_;
 };
 
 }  // namespace say_count::ui
