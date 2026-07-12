@@ -50,7 +50,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 
 - [x] Step 5.1 — Project folder model · mini · ≤700,000 tok — done 2026-07-12, commit `795a072`
 - [x] Step 5.2 — External file watching · mini · ≤650,000 tok — done 2026-07-12, commit `3e12e18`
-- [ ] Step 5.3 — Conflict review · full · ≤800,000 tok — **HIGH REASONING REQUIRED**
+- [x] Step 5.3 — Conflict review · full · ≤800,000 tok — done 2026-07-12, commit `feebb74`
 - [ ] Step 5.4 — Snapshot storage · mini · ≤700,000 tok
 - [ ] Step 5.5 — Snapshot restore and comparison · mini · ≤700,000 tok
 - [ ] Step 5.6 — Import and export compatibility · full · ≤900,000 tok — **HIGH REASONING REQUIRED**
