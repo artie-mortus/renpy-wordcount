@@ -35,7 +35,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 29 | import `.rpy` files (multi-select or drag & drop onto the editor), copy script, download `.rpy` | Partial — multi-select open and drag & drop landed (Step 1.3); copy script and download pending |
 | 30 | project folder sync: connect a folder and every `.rpy` in it opens automatically; edits made outside (e.g. VS Code) are picked up while you write | Done — connection (Step 5.1), watcher (Step 5.2), conflict safety (Step 5.3) |
 | 31 | find & replace (Ctrl+F): case, regex (`.*`, `$1` groups), and whole-word toggles, all-files scope, F3/Shift+F3 to cycle, every match highlighted in the editor | Done — current file (Step 4.4), all open files (Step 4.5) |
-| 32 | editor shortcuts: Ctrl+G go to line, Ctrl+/ comment toggle, Alt+↑/↓ move lines, Shift+Alt+↑/↓ duplicate lines, Ctrl+↑/↓ previous/next label, Ctrl+PageUp/PageDown switch tabs, Ctrl+Shift+T reopen closed tab, Ctrl+S save + snapshot, Ctrl+= / Ctrl+− / Ctrl+0 font size — Ctrl+K shows the full cheat sheet | Partial — editing/navigation commands and cheat sheet done (Step 4.8); reopen-closed and save snapshots pending |
+| 32 | editor shortcuts: Ctrl+G go to line, Ctrl+/ comment toggle, Alt+↑/↓ move lines, Shift+Alt+↑/↓ duplicate lines, Ctrl+↑/↓ previous/next label, Ctrl+PageUp/PageDown switch tabs, Ctrl+Shift+T reopen closed tab, Ctrl+S save + snapshot, Ctrl+= / Ctrl+− / Ctrl+0 font size — Ctrl+K shows the full cheat sheet | Partial — editing/navigation commands and cheat sheet done (Step 4.8), Ctrl+S save + snapshot done (Step 5.4); reopen-closed pending |
 | 33 | status bar with line/column, current label (also shown as a breadcrumb in the header), and selected-word count | Pending |
 | 34 | auto-close and selection-wrap for `"` `(` `[`, with type-over for closers and escaped-quote awareness | Done (Step 4.8) |
 | 35 | snippets in autocomplete: `label`, `menu`, `define` expand to full blocks with the placeholder selected | Done (Step 4.2) |
@@ -43,7 +43,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 37 | current-line highlight, adjustable editor font size (persisted) | Pending |
 | 38 | collapsible side panels (fold state remembered), focus mode with floating word-count pill, draggable editor/stats divider | Partial — exact-layout focus mode and live word-count pill done (Step 4.9); fold persistence/divider pending |
 | 39 | tabs: dirty dot when a file differs from what's on disk, inline rename on double-click | Pending |
-| 40 | snapshots: automatic backup every 10 minutes plus manual "Snapshot now"; restore or diff any point (last 50 kept) | Pending |
+| 40 | snapshots: automatic backup every 10 minutes plus manual "Snapshot now"; restore or diff any point (last 50 kept) | Partial — automatic/manual storage and newest-50 retention done (Step 5.4); restore and diff pending (Step 5.5) |
 | 41 | outline panel: labels with word counts, menu choices, and jumps/calls — click to navigate; jumps to missing labels shown in red | Done (Step 4.1) |
 | 42 | routes panel: walks jumps/calls/fall-through from `start` for shortest/longest route word counts and reading time, ending and branch-point counts, and unreachable labels (click to jump) | Pending |
 | 43 | branch-aware route details: shows dialogue words inside each inline menu choice and conditional block | Pending |

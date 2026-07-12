@@ -3,11 +3,13 @@
 #include <wx/frame.h>
 #include <wx/aui/framemanager.h>
 #include <wx/fswatcher.h>
+#include <wx/timer.h>
 
 #include "app/settings.h"
 #include "core/parser.h"
 #include "core/find_replace.h"
 #include "core/project.h"
+#include "core/snapshots.h"
 
 #include <optional>
 #include <memory>
@@ -47,6 +49,7 @@ private:
     void RefreshProjectDiscovery();
     void HandleExternalScriptChange(const wxString& path);
     void ReviewExternalConflict(const std::string& key);
+    bool TakeSnapshot(bool automatic, std::string label = {});
     void RestoreWindow();
     void OnAbout(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -76,6 +79,8 @@ private:
     void OnRecentProject(wxCommandEvent& event);
     void OnFileSystemEvent(wxFileSystemWatcherEvent& event);
     void OnReviewConflicts(wxCommandEvent& event);
+    void OnSnapshotNow(wxCommandEvent& event);
+    void OnSnapshotTimer(wxTimerEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -100,6 +105,7 @@ private:
     wxMenu* recent_projects_menu_ = nullptr;
     std::vector<ProjectFindMatch> project_matches_;
     wxAuiManager manager_;
+    wxTimer snapshot_timer_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
     ScriptAnalysis analysis_;
@@ -110,6 +116,7 @@ private:
     std::unique_ptr<wxFileSystemWatcher> project_watcher_;
     std::unordered_map<std::string, ExternalConflict> external_conflicts_;
     bool conflict_review_open_ = false;
+    std::unique_ptr<SnapshotStore> snapshot_store_;
 };
 
 }  // namespace say_count::ui

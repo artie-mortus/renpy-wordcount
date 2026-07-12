@@ -33,6 +33,7 @@ public:
     std::vector<wxString> LoadRecentProjects() const;
     bool SaveRecentProjects(const std::vector<wxString>& projects) const;
     const wxString& path() const { return path_; }
+    const wxString& data_directory() const { return directory_; }
 
 private:
     bool Write(const std::optional<WindowSettings>& window, const EditorSettings& editor,

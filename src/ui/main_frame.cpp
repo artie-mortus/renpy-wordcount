@@ -59,6 +59,7 @@ enum MenuId {
     kRecentProjectFirst,
     kRecentProjectLast = kRecentProjectFirst + 7,
     kReviewConflicts = kRecentProjectLast + 1,
+    kSnapshotNow,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -88,10 +89,12 @@ bool IsGeometryVisible(const wxRect& rectangle) {
 
 MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, "Say Count", wxDefaultPosition, wxSize(kDefaultWidth, kDefaultHeight)),
-      manager_(this) {
+      manager_(this), snapshot_timer_(this) {
     SetMinSize(wxSize(400, 300));
     editor_settings_ = settings_.LoadEditor();
     recent_projects_ = settings_.LoadRecentProjects();
+    snapshot_store_ = std::make_unique<SnapshotStore>(
+        (settings_.data_directory() + wxFILE_SEP_PATH + "snapshots").ToStdString(), 50);
     BuildMenus();
     CreateStatusBar();
     speaker_stats_ = new SpeakerStatsPanel(
@@ -165,6 +168,9 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnRecentProject, this, kRecentProjectFirst, kRecentProjectLast);
     Bind(wxEVT_FSWATCHER, &MainFrame::OnFileSystemEvent, this);
     Bind(wxEVT_MENU, &MainFrame::OnReviewConflicts, this, kReviewConflicts);
+    Bind(wxEVT_MENU, &MainFrame::OnSnapshotNow, this, kSnapshotNow);
+    Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
+    snapshot_timer_.Start(10 * 60 * 1000);
 }
 
 MainFrame::~MainFrame() {
@@ -183,6 +189,7 @@ void MainFrame::BuildMenus() {
     recent_projects_menu_ = new wxMenu();
     file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
     file->Append(kReviewConflicts, "Review External &Conflicts…");
+    file->Append(kSnapshotNow, "&Snapshot Now", "Store a backup of every open script");
     RebuildRecentProjectsMenu();
     file->AppendSeparator();
     auto* export_menu = new wxMenu();
@@ -366,6 +373,9 @@ void MainFrame::ReviewExternalConflict(const std::string& key) {
                          "Save failed", wxOK | wxICON_ERROR, this);
             return;
         }
+    } else if (!TakeSnapshot(false, "Before using disk version of " +
+                             wxFileName(wxString::FromUTF8(conflict.path)).GetFullName().ToStdString())) {
+        return;
     }
     if (notebook_->ApplyExternalVersion(wxString::FromUTF8(conflict.path), conflict.disk_content, true)) {
         external_conflicts_.erase(key);
@@ -380,6 +390,33 @@ void MainFrame::OnReviewConflicts(wxCommandEvent&) {
         return;
     }
     ReviewExternalConflict(external_conflicts_.begin()->first);
+}
+
+bool MainFrame::TakeSnapshot(bool automatic, std::string label) {
+    if (!snapshot_store_) return false;
+    const auto files = notebook_->ProjectScripts();
+    if (automatic && std::none_of(files.begin(), files.end(), [](const auto& file) {
+        return file.content.find_first_not_of(" \t\r\n") != std::string::npos;
+    })) return true;
+    const auto words = analyze_project(files).total_words;
+    if (label.empty()) label = automatic ? "Automatic snapshot" : "Manual snapshot";
+    const auto result = snapshot_store_->Create(files, std::move(label), automatic,
+                                                project_ ? project_->root : std::string{}, words);
+    if (!result.success) {
+        if (!automatic) wxMessageBox(wxString::FromUTF8(result.error), "Snapshot failed",
+                                     wxOK | wxICON_ERROR, this);
+        return false;
+    }
+    if (!automatic) SetStatusText(result.created ? "Snapshot stored" : "No changes since the last snapshot");
+    return true;
+}
+
+void MainFrame::OnSnapshotNow(wxCommandEvent&) {
+    TakeSnapshot(false);
+}
+
+void MainFrame::OnSnapshotTimer(wxTimerEvent&) {
+    TakeSnapshot(true);
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {
@@ -760,7 +797,9 @@ void MainFrame::OnOpen(wxCommandEvent&) {
     notebook_->OpenFiles({paths.begin(), paths.end()});
 }
 
-void MainFrame::OnSave(wxCommandEvent&) { notebook_->SaveCurrent(); }
+void MainFrame::OnSave(wxCommandEvent&) {
+    if (notebook_->SaveCurrent()) TakeSnapshot(false, "Manual save");
+}
 
 void MainFrame::OnSaveAs(wxCommandEvent&) { notebook_->SaveCurrentAs(); }
 
