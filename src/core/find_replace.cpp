@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <regex>
+#include <unordered_set>
 
 namespace say_count {
 namespace {
@@ -30,6 +31,17 @@ std::regex make_regex(std::string_view query, const FindOptions& options) {
     auto flags = std::regex_constants::ECMAScript;
     if (!options.case_sensitive) flags |= std::regex_constants::icase;
     return std::regex(std::string(query), flags);
+}
+
+std::string trimmed_line(std::string_view text, std::size_t position) {
+    const auto start_pos = position == 0 ? std::string_view::npos : text.rfind('\n', position - 1);
+    std::size_t start = start_pos == std::string_view::npos ? 0 : start_pos + 1;
+    const auto end_pos = text.find('\n', position);
+    std::size_t end = end_pos == std::string_view::npos ? text.size() : end_pos;
+    if (end > start && text[end - 1] == '\r') --end;
+    while (start < end && std::isspace(static_cast<unsigned char>(text[start]))) ++start;
+    while (end > start && std::isspace(static_cast<unsigned char>(text[end - 1]))) --end;
+    return std::string(text.substr(start, end - start));
 }
 
 }  // namespace
@@ -108,6 +120,66 @@ ReplaceResult replace_all_matches(std::string_view text, std::string_view query,
         result.valid = false;
         result.text = std::string(text);
         result.count = 0;
+    }
+    return result;
+}
+
+ProjectFindResult find_project_matches(const std::vector<NamedScript>& scripts,
+                                       std::string_view query, FindOptions options) {
+    ProjectFindResult result;
+    for (std::size_t file_index = 0; file_index < scripts.size(); ++file_index) {
+        const auto& script = scripts[file_index];
+        const auto found = find_matches(script.content, query, options);
+        if (!found.valid) {
+            result.valid = false;
+            result.matches.clear();
+            return result;
+        }
+        for (const auto& match : found.matches) {
+            const auto line_start_pos = match.position == 0 ? std::string::npos
+                                                            : script.content.rfind('\n', match.position - 1);
+            const std::size_t line_start = line_start_pos == std::string::npos ? 0 : line_start_pos + 1;
+            const std::size_t line_number = 1 + static_cast<std::size_t>(
+                std::count(script.content.begin(), script.content.begin() + match.position, '\n'));
+            result.matches.push_back({file_index, script.name, line_number,
+                                      match.position - line_start + 1, match.position,
+                                      match.length, trimmed_line(script.content, match.position)});
+        }
+    }
+    return result;
+}
+
+std::vector<ProjectReplacePreview> preview_project_replacement(
+    const std::vector<NamedScript>& scripts, std::string_view query, FindOptions options) {
+    std::vector<ProjectReplacePreview> preview;
+    for (std::size_t index = 0; index < scripts.size(); ++index) {
+        const auto found = find_matches(scripts[index].content, query, options);
+        if (!found.valid) return {};
+        if (!found.matches.empty()) preview.push_back({index, scripts[index].name, found.matches.size()});
+    }
+    return preview;
+}
+
+ProjectReplaceResult replace_project_matches(
+    const std::vector<NamedScript>& scripts, const std::vector<std::size_t>& selected_files,
+    std::string_view query, std::string_view replacement, FindOptions options) {
+    ProjectReplaceResult result;
+    result.scripts = scripts;
+    result.per_file_counts.resize(scripts.size());
+    const std::unordered_set<std::size_t> selected(selected_files.begin(), selected_files.end());
+    for (const auto index : selected) {
+        if (index >= scripts.size()) continue;
+        const auto changed = replace_all_matches(scripts[index].content, query, replacement, options);
+        if (!changed.valid) {
+            result.valid = false;
+            result.scripts = scripts;
+            std::fill(result.per_file_counts.begin(), result.per_file_counts.end(), 0);
+            result.count = 0;
+            return result;
+        }
+        result.scripts[index].content = changed.text;
+        result.per_file_counts[index] = changed.count;
+        result.count += changed.count;
     }
     return result;
 }

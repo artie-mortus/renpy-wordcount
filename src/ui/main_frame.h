@@ -11,6 +11,8 @@ class wxPanel;
 class wxTextCtrl;
 class wxCheckBox;
 class wxStaticText;
+class wxDataViewListCtrl;
+class wxDataViewEvent;
 
 namespace say_count::ui {
 
@@ -27,6 +29,7 @@ public:
 private:
     void BuildMenus();
     void BuildFindBar();
+    void BuildFindResults();
     void RestoreWindow();
     void OnAbout(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -47,8 +50,10 @@ private:
     void OnReplaceAll(wxCommandEvent& event);
     void OnCloseFind(wxCommandEvent& event);
     void OnCharHook(wxKeyEvent& event);
+    void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
+    void RefreshProjectFindResults(bool valid);
 
     app::Settings settings_;
     EditorNotebook* notebook_ = nullptr;
@@ -60,7 +65,10 @@ private:
     wxCheckBox* find_case_ = nullptr;
     wxCheckBox* find_regex_ = nullptr;
     wxCheckBox* find_word_ = nullptr;
+    wxCheckBox* find_all_ = nullptr;
     wxStaticText* find_count_ = nullptr;
+    wxDataViewListCtrl* find_results_ = nullptr;
+    std::vector<ProjectFindMatch> project_matches_;
     wxAuiManager manager_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;

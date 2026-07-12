@@ -47,8 +47,13 @@ public:
     std::string SelectedText() const;
     FindStatus SetFindQuery(std::string query, FindOptions options);
     FindStatus FindNext(int direction);
-    bool ReplaceCurrent(std::string_view replacement);
+    FindStatus FindNextAcrossFiles(int direction);
+    bool ReplaceCurrent(std::string_view replacement, bool across_files = false);
     std::size_t ReplaceAll(std::string_view replacement);
+    std::size_t ReplaceAllAcrossFiles(const std::vector<std::size_t>& selected_files,
+                                      std::string_view replacement);
+    std::vector<NamedScript> ProjectScripts() const;
+    void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);
 

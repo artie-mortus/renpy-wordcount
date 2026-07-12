@@ -18,6 +18,8 @@
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
+#include <wx/choicdlg.h>
+#include <wx/dataview.h>
 
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
@@ -93,12 +95,15 @@ MainFrame::MainFrame()
         outline_->SetDocument(source, analysis);
     });
     BuildFindBar();
+    BuildFindResults();
     notebook_->SetFindStatusHandler([this](const FindStatus& status) { UpdateFindStatus(status); });
     speaker_stats_->SetLineJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     manager_.AddPane(notebook_, wxAuiPaneInfo().CenterPane().Name("editor"));
     manager_.AddPane(find_bar_, wxAuiPaneInfo().Top().Name("find-replace").CaptionVisible(false)
                          .PaneBorder(false).DockFixed(true).Resizable(false).BestSize(-1, 44).Hide());
+    manager_.AddPane(find_results_, wxAuiPaneInfo().Bottom().Name("find-results").Caption("Find Results")
+                         .BestSize(-1, 190).MinSize(300, 110).CloseButton(false).Hide());
     manager_.AddPane(speaker_stats_, wxAuiPaneInfo().Right().Name("speaker-statistics")
                          .Caption("Speaker Statistics").BestSize(320, 500).MinSize(240, 180)
                          .CloseButton(true).MaximizeButton(true));
@@ -196,6 +201,7 @@ void MainFrame::BuildFindBar() {
     find_regex_ = new wxCheckBox(find_bar_, wxID_ANY, ".*");
     find_regex_->SetToolTip("Regular expression");
     find_word_ = new wxCheckBox(find_bar_, wxID_ANY, "Whole word");
+    find_all_ = new wxCheckBox(find_bar_, wxID_ANY, "All files");
     auto* close = new wxButton(find_bar_, kFindClose, "×", wxDefaultPosition, wxDefaultSize,
                                wxBU_EXACTFIT);
 
@@ -207,6 +213,7 @@ void MainFrame::BuildFindBar() {
     layout->Add(find_case_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
     layout->Add(find_regex_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
     layout->Add(find_word_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    layout->Add(find_all_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
     layout->Add(close, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     find_bar_->SetSizer(layout);
 
@@ -214,15 +221,30 @@ void MainFrame::BuildFindBar() {
     find_case_->Bind(wxEVT_CHECKBOX, &MainFrame::OnFindChanged, this);
     find_regex_->Bind(wxEVT_CHECKBOX, &MainFrame::OnFindChanged, this);
     find_word_->Bind(wxEVT_CHECKBOX, &MainFrame::OnFindChanged, this);
+    find_all_->Bind(wxEVT_CHECKBOX, &MainFrame::OnFindChanged, this);
     previous->Bind(wxEVT_BUTTON, &MainFrame::OnFindNext, this);
     next->Bind(wxEVT_BUTTON, &MainFrame::OnFindNext, this);
     replace->Bind(wxEVT_BUTTON, &MainFrame::OnReplace, this);
     replace_all->Bind(wxEVT_BUTTON, &MainFrame::OnReplaceAll, this);
     close->Bind(wxEVT_BUTTON, &MainFrame::OnCloseFind, this);
     find_input_->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) {
-        notebook_->FindNext(wxGetKeyState(WXK_SHIFT) ? -1 : 1);
+        const int direction = wxGetKeyState(WXK_SHIFT) ? -1 : 1;
+        if (find_all_->GetValue()) notebook_->FindNextAcrossFiles(direction);
+        else notebook_->FindNext(direction);
     });
     replace_input_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnReplace, this);
+}
+
+void MainFrame::BuildFindResults() {
+    find_results_ = new wxDataViewListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                           wxDV_ROW_LINES | wxDV_VERT_RULES);
+    find_results_->AppendTextColumn("File", wxDATAVIEW_CELL_INERT, 180, wxALIGN_LEFT,
+                                    wxDATAVIEW_COL_RESIZABLE | wxDATAVIEW_COL_SORTABLE);
+    find_results_->AppendTextColumn("Line", wxDATAVIEW_CELL_INERT, 65, wxALIGN_RIGHT,
+                                    wxDATAVIEW_COL_RESIZABLE);
+    find_results_->AppendTextColumn("Preview", wxDATAVIEW_CELL_INERT, 600, wxALIGN_LEFT,
+                                    wxDATAVIEW_COL_RESIZABLE);
+    find_results_->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &MainFrame::OnFindResultActivated, this);
 }
 
 FindOptions MainFrame::CurrentFindOptions() const {
@@ -237,6 +259,35 @@ void MainFrame::UpdateFindStatus(const FindStatus& status) {
     find_count_->SetLabel(wxString::FromUTF8(count));
     find_input_->SetBackgroundColour(status.valid ? wxNullColour : wxColour("#ffd8d8"));
     find_input_->Refresh();
+    RefreshProjectFindResults(status.valid);
+}
+
+void MainFrame::RefreshProjectFindResults(bool valid) {
+    if (!find_results_) return;
+    find_results_->DeleteAllItems();
+    project_matches_.clear();
+    auto& pane = manager_.GetPane(find_results_);
+    const std::string query = find_input_->GetValue().ToStdString();
+    if (!find_all_->GetValue() || query.empty() || !valid) {
+        if (pane.IsShown()) { pane.Hide(); manager_.Update(); }
+        return;
+    }
+
+    const auto found = find_project_matches(notebook_->ProjectScripts(), query, CurrentFindOptions());
+    if (!found.valid) {
+        if (pane.IsShown()) { pane.Hide(); manager_.Update(); }
+        return;
+    }
+    project_matches_ = found.matches;
+    for (const auto& match : project_matches_) {
+        wxVector<wxVariant> row;
+        row.push_back(wxVariant(wxString::FromUTF8(match.file_name)));
+        row.push_back(wxVariant(std::to_string(match.line_number)));
+        row.push_back(wxVariant(wxString::FromUTF8(match.preview)));
+        find_results_->AppendItem(row, static_cast<wxUIntPtr>(&match - project_matches_.data() + 1));
+    }
+    find_count_->SetLabel(wxString::FromUTF8(std::to_string(project_matches_.size()) + " matches"));
+    if (!pane.IsShown()) { pane.Show(); manager_.Update(); }
 }
 
 void MainFrame::OnOpenFind(wxCommandEvent&) {
@@ -255,7 +306,9 @@ void MainFrame::OnFindNext(wxCommandEvent& event) {
         OnOpenFind(event);
         return;
     }
-    notebook_->FindNext(event.GetId() == kFindPrevious ? -1 : 1);
+    const int direction = event.GetId() == kFindPrevious ? -1 : 1;
+    if (find_all_->GetValue()) notebook_->FindNextAcrossFiles(direction);
+    else notebook_->FindNext(direction);
 }
 
 void MainFrame::OnFindChanged(wxCommandEvent&) {
@@ -263,11 +316,50 @@ void MainFrame::OnFindChanged(wxCommandEvent&) {
 }
 
 void MainFrame::OnReplace(wxCommandEvent&) {
-    notebook_->ReplaceCurrent(replace_input_->GetValue().ToStdString());
+    notebook_->ReplaceCurrent(replace_input_->GetValue().ToStdString(), find_all_->GetValue());
 }
 
 void MainFrame::OnReplaceAll(wxCommandEvent&) {
-    const auto count = notebook_->ReplaceAll(replace_input_->GetValue().ToStdString());
+    std::size_t count = 0;
+    if (!find_all_->GetValue()) {
+        count = notebook_->ReplaceAll(replace_input_->GetValue().ToStdString());
+    } else {
+        const auto scripts = notebook_->ProjectScripts();
+        const auto preview = preview_project_replacement(
+            scripts, find_input_->GetValue().ToStdString(), CurrentFindOptions());
+        if (preview.empty()) {
+            SetStatusText("No matches to replace");
+            return;
+        }
+        wxArrayString choices;
+        wxArrayInt defaults;
+        for (std::size_t index = 0; index < preview.size(); ++index) {
+            choices.Add(wxString::FromUTF8(preview[index].file_name + " — " +
+                                           std::to_string(preview[index].count) + " match" +
+                                           (preview[index].count == 1 ? "" : "es")));
+            defaults.Add(static_cast<int>(index));
+        }
+        wxMultiChoiceDialog selection(this, "Select the files to change. Unchecked files remain untouched.",
+                                      "Replace across files", choices);
+        selection.SetSelections(defaults);
+        if (selection.ShowModal() != wxID_OK) return;
+        const wxArrayInt chosen = selection.GetSelections();
+        if (chosen.empty()) return;
+        std::vector<std::size_t> selected_files;
+        std::size_t selected_matches = 0;
+        for (const int choice : chosen) {
+            selected_files.push_back(preview[static_cast<std::size_t>(choice)].file_index);
+            selected_matches += preview[static_cast<std::size_t>(choice)].count;
+        }
+        const std::string question = "Replace " + std::to_string(selected_matches) + " match" +
+            (selected_matches == 1 ? "" : "es") + " across " +
+            std::to_string(selected_files.size()) + " selected file" +
+            (selected_files.size() == 1 ? "?" : "s?");
+        if (wxMessageBox(wxString::FromUTF8(question), "Confirm project replacement",
+                         wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES) return;
+        count = notebook_->ReplaceAllAcrossFiles(selected_files,
+                                                 replace_input_->GetValue().ToStdString());
+    }
     SetStatusText(count == 0 ? "No matches to replace"
                              : wxString::FromUTF8("Replaced " + std::to_string(count) + " match" +
                                                   (count == 1 ? "" : "es")));
@@ -276,8 +368,16 @@ void MainFrame::OnReplaceAll(wxCommandEvent&) {
 void MainFrame::OnCloseFind(wxCommandEvent&) {
     notebook_->ClearFind();
     manager_.GetPane(find_bar_).Hide();
+    manager_.GetPane(find_results_).Hide();
     manager_.Update();
     notebook_->SetFocus();
+}
+
+void MainFrame::OnFindResultActivated(wxDataViewEvent& event) {
+    const wxUIntPtr data = find_results_->GetItemData(event.GetItem());
+    if (data == 0 || data - 1 >= project_matches_.size()) return;
+    const auto match = project_matches_[data - 1];
+    notebook_->SelectProjectMatch(match);
 }
 
 void MainFrame::OnCharHook(wxKeyEvent& event) {

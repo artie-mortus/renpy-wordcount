@@ -57,3 +57,38 @@ TEST_CASE("whole-word replacement and zero-match replacement preserve other text
     REQUIRE(unchanged.count == 0);
     REQUIRE(unchanged.text == "text");
 }
+
+TEST_CASE("project find reports file line column and preview") {
+    const std::vector<say_count::NamedScript> scripts{
+        {"one.rpy", "label start:\n    e \"Hello there\"\n"},
+        {"two.rpy", "# Hello comment\nlabel next:\n    \"hello again\"\n"}
+    };
+    const auto found = say_count::find_project_matches(scripts, "hello");
+    REQUIRE(found.valid);
+    REQUIRE(found.matches.size() == 3);
+    REQUIRE(found.matches[0].file_name == "one.rpy");
+    REQUIRE(found.matches[0].line_number == 2);
+    REQUIRE(found.matches[0].column == 8);
+    REQUIRE(found.matches[0].preview == "e \"Hello there\"");
+    REQUIRE(found.matches[2].file_name == "two.rpy");
+    REQUIRE(found.matches[2].line_number == 3);
+}
+
+TEST_CASE("project replacement changes only selected files") {
+    const std::vector<say_count::NamedScript> scripts{
+        {"one.rpy", "route route\n"},
+        {"two.rpy", "route\n"},
+        {"three.rpy", "route\n"}
+    };
+    const auto preview = say_count::preview_project_replacement(scripts, "route");
+    REQUIRE(preview.size() == 3);
+    REQUIRE(preview[0].count == 2);
+
+    const auto changed = say_count::replace_project_matches(scripts, {0, 2}, "route", "path");
+    REQUIRE(changed.valid);
+    REQUIRE(changed.count == 3);
+    REQUIRE(changed.scripts[0].content == "path path\n");
+    REQUIRE(changed.scripts[1].content == scripts[1].content);
+    REQUIRE(changed.scripts[2].content == "path\n");
+    REQUIRE(changed.per_file_counts == std::vector<std::size_t>{2, 0, 1});
+}

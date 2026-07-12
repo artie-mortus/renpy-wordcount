@@ -367,7 +367,56 @@ FindStatus EditorNotebook::FindNext(int direction) {
     return RefreshFindHighlights();
 }
 
-bool EditorNotebook::ReplaceCurrent(std::string_view replacement) {
+std::vector<NamedScript> EditorNotebook::ProjectScripts() const {
+    std::vector<NamedScript> scripts;
+    scripts.reserve(GetPageCount());
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        if (auto* editor = EditorAt(index))
+            scripts.push_back({editor->GetName().ToStdString(), editor->GetText().ToStdString()});
+    }
+    return scripts;
+}
+
+void EditorNotebook::SelectProjectMatch(const ProjectFindMatch& match) {
+    if (match.file_index >= GetPageCount()) return;
+    SetSelection(match.file_index);
+    auto* editor = EditorAt(match.file_index);
+    if (!editor) return;
+    editor->SetSelection(static_cast<int>(match.position),
+                         static_cast<int>(match.position + match.length));
+    editor->EnsureCaretVisible();
+    editor->SetFocus();
+    RefreshFindHighlights();
+}
+
+FindStatus EditorNotebook::FindNextAcrossFiles(int direction) {
+    const int page = GetSelection();
+    auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(page));
+    if (!editor || find_query_.empty()) return RefreshFindHighlights();
+    const auto found = find_project_matches(ProjectScripts(), find_query_, find_options_);
+    if (!found.valid || found.matches.empty()) return RefreshFindHighlights();
+    const std::size_t current_file = static_cast<std::size_t>(page);
+    const std::size_t caret = static_cast<std::size_t>(
+        direction >= 0 ? editor->GetSelectionEnd() : editor->GetSelectionStart());
+    const ProjectFindMatch* selected = nullptr;
+    if (direction >= 0) {
+        const auto item = std::find_if(found.matches.begin(), found.matches.end(), [&](const auto& match) {
+            return match.file_index > current_file ||
+                   (match.file_index == current_file && match.position >= caret);
+        });
+        selected = item == found.matches.end() ? &found.matches.front() : &*item;
+    } else {
+        const auto item = std::find_if(found.matches.rbegin(), found.matches.rend(), [&](const auto& match) {
+            return match.file_index < current_file ||
+                   (match.file_index == current_file && match.position < caret);
+        });
+        selected = item == found.matches.rend() ? &found.matches.back() : &*item;
+    }
+    SelectProjectMatch(*selected);
+    return RefreshFindHighlights();
+}
+
+bool EditorNotebook::ReplaceCurrent(std::string_view replacement, bool across_files) {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || find_query_.empty()) return false;
@@ -379,7 +428,8 @@ bool EditorNotebook::ReplaceCurrent(std::string_view replacement) {
         return match.position == start && match.position + match.length == end;
     });
     if (!found.valid || !selected_match) {
-        FindNext(1);
+        if (across_files) FindNextAcrossFiles(1);
+        else FindNext(1);
         return false;
     }
 
@@ -392,7 +442,8 @@ bool EditorNotebook::ReplaceCurrent(std::string_view replacement) {
     editor->ReplaceTarget(wxString::FromUTF8(changed.text));
     editor->EndUndoAction();
     editor->GotoPos(static_cast<int>(start + changed.text.size()));
-    FindNext(1);
+    if (across_files) FindNextAcrossFiles(1);
+    else FindNext(1);
     return true;
 }
 
@@ -413,6 +464,27 @@ std::size_t EditorNotebook::ReplaceAll(std::string_view replacement) {
     editor->ReplaceTarget(wxString::FromUTF8(changed.text));
     editor->EndUndoAction();
     editor->GotoPos(caret);
+    RefreshFindHighlights();
+    return changed.count;
+}
+
+std::size_t EditorNotebook::ReplaceAllAcrossFiles(
+    const std::vector<std::size_t>& selected_files, std::string_view replacement) {
+    if (find_query_.empty() || selected_files.empty()) return 0;
+    const auto changed = replace_project_matches(ProjectScripts(), selected_files, find_query_,
+                                                 replacement, find_options_);
+    if (!changed.valid || changed.count == 0) return 0;
+    for (const auto index : selected_files) {
+        if (index >= GetPageCount() || index >= changed.per_file_counts.size() ||
+            changed.per_file_counts[index] == 0) continue;
+        auto* editor = EditorAt(index);
+        if (!editor) continue;
+        editor->BeginUndoAction();
+        editor->SetTargetStart(0);
+        editor->SetTargetEnd(editor->GetTextLength());
+        editor->ReplaceTarget(wxString::FromUTF8(changed.scripts[index].content));
+        editor->EndUndoAction();
+    }
     RefreshFindHighlights();
     return changed.count;
 }
