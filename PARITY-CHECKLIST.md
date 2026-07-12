@@ -25,7 +25,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 19 | uses `define e = Character("Eileen")` names instead of `e` aliases | Pending |
 | 20 | total word and line target progress | Done (Step 3.4) |
 | 21 | reading-time estimate (~200 wpm) and words-written-this-session counter | Pending |
-| 22 | version diff: paste an old script to see words added or cut per speaker | Pending |
+| 22 | version diff: paste an old script to see words added or cut per speaker | Done (Step 3.7) |
 | 23 | scene/label breakdown | Done (Step 3.4) |
 | 24 | counted-line speaker/search filters | Done (Step 3.5) |
 | 25 | CSV/JSON stats export | Done (Step 3.6) |

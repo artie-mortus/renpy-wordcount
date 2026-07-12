@@ -1,6 +1,8 @@
 #include "core/version.h"
 
 #include <sstream>
+#include <algorithm>
+#include <cstdlib>
 
 namespace say_count {
 
@@ -75,6 +77,23 @@ std::string statistics_html(const ScriptAnalysis& a, std::string_view title, std
     o<<"</tbody></table><h2>Scenes</h2><table><thead><tr><th>Scene</th><th>Words</th><th>Lines</th></tr></thead><tbody>";
     for(const auto& s:a.scenes)o<<"<tr><td>"<<html_escape(s.name)<<"</td><td>"<<s.words<<"</td><td>"<<s.lines<<"</td></tr>";
     return o.str()+"</tbody></table></body></html>\n";
+}
+
+VersionComparison compare_versions(const ScriptAnalysis& before, const ScriptAnalysis& after) {
+    VersionComparison result;
+    result.before_words = before.total_words; result.after_words = after.total_words;
+    result.net_words = static_cast<long>(after.total_words) - static_cast<long>(before.total_words);
+    result.added_words = result.net_words > 0 ? static_cast<std::size_t>(result.net_words) : 0;
+    result.removed_words = result.net_words < 0 ? static_cast<std::size_t>(-result.net_words) : 0;
+    std::map<std::string, std::pair<std::size_t, std::size_t>> speakers;
+    for (const auto& speaker : before.speakers) speakers[speaker.name].first = speaker.words;
+    for (const auto& speaker : after.speakers) speakers[speaker.name].second = speaker.words;
+    for (const auto& [name, counts] : speakers) result.speakers.push_back({name, counts.first, counts.second,
+        static_cast<long>(counts.second) - static_cast<long>(counts.first)});
+    std::stable_sort(result.speakers.begin(), result.speakers.end(), [](const auto& left, const auto& right) {
+        return std::labs(left.delta) > std::labs(right.delta);
+    });
+    return result;
 }
 
 }  // namespace say_count

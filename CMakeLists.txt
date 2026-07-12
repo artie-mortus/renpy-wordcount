@@ -44,6 +44,7 @@ if(BUILD_TESTING)
         tests/analysis_test.cpp
         tests/tokenizer_test.cpp
         tests/export_test.cpp
+        tests/version_comparison_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 

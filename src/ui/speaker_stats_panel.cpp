@@ -15,6 +15,12 @@
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 #include <wx/weakref.h>
+#include <wx/button.h>
+#include <wx/file.h>
+#include <wx/filedlg.h>
+#include <wx/msgdlg.h>
+
+#include "core/version.h"
 
 namespace say_count::ui {
 namespace {
@@ -102,6 +108,28 @@ void SpeakerStatsPanel::RefreshCountedLines() {
     }
 }
 
+void SpeakerStatsPanel::RefreshVersionComparison() {
+    if (!version_input_ || !version_result_) return;
+    version_source_ = version_input_->GetValue();
+    if (wxString(version_source_).Strip(wxString::both).empty()) {
+        version_result_->SetValue("Paste or load an old version to compare.");
+        return;
+    }
+    const auto comparison = compare_versions(analyze_script(version_source_.ToStdString()), analysis_);
+    auto signed_value = [](long value) { return value >= 0 ? "+" + std::to_string(value) : std::to_string(value); };
+    std::string text = "Total: " + std::to_string(comparison.before_words) + " -> " +
+        std::to_string(comparison.after_words) + " (" + signed_value(comparison.net_words) + ")\n" +
+        "Added: " + std::to_string(comparison.added_words) + "   Removed: " +
+        std::to_string(comparison.removed_words) + "   Net: " + signed_value(comparison.net_words);
+    for (const auto& speaker : comparison.speakers) {
+        text += "\n" + speaker.name + ": ";
+        if (!speaker.delta) text += std::to_string(speaker.after) + " words (unchanged)";
+        else text += std::to_string(speaker.before) + " -> " + std::to_string(speaker.after) +
+                     " (" + signed_value(speaker.delta) + ")";
+    }
+    version_result_->SetValue(wxString::FromUTF8(text));
+}
+
 SpeakerStatsPanel::Targets SpeakerStatsPanel::ReadTargets(wxTextCtrl* words,
                                                            wxTextCtrl* lines) const {
     return {Positive(words), Positive(lines)};
@@ -116,6 +144,8 @@ void SpeakerStatsPanel::Rebuild() {
     text_filter_ = nullptr;
     label_filter_ = nullptr;
     counted_lines_ = nullptr;
+    version_input_ = nullptr;
+    version_result_ = nullptr;
     auto add_heading = [&](const wxString& text) {
         auto* label = new wxStaticText(this, wxID_ANY, text);
         label->SetFont(label->GetFont().Bold());
@@ -257,6 +287,27 @@ void SpeakerStatsPanel::Rebuild() {
             line_jump_handler_(analysis_.counted[index].line_number);
     });
     RefreshCountedLines();
+    add_heading("Compare versions");
+    version_input_ = new wxTextCtrl(this, wxID_ANY, version_source_, wxDefaultPosition,
+                                    wxSize(-1, 120), wxTE_MULTILINE);
+    version_input_->SetHint("Paste an older script here");
+    auto* load_version = new wxButton(this, wxID_ANY, "Load old script...");
+    version_result_ = new wxTextCtrl(this, wxID_ANY, {}, wxDefaultPosition, wxSize(-1, 150),
+                                    wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+    content_->Add(version_input_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 12);
+    content_->Add(load_version, 0, wxLEFT | wxRIGHT | wxTOP, 12);
+    content_->Add(version_result_, 0, wxEXPAND | wxALL, 12);
+    version_input_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RefreshVersionComparison(); });
+    load_version->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        wxFileDialog dialog(this, "Load older script", wxEmptyString, wxEmptyString,
+                            "Ren'Py scripts (*.rpy)|*.rpy", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dialog.ShowModal() != wxID_OK) return;
+        wxFile file(dialog.GetPath()); wxString contents;
+        if (file.IsOpened() && file.ReadAll(&contents, wxConvUTF8)) version_input_->SetValue(contents);
+        else wxMessageBox("Could not read the selected script.", "Version comparison",
+                          wxOK | wxICON_ERROR, this);
+    });
+    RefreshVersionComparison();
     Layout();
     FitInside();
 }

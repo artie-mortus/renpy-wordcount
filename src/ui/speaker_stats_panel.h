@@ -30,6 +30,7 @@ private:
     void LoadTargets();
     Targets ReadTargets(wxTextCtrl* words, wxTextCtrl* lines) const;
     void RefreshCountedLines();
+    void RefreshVersionComparison();
 
     wxString targets_path_;
     ScriptAnalysis analysis_;
@@ -42,6 +43,9 @@ private:
     wxTextCtrl* text_filter_ = nullptr;
     wxTextCtrl* label_filter_ = nullptr;
     wxListCtrl* counted_lines_ = nullptr;
+    wxTextCtrl* version_input_ = nullptr;
+    wxTextCtrl* version_result_ = nullptr;
+    wxString version_source_;
     std::function<void(std::size_t)> line_jump_handler_;
 };
 
