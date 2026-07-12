@@ -48,3 +48,22 @@ TEST_CASE("external changes reload only clean documents") {
     REQUIRE(say_count::classify_external_change("local draft", "disk revision", true) ==
             ExternalChangeDecision::Conflict);
 }
+
+TEST_CASE("conflict diff aligns common context and highlights changed rows") {
+    const auto rows = say_count::build_conflict_diff(
+        "label start:\n    \"Local draft.\"\n    return\n",
+        "label start:\n    \"Disk revision.\"\n    $ flag = True\n    return\n");
+    REQUIRE(rows.size() == 5);
+    REQUIRE_FALSE(rows.front().changed);
+    REQUIRE(rows[1].changed);
+    REQUIRE(rows[2].changed);
+    REQUIRE_FALSE(rows[3].changed);
+    REQUIRE_FALSE(rows.back().changed);
+    REQUIRE(rows.back().local_text == "");
+}
+
+TEST_CASE("conflict resolution never mixes versions") {
+    const say_count::ExternalConflict conflict{"story.rpy", "local", "disk"};
+    REQUIRE(say_count::resolve_conflict_content(conflict, say_count::ConflictResolution::KeepLocal) == "local");
+    REQUIRE(say_count::resolve_conflict_content(conflict, say_count::ConflictResolution::UseDisk) == "disk");
+}

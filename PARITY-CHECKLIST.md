@@ -33,7 +33,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 27 | standalone HTML report export | Done (Step 3.6) |
 | 28 | dark mode | Partial — system/light/dark editor themes landed (Step 1.4); app-wide dark mode pending |
 | 29 | import `.rpy` files (multi-select or drag & drop onto the editor), copy script, download `.rpy` | Partial — multi-select open and drag & drop landed (Step 1.3); copy script and download pending |
-| 30 | project folder sync: connect a folder and every `.rpy` in it opens automatically; edits made outside (e.g. VS Code) are picked up while you write | Partial — recursive connection and clean external reload done (Steps 5.1/5.2); dirty conflict review pending Step 5.3 |
+| 30 | project folder sync: connect a folder and every `.rpy` in it opens automatically; edits made outside (e.g. VS Code) are picked up while you write | Done — connection (Step 5.1), watcher (Step 5.2), conflict safety (Step 5.3) |
 | 31 | find & replace (Ctrl+F): case, regex (`.*`, `$1` groups), and whole-word toggles, all-files scope, F3/Shift+F3 to cycle, every match highlighted in the editor | Done — current file (Step 4.4), all open files (Step 4.5) |
 | 32 | editor shortcuts: Ctrl+G go to line, Ctrl+/ comment toggle, Alt+↑/↓ move lines, Shift+Alt+↑/↓ duplicate lines, Ctrl+↑/↓ previous/next label, Ctrl+PageUp/PageDown switch tabs, Ctrl+Shift+T reopen closed tab, Ctrl+S save + snapshot, Ctrl+= / Ctrl+− / Ctrl+0 font size — Ctrl+K shows the full cheat sheet | Partial — editing/navigation commands and cheat sheet done (Step 4.8); reopen-closed and save snapshots pending |
 | 33 | status bar with line/column, current label (also shown as a breadcrumb in the header), and selected-word count | Pending |
@@ -53,7 +53,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 47 | Ren'Py-aware autocomplete for image names after `show`, audio paths after `play`, screen names after `call screen`, and declared variables after `$` | Done (Step 4.3) |
 | 48 | inline editor diagnostics for syntax, unresolved-label, quote, speaker, and long-line checks | Done — engine (Step 4.6), squiggles/gutter/tooltips/panel (Step 4.7) |
 | 49 | project-wide text search across every `.rpy` file in the connected game folder (or all open tabs offline) | Done — open tabs (Step 4.5), recursively connected folder (Step 5.1) |
-| 50 | folder-sync conflict review with a side-by-side local/disk comparison before choosing a version | Pending |
+| 50 | folder-sync conflict review with a side-by-side local/disk comparison before choosing a version | Done (Step 5.3) |
 | 51 | safe project-wide character-alias and label rename with an affected-line preview before applying | Pending |
 | 52 | prose panel: vocabulary size, average sentence length per speaker, and overused words/phrases as clickable chips that open find | Pending |
 | 53 | local browser autosave | Pending |

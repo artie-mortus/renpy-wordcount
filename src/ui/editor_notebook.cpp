@@ -126,24 +126,27 @@ bool EditorNotebook::OpenProjectFiles(const std::vector<wxString>& paths) {
     return true;
 }
 
-ExternalFileResult EditorNotebook::ReloadExternalFile(const wxString& path) {
+ExternalFileUpdate EditorNotebook::ReloadExternalFile(const wxString& path) {
     const wxString absolute_path = wxFileName(path).GetAbsolutePath();
     wxStyledTextCtrl* editor = nullptr;
     for (size_t index = 0; index < GetPageCount(); ++index) {
         auto* candidate = EditorAt(index);
         if (candidate && FilePath(candidate) == absolute_path) { editor = candidate; break; }
     }
-    if (!editor) return ExternalFileResult::NotOpen;
-    if (!wxFileName::FileExists(absolute_path)) return ExternalFileResult::Missing;
+    if (!editor) return {ExternalFileResult::NotOpen, {}, {}};
+    const std::string local = editor->GetText().ToStdString();
+    if (!wxFileName::FileExists(absolute_path)) return {ExternalFileResult::Missing, local, {}};
     wxFile file(absolute_path);
     wxString content;
-    if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8)) return ExternalFileResult::Failed;
+    if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8))
+        return {ExternalFileResult::Failed, local, {}};
     content = NormalizeTabs(content);
-    const std::string local = editor->GetText().ToStdString();
     const std::string disk = content.ToStdString();
     const auto decision = classify_external_change(local, disk, editor->GetModify());
-    if (decision == ExternalChangeDecision::Unchanged) return ExternalFileResult::Unchanged;
-    if (decision == ExternalChangeDecision::Conflict) return ExternalFileResult::Dirty;
+    if (decision == ExternalChangeDecision::Unchanged)
+        return {ExternalFileResult::Unchanged, local, disk};
+    if (decision == ExternalChangeDecision::Conflict)
+        return {ExternalFileResult::Dirty, local, disk};
 
     const int selection_start = editor->GetSelectionStart();
     const int selection_end = editor->GetSelectionEnd();
@@ -157,7 +160,31 @@ ExternalFileResult EditorNotebook::ReloadExternalFile(const wxString& path) {
     editor->Colourise(0, -1);
     RefreshCompletionIndex();
     analysis_timer_.StartOnce(kAnalysisDelayMs);
-    return ExternalFileResult::Reloaded;
+    return {ExternalFileResult::Reloaded, local, disk};
+}
+
+bool EditorNotebook::ApplyExternalVersion(const wxString& path, std::string_view content,
+                                          bool mark_clean) {
+    const wxString absolute_path = wxFileName(path).GetAbsolutePath();
+    wxStyledTextCtrl* editor = nullptr;
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        auto* candidate = EditorAt(index);
+        if (candidate && FilePath(candidate) == absolute_path) { editor = candidate; break; }
+    }
+    if (!editor) return false;
+    const int selection_start = editor->GetSelectionStart();
+    const int selection_end = editor->GetSelectionEnd();
+    const int first_visible = editor->GetFirstVisibleLine();
+    editor->SetText(NormalizeTabs(wxString::FromUTF8(content.data(), content.size())));
+    editor->SetSelection(std::min(selection_start, editor->GetTextLength()),
+                         std::min(selection_end, editor->GetTextLength()));
+    editor->SetFirstVisibleLine(std::min(first_visible, editor->GetLineCount() - 1));
+    if (mark_clean) editor->SetSavePoint();
+    RefreshSpeakers(editor);
+    editor->Colourise(0, -1);
+    RefreshCompletionIndex();
+    analysis_timer_.StartOnce(kAnalysisDelayMs);
+    return true;
 }
 
 void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {

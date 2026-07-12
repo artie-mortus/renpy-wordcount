@@ -21,6 +21,22 @@ struct ProjectFolder {
 
 enum class ExternalChangeDecision { Unchanged, Reload, Conflict };
 
+struct ExternalConflict {
+    std::string path;
+    std::string local_content;
+    std::string disk_content;
+};
+
+struct ConflictDiffRow {
+    std::size_t local_line = 0;
+    std::size_t disk_line = 0;
+    std::string local_text;
+    std::string disk_text;
+    bool changed = false;
+};
+
+enum class ConflictResolution { KeepLocal, UseDisk };
+
 std::optional<ProjectFolder> discover_project_folder(const std::string& selected_path,
                                                      std::string* error = nullptr);
 std::vector<std::string> update_recent_projects(const std::vector<std::string>& recent,
@@ -29,5 +45,9 @@ std::vector<std::string> update_recent_projects(const std::vector<std::string>& 
 ExternalChangeDecision classify_external_change(std::string_view local_content,
                                                 std::string_view disk_content,
                                                 bool local_dirty);
+std::vector<ConflictDiffRow> build_conflict_diff(std::string_view local_content,
+                                                 std::string_view disk_content);
+std::string resolve_conflict_content(const ExternalConflict& conflict,
+                                     ConflictResolution resolution);
 
 }  // namespace say_count

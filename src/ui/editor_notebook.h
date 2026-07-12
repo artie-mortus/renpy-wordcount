@@ -31,6 +31,11 @@ struct FindStatus {
 };
 
 enum class ExternalFileResult { NotOpen, Unchanged, Reloaded, Dirty, Missing, Failed };
+struct ExternalFileUpdate {
+    ExternalFileResult result = ExternalFileResult::NotOpen;
+    std::string local_content;
+    std::string disk_content;
+};
 
 class EditorNotebook final : public wxAuiNotebook {
 public:
@@ -67,7 +72,8 @@ public:
     void SetDiagnosticsHandler(DiagnosticsHandler handler);
     void SelectDiagnostic(const Diagnostic& diagnostic);
     void ToggleComments();
-    ExternalFileResult ReloadExternalFile(const wxString& path);
+    ExternalFileUpdate ReloadExternalFile(const wxString& path);
+    bool ApplyExternalVersion(const wxString& path, std::string_view content, bool mark_clean);
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;

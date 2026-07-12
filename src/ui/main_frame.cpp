@@ -27,6 +27,7 @@
 #include "ui/speaker_stats_panel.h"
 #include "ui/outline_panel.h"
 #include "ui/diagnostics_panel.h"
+#include "ui/conflict_dialog.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -57,6 +58,7 @@ enum MenuId {
     kConnectProject,
     kRecentProjectFirst,
     kRecentProjectLast = kRecentProjectFirst + 7,
+    kReviewConflicts = kRecentProjectLast + 1,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -162,6 +164,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnConnectProject, this, kConnectProject);
     Bind(wxEVT_MENU, &MainFrame::OnRecentProject, this, kRecentProjectFirst, kRecentProjectLast);
     Bind(wxEVT_FSWATCHER, &MainFrame::OnFileSystemEvent, this);
+    Bind(wxEVT_MENU, &MainFrame::OnReviewConflicts, this, kReviewConflicts);
 }
 
 MainFrame::~MainFrame() {
@@ -179,6 +182,7 @@ void MainFrame::BuildMenus() {
     file->Append(kConnectProject, "Connect Project &Folder…", "Open every Ren'Py script in a project");
     recent_projects_menu_ = new wxMenu();
     file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
+    file->Append(kReviewConflicts, "Review External &Conflicts…");
     RebuildRecentProjectsMenu();
     file->AppendSeparator();
     auto* export_menu = new wxMenu();
@@ -295,15 +299,20 @@ void MainFrame::RefreshProjectDiscovery() {
 }
 
 void MainFrame::HandleExternalScriptChange(const wxString& path) {
-    const auto result = notebook_->ReloadExternalFile(path);
+    const auto update = notebook_->ReloadExternalFile(path);
+    const auto result = update.result;
     const wxFileName file(path);
     const std::string key = file.GetFullPath().ToStdString();
     if (result == ExternalFileResult::Reloaded) {
         external_conflicts_.erase(key);
         SetStatusText("Reloaded external changes to " + file.GetFullName());
     } else if (result == ExternalFileResult::Dirty) {
-        if (external_conflicts_.insert(key).second) wxBell();
+        const bool first = external_conflicts_.count(key) == 0;
+        external_conflicts_.insert_or_assign(key, ExternalConflict{key, update.local_content,
+                                                                   update.disk_content});
+        if (first) wxBell();
         SetStatusText(file.GetFullName() + " changed externally; local unsaved edits were kept");
+        if (first) CallAfter([this, key] { ReviewExternalConflict(key); });
     } else if (result == ExternalFileResult::NotOpen && wxFileName::FileExists(path)) {
         notebook_->OpenFiles({path});
     } else if (result == ExternalFileResult::Unchanged) {
@@ -311,6 +320,66 @@ void MainFrame::HandleExternalScriptChange(const wxString& path) {
     } else if (result == ExternalFileResult::Failed) {
         SetStatusText("Could not read external changes to " + file.GetFullName());
     }
+}
+
+void MainFrame::ReviewExternalConflict(const std::string& key) {
+    if (conflict_review_open_) return;
+    const auto found = external_conflicts_.find(key);
+    if (found == external_conflicts_.end()) return;
+    const ExternalConflict conflict = found->second;
+    conflict_review_open_ = true;
+    ConflictDialog dialog(this, conflict);
+    const int modal = dialog.ShowModal();
+    conflict_review_open_ = false;
+    if (modal != wxID_OK || dialog.choice() == ConflictDialogChoice::Cancel) return;
+
+    const auto current = external_conflicts_.find(key);
+    if (current == external_conflicts_.end()) return;
+    if (current->second.disk_content != conflict.disk_content) {
+        wxMessageBox("The disk file changed again during review. The comparison will be refreshed.",
+                     "Conflict changed", wxOK | wxICON_WARNING, this);
+        CallAfter([this, key] { ReviewExternalConflict(key); });
+        return;
+    }
+
+    if (dialog.choice() == ConflictDialogChoice::KeepLocal) {
+        external_conflicts_.erase(key);
+        SetStatusText("Keeping local unsaved version of " + wxFileName(wxString::FromUTF8(key)).GetFullName());
+        return;
+    }
+    if (dialog.choice() == ConflictDialogChoice::SaveElsewhere) {
+        const wxFileName original(wxString::FromUTF8(conflict.path));
+        const wxString suggested = original.GetName() + "-local." + original.GetExt();
+        wxFileDialog save(this, "Save local version before using disk", original.GetPath(), suggested,
+                          "Ren'Py scripts (*.rpy)|*.rpy|All files (*.*)|*.*",
+                          wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (save.ShowModal() != wxID_OK) return;
+        if (wxFileName(save.GetPath()).GetAbsolutePath() == original.GetAbsolutePath()) {
+            wxMessageBox("Choose a different path so the external disk revision is not overwritten.",
+                         "Different path required", wxOK | wxICON_WARNING, this);
+            return;
+        }
+        wxFile output;
+        if (!output.Create(save.GetPath(), true) ||
+            !output.Write(wxString::FromUTF8(conflict.local_content), wxConvUTF8) || !output.Close()) {
+            wxMessageBox("The local copy could not be saved. The conflict remains unresolved.",
+                         "Save failed", wxOK | wxICON_ERROR, this);
+            return;
+        }
+    }
+    if (notebook_->ApplyExternalVersion(wxString::FromUTF8(conflict.path), conflict.disk_content, true)) {
+        external_conflicts_.erase(key);
+        SetStatusText("Using external disk version of " +
+                      wxFileName(wxString::FromUTF8(conflict.path)).GetFullName());
+    }
+}
+
+void MainFrame::OnReviewConflicts(wxCommandEvent&) {
+    if (external_conflicts_.empty()) {
+        SetStatusText("No external conflicts are pending");
+        return;
+    }
+    ReviewExternalConflict(external_conflicts_.begin()->first);
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {

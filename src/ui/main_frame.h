@@ -12,6 +12,7 @@
 #include <optional>
 #include <memory>
 #include <unordered_set>
+#include <unordered_map>
 
 class wxPanel;
 class wxTextCtrl;
@@ -45,6 +46,7 @@ private:
     void StartProjectWatcher();
     void RefreshProjectDiscovery();
     void HandleExternalScriptChange(const wxString& path);
+    void ReviewExternalConflict(const std::string& key);
     void RestoreWindow();
     void OnAbout(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -73,6 +75,7 @@ private:
     void OnConnectProject(wxCommandEvent& event);
     void OnRecentProject(wxCommandEvent& event);
     void OnFileSystemEvent(wxFileSystemWatcherEvent& event);
+    void OnReviewConflicts(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -105,7 +108,8 @@ private:
     std::optional<ProjectFolder> project_;
     std::vector<wxString> recent_projects_;
     std::unique_ptr<wxFileSystemWatcher> project_watcher_;
-    std::unordered_set<std::string> external_conflicts_;
+    std::unordered_map<std::string, ExternalConflict> external_conflicts_;
+    bool conflict_review_open_ = false;
 };
 
 }  // namespace say_count::ui
