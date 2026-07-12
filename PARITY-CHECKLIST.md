@@ -34,7 +34,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 28 | dark mode | Partial — system/light/dark editor themes landed (Step 1.4); app-wide dark mode pending |
 | 29 | import `.rpy` files (multi-select or drag & drop onto the editor), copy script, download `.rpy` | Partial — multi-select open and drag & drop landed (Step 1.3); copy script and download pending |
 | 30 | project folder sync: connect a folder and every `.rpy` in it opens automatically; edits made outside (e.g. VS Code) are picked up while you write | Pending |
-| 31 | find & replace (Ctrl+F): case, regex (`.*`, `$1` groups), and whole-word toggles, all-files scope, F3/Shift+F3 to cycle, every match highlighted in the editor | Pending |
+| 31 | find & replace (Ctrl+F): case, regex (`.*`, `$1` groups), and whole-word toggles, all-files scope, F3/Shift+F3 to cycle, every match highlighted in the editor | Partial — current-file find/replace and highlighting done (Step 4.4); all-files scope pending Step 4.5 |
 | 32 | editor shortcuts: Ctrl+G go to line, Ctrl+/ comment toggle, Alt+↑/↓ move lines, Shift+Alt+↑/↓ duplicate lines, Ctrl+↑/↓ previous/next label, Ctrl+PageUp/PageDown switch tabs, Ctrl+Shift+T reopen closed tab, Ctrl+S save + snapshot, Ctrl+= / Ctrl+− / Ctrl+0 font size — Ctrl+K shows the full cheat sheet | Partial — Ctrl+= / Ctrl+− / Ctrl+0 font size landed (Step 1.4); rest pending |
 | 33 | status bar with line/column, current label (also shown as a breadcrumb in the header), and selected-word count | Pending |
 | 34 | auto-close and selection-wrap for `"` `(` `[`, with type-over for closers and escaped-quote awareness | Pending |

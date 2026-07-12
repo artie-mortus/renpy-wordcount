@@ -13,6 +13,7 @@ add_library(say_count_core STATIC
     src/core/parser.cpp
     src/core/outline.cpp
     src/core/autocomplete.cpp
+    src/core/find_replace.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
 )
@@ -48,6 +49,7 @@ if(BUILD_TESTING)
         tests/tokenizer_test.cpp
         tests/outline_test.cpp
         tests/autocomplete_test.cpp
+        tests/find_replace_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp
     )

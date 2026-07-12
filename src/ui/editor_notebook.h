@@ -13,15 +13,23 @@
 #include "app/settings.h"
 #include "core/parser.h"
 #include "core/autocomplete.h"
+#include "core/find_replace.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
 
 namespace say_count::ui {
 
+struct FindStatus {
+    bool valid = true;
+    std::size_t current = 0;
+    std::size_t total = 0;
+};
+
 class EditorNotebook final : public wxAuiNotebook {
 public:
     using AnalysisHandler = std::function<void(const wxString&, const ScriptAnalysis&)>;
+    using FindStatusHandler = std::function<void(const FindStatus&)>;
 
     EditorNotebook(wxWindow* parent, const app::EditorSettings& settings,
                    AnalysisHandler analysis_handler);
@@ -36,6 +44,13 @@ public:
     void SetFontSize(int size);
     void SetTheme(app::EditorTheme theme);
     void JumpToLine(std::size_t line_number);
+    std::string SelectedText() const;
+    FindStatus SetFindQuery(std::string query, FindOptions options);
+    FindStatus FindNext(int direction);
+    bool ReplaceCurrent(std::string_view replacement);
+    std::size_t ReplaceAll(std::string_view replacement);
+    void ClearFind();
+    void SetFindStatusHandler(FindStatusHandler handler);
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;
@@ -57,6 +72,7 @@ private:
     void AnalyzeActive();
     void RefreshSpeakers(wxStyledTextCtrl* editor);
     void RefreshCompletionIndex();
+    FindStatus RefreshFindHighlights();
 
     unsigned int next_untitled_number_ = 1;
     app::EditorSettings settings_;
@@ -65,6 +81,9 @@ private:
     std::unordered_map<wxStyledTextCtrl*, std::unordered_set<std::string>> speakers_;
     std::unordered_map<wxStyledTextCtrl*, CompletionResult> completions_;
     CompletionIndex completion_index_;
+    std::string find_query_;
+    FindOptions find_options_;
+    FindStatusHandler find_status_handler_;
 };
 
 }  // namespace say_count::ui

@@ -1,10 +1,11 @@
 # Status
 
-- Completed: Steps 0.1 through 4.3.
-- Autocomplete now indexes every open script for image declarations, audio definitions and quoted paths, screen declarations, and declared/assigned variables.
-- Ren'Py-aware contexts cover `show`/`hide`/`scene`, quoted `play`/`queue`, `call screen`, and bare `$` expressions; audio acceptance closes the quote.
-- Speaker aliases and labels are now project-wide, and the completion index refreshes when tabs or document text change.
-- Suggestions remain case-insensitive, prefix-filtered, capped at eight, and suppressed in unrelated contexts; core remains wx-free and parser parity output is unchanged.
-- Verified (2026-07-12): `cmake --build build -j` succeeded; `ctest --test-dir build --output-on-failure` passed 53/53, including symbol extraction, cross-file contexts, index rebuilding, and all parser parity tests.
+- Completed: Steps 0.1 through 4.4.
+- Ctrl+F opens a current-file find/replace bar with next/previous navigation, match count, case, regex, and whole-word options.
+- F3/Shift+F3 navigate with wraparound; Escape closes the bar, and opening it seeds a single-line editor selection.
+- Every current-file match is highlighted through a Scintilla indicator; highlights and counts refresh after edits and tab changes.
+- Replace-current and replace-all support literal replacements and regex `$1` capture expansion; each replacement is one undo action and invalid regexes never alter text.
+- Core matching remains wx-free; all-files scope is reserved for Step 4.5 and parser parity output is unchanged.
+- Verified (2026-07-12): `cmake --build build -j` succeeded; `ctest --test-dir build --output-on-failure` passed 58/58, including literal, regex, capture-group, whole-word, invalid-regex, zero-match, and all parser parity tests.
 - Known issues: pre-existing Step 1.3-era re-entrant quit/discard-modal `ConfirmCloseAll` crash remains; not reproducible in normal flows.
-- Next step: Phase 4, Step 4.4 — find in current file.
+- Next step: Phase 4, Step 4.5 — find across files.

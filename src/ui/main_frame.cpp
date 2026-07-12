@@ -12,6 +12,12 @@
 #include <wx/datetime.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
+#include <wx/button.h>
+#include <wx/checkbox.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/textctrl.h>
 
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
@@ -34,6 +40,11 @@ enum MenuId {
     kExportCsv,
     kExportJson,
     kExportHtml,
+    kFindNext,
+    kFindPrevious,
+    kFindReplace,
+    kFindReplaceAll,
+    kFindClose,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -81,9 +92,13 @@ MainFrame::MainFrame()
         speaker_stats_->SetAnalysis(analysis);
         outline_->SetDocument(source, analysis);
     });
+    BuildFindBar();
+    notebook_->SetFindStatusHandler([this](const FindStatus& status) { UpdateFindStatus(status); });
     speaker_stats_->SetLineJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     manager_.AddPane(notebook_, wxAuiPaneInfo().CenterPane().Name("editor"));
+    manager_.AddPane(find_bar_, wxAuiPaneInfo().Top().Name("find-replace").CaptionVisible(false)
+                         .PaneBorder(false).DockFixed(true).Resizable(false).BestSize(-1, 44).Hide());
     manager_.AddPane(speaker_stats_, wxAuiPaneInfo().Right().Name("speaker-statistics")
                          .Caption("Speaker Statistics").BestSize(320, 500).MinSize(240, 180)
                          .CloseButton(true).MaximizeButton(true));
@@ -105,6 +120,9 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnFontSize, this, kFontIncrease, kFontReset);
     Bind(wxEVT_MENU, &MainFrame::OnTheme, this, kThemeSystem, kThemeDark);
     Bind(wxEVT_MENU, &MainFrame::OnExport, this, kExportCsv, kExportHtml);
+    Bind(wxEVT_MENU, &MainFrame::OnOpenFind, this, wxID_FIND);
+    Bind(wxEVT_MENU, &MainFrame::OnFindNext, this, kFindNext, kFindPrevious);
+    Bind(wxEVT_CHAR_HOOK, &MainFrame::OnCharHook, this);
 }
 
 MainFrame::~MainFrame() {
@@ -128,6 +146,9 @@ void MainFrame::BuildMenus() {
     file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
 
     auto* edit = new wxMenu();
+    edit->Append(wxID_FIND, "&Find and Replace…\tCtrl+F");
+    edit->Append(kFindNext, "Find &Next\tF3");
+    edit->Append(kFindPrevious, "Find &Previous\tShift+F3");
     auto* view = new wxMenu();
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
@@ -151,6 +172,121 @@ void MainFrame::BuildMenus() {
     menu_bar->Append(view, "&View");
     menu_bar->Append(help, "&Help");
     SetMenuBar(menu_bar);
+}
+
+void MainFrame::BuildFindBar() {
+    find_bar_ = new wxPanel(this);
+    auto* layout = new wxBoxSizer(wxHORIZONTAL);
+    find_input_ = new wxTextCtrl(find_bar_, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                 wxSize(180, -1), wxTE_PROCESS_ENTER);
+    find_input_->SetHint("Find");
+    replace_input_ = new wxTextCtrl(find_bar_, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                    wxSize(180, -1), wxTE_PROCESS_ENTER);
+    replace_input_->SetHint("Replace");
+    find_count_ = new wxStaticText(find_bar_, wxID_ANY, "0/0", wxDefaultPosition, wxSize(52, -1),
+                                   wxALIGN_CENTER_HORIZONTAL);
+    auto* previous = new wxButton(find_bar_, kFindPrevious, "↑", wxDefaultPosition, wxDefaultSize,
+                                  wxBU_EXACTFIT);
+    auto* next = new wxButton(find_bar_, kFindNext, "↓", wxDefaultPosition, wxDefaultSize,
+                              wxBU_EXACTFIT);
+    auto* replace = new wxButton(find_bar_, kFindReplace, "Replace");
+    auto* replace_all = new wxButton(find_bar_, kFindReplaceAll, "Replace all");
+    find_case_ = new wxCheckBox(find_bar_, wxID_ANY, "Aa");
+    find_case_->SetToolTip("Match case");
+    find_regex_ = new wxCheckBox(find_bar_, wxID_ANY, ".*");
+    find_regex_->SetToolTip("Regular expression");
+    find_word_ = new wxCheckBox(find_bar_, wxID_ANY, "Whole word");
+    auto* close = new wxButton(find_bar_, kFindClose, "×", wxDefaultPosition, wxDefaultSize,
+                               wxBU_EXACTFIT);
+
+    layout->Add(find_input_, 1, wxALIGN_CENTER_VERTICAL | wxALL, 4);
+    layout->Add(replace_input_, 1, wxALIGN_CENTER_VERTICAL | wxALL, 4);
+    layout->Add(find_count_, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 4);
+    for (auto* button : {previous, next, replace, replace_all})
+        layout->Add(button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    layout->Add(find_case_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    layout->Add(find_regex_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    layout->Add(find_word_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    layout->Add(close, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    find_bar_->SetSizer(layout);
+
+    find_input_->Bind(wxEVT_TEXT, &MainFrame::OnFindChanged, this);
+    find_case_->Bind(wxEVT_CHECKBOX, &MainFrame::OnFindChanged, this);
+    find_regex_->Bind(wxEVT_CHECKBOX, &MainFrame::OnFindChanged, this);
+    find_word_->Bind(wxEVT_CHECKBOX, &MainFrame::OnFindChanged, this);
+    previous->Bind(wxEVT_BUTTON, &MainFrame::OnFindNext, this);
+    next->Bind(wxEVT_BUTTON, &MainFrame::OnFindNext, this);
+    replace->Bind(wxEVT_BUTTON, &MainFrame::OnReplace, this);
+    replace_all->Bind(wxEVT_BUTTON, &MainFrame::OnReplaceAll, this);
+    close->Bind(wxEVT_BUTTON, &MainFrame::OnCloseFind, this);
+    find_input_->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) {
+        notebook_->FindNext(wxGetKeyState(WXK_SHIFT) ? -1 : 1);
+    });
+    replace_input_->Bind(wxEVT_TEXT_ENTER, &MainFrame::OnReplace, this);
+}
+
+FindOptions MainFrame::CurrentFindOptions() const {
+    return {find_case_->GetValue(), find_regex_->GetValue(), find_word_->GetValue()};
+}
+
+void MainFrame::UpdateFindStatus(const FindStatus& status) {
+    if (!find_count_) return;
+    const std::string count = status.valid
+        ? std::to_string(status.current) + "/" + std::to_string(status.total)
+        : "Invalid";
+    find_count_->SetLabel(wxString::FromUTF8(count));
+    find_input_->SetBackgroundColour(status.valid ? wxNullColour : wxColour("#ffd8d8"));
+    find_input_->Refresh();
+}
+
+void MainFrame::OnOpenFind(wxCommandEvent&) {
+    manager_.GetPane(find_bar_).Show();
+    manager_.Update();
+    const std::string selected = notebook_->SelectedText();
+    if (!selected.empty() && selected.find('\n') == std::string::npos && selected.find('\r') == std::string::npos)
+        find_input_->SetValue(wxString::FromUTF8(selected));
+    find_input_->SetFocus();
+    find_input_->SelectAll();
+    notebook_->SetFindQuery(find_input_->GetValue().ToStdString(), CurrentFindOptions());
+}
+
+void MainFrame::OnFindNext(wxCommandEvent& event) {
+    if (!manager_.GetPane(find_bar_).IsShown()) {
+        OnOpenFind(event);
+        return;
+    }
+    notebook_->FindNext(event.GetId() == kFindPrevious ? -1 : 1);
+}
+
+void MainFrame::OnFindChanged(wxCommandEvent&) {
+    notebook_->SetFindQuery(find_input_->GetValue().ToStdString(), CurrentFindOptions());
+}
+
+void MainFrame::OnReplace(wxCommandEvent&) {
+    notebook_->ReplaceCurrent(replace_input_->GetValue().ToStdString());
+}
+
+void MainFrame::OnReplaceAll(wxCommandEvent&) {
+    const auto count = notebook_->ReplaceAll(replace_input_->GetValue().ToStdString());
+    SetStatusText(count == 0 ? "No matches to replace"
+                             : wxString::FromUTF8("Replaced " + std::to_string(count) + " match" +
+                                                  (count == 1 ? "" : "es")));
+}
+
+void MainFrame::OnCloseFind(wxCommandEvent&) {
+    notebook_->ClearFind();
+    manager_.GetPane(find_bar_).Hide();
+    manager_.Update();
+    notebook_->SetFocus();
+}
+
+void MainFrame::OnCharHook(wxKeyEvent& event) {
+    if (event.GetKeyCode() == WXK_ESCAPE && find_bar_ && manager_.GetPane(find_bar_).IsShown()) {
+        wxCommandEvent close;
+        OnCloseFind(close);
+        return;
+    }
+    event.Skip();
 }
 
 void MainFrame::RestoreWindow() {

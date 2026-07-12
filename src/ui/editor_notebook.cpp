@@ -17,6 +17,8 @@ namespace {
 
 constexpr const char* kFilePathProperty = "say-count-file-path";
 constexpr int kAnalysisDelayMs = 120;
+constexpr int kFindIndicator = 8;
+constexpr std::size_t kMaxHighlightedMatches = 2000;
 enum EditorStyle { kDefault, kComment, kKeyword, kLabel, kSpeaker, kString, kPython, kStatement };
 
 wxString NormalizeTabs(wxString text) {
@@ -147,6 +149,10 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->SetCaretForeground(foreground);
     editor->SetCaretLineBackground(dark ? wxColour("#281f3d") : wxColour("#f5e9c9"));
     editor->SetSelBackground(true, dark ? wxColour("#6b542d") : wxColour("#ead39c"));
+    editor->IndicatorSetStyle(kFindIndicator, wxSTC_INDIC_ROUNDBOX);
+    editor->IndicatorSetForeground(kFindIndicator, dark ? wxColour("#f2ca72") : wxColour("#d49a13"));
+    editor->IndicatorSetAlpha(kFindIndicator, 80);
+    editor->IndicatorSetOutlineAlpha(kFindIndicator, 180);
     editor->Colourise(0, -1);
 }
 
@@ -220,6 +226,7 @@ void EditorNotebook::OnModified(wxStyledTextEvent& event) {
         editor->Colourise(0, -1);
     }
     RefreshCompletionIndex();
+    if (!find_query_.empty()) RefreshFindHighlights();
     analysis_timer_.StartOnce(kAnalysisDelayMs);
     event.Skip();
 }
@@ -288,6 +295,139 @@ void EditorNotebook::JumpToLine(std::size_t line_number) {
     editor->SetFocus();
 }
 
+std::string EditorNotebook::SelectedText() const {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    return editor ? editor->GetSelectedText().ToStdString() : std::string{};
+}
+
+void EditorNotebook::SetFindStatusHandler(FindStatusHandler handler) {
+    find_status_handler_ = std::move(handler);
+}
+
+FindStatus EditorNotebook::RefreshFindHighlights() {
+    FindStatus status;
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor) return status;
+
+    editor->SetIndicatorCurrent(kFindIndicator);
+    editor->IndicatorClearRange(0, editor->GetTextLength());
+    const auto found = find_matches(editor->GetText().ToStdString(), find_query_, find_options_);
+    status.valid = found.valid;
+    status.total = found.matches.size();
+    if (found.valid && found.matches.size() <= kMaxHighlightedMatches) {
+        for (const auto& match : found.matches)
+            editor->IndicatorFillRange(static_cast<int>(match.position), static_cast<int>(match.length));
+    }
+
+    const std::size_t start = static_cast<std::size_t>(editor->GetSelectionStart());
+    const std::size_t end = static_cast<std::size_t>(editor->GetSelectionEnd());
+    for (std::size_t index = 0; index < found.matches.size(); ++index) {
+        const auto& match = found.matches[index];
+        if (match.position == start && match.position + match.length == end) {
+            status.current = index + 1;
+            break;
+        }
+        if (match.position < start) status.current = index + 1;
+    }
+    if (find_status_handler_) find_status_handler_(status);
+    return status;
+}
+
+FindStatus EditorNotebook::SetFindQuery(std::string query, FindOptions options) {
+    find_query_ = std::move(query);
+    find_options_ = options;
+    return RefreshFindHighlights();
+}
+
+FindStatus EditorNotebook::FindNext(int direction) {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor || find_query_.empty()) return RefreshFindHighlights();
+    const auto found = find_matches(editor->GetText().ToStdString(), find_query_, find_options_);
+    if (!found.valid || found.matches.empty()) return RefreshFindHighlights();
+
+    const std::size_t caret = static_cast<std::size_t>(
+        direction >= 0 ? editor->GetSelectionEnd() : editor->GetSelectionStart());
+    const FindMatch* selected = nullptr;
+    if (direction >= 0) {
+        const auto item = std::find_if(found.matches.begin(), found.matches.end(),
+            [&](const auto& match) { return match.position >= caret; });
+        selected = item == found.matches.end() ? &found.matches.front() : &*item;
+    } else {
+        const auto item = std::find_if(found.matches.rbegin(), found.matches.rend(),
+            [&](const auto& match) { return match.position < caret; });
+        selected = item == found.matches.rend() ? &found.matches.back() : &*item;
+    }
+    editor->SetSelection(static_cast<int>(selected->position),
+                         static_cast<int>(selected->position + selected->length));
+    editor->EnsureCaretVisible();
+    editor->SetFocus();
+    return RefreshFindHighlights();
+}
+
+bool EditorNotebook::ReplaceCurrent(std::string_view replacement) {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor || find_query_.empty()) return false;
+    const std::string source = editor->GetText().ToStdString();
+    const auto found = find_matches(source, find_query_, find_options_);
+    const std::size_t start = static_cast<std::size_t>(editor->GetSelectionStart());
+    const std::size_t end = static_cast<std::size_t>(editor->GetSelectionEnd());
+    const bool selected_match = std::any_of(found.matches.begin(), found.matches.end(), [&](const auto& match) {
+        return match.position == start && match.position + match.length == end;
+    });
+    if (!found.valid || !selected_match) {
+        FindNext(1);
+        return false;
+    }
+
+    const auto changed = replace_all_matches(source.substr(start, end - start), find_query_,
+                                             replacement, find_options_);
+    if (!changed.valid || changed.count == 0) return false;
+    editor->BeginUndoAction();
+    editor->SetTargetStart(static_cast<int>(start));
+    editor->SetTargetEnd(static_cast<int>(end));
+    editor->ReplaceTarget(wxString::FromUTF8(changed.text));
+    editor->EndUndoAction();
+    editor->GotoPos(static_cast<int>(start + changed.text.size()));
+    FindNext(1);
+    return true;
+}
+
+std::size_t EditorNotebook::ReplaceAll(std::string_view replacement) {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor || find_query_.empty()) return 0;
+    const auto changed = replace_all_matches(editor->GetText().ToStdString(), find_query_,
+                                             replacement, find_options_);
+    if (!changed.valid || changed.count == 0) {
+        RefreshFindHighlights();
+        return 0;
+    }
+    const int caret = std::min<int>(editor->GetCurrentPos(), static_cast<int>(changed.text.size()));
+    editor->BeginUndoAction();
+    editor->SetTargetStart(0);
+    editor->SetTargetEnd(editor->GetTextLength());
+    editor->ReplaceTarget(wxString::FromUTF8(changed.text));
+    editor->EndUndoAction();
+    editor->GotoPos(caret);
+    RefreshFindHighlights();
+    return changed.count;
+}
+
+void EditorNotebook::ClearFind() {
+    find_query_.clear();
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        if (auto* editor = EditorAt(index)) {
+            editor->SetIndicatorCurrent(kFindIndicator);
+            editor->IndicatorClearRange(0, editor->GetTextLength());
+        }
+    }
+    if (find_status_handler_) find_status_handler_({});
+}
+
 void EditorNotebook::OnAnalysisTimer(wxTimerEvent&) {
     AnalyzeActive();
 }
@@ -295,6 +435,7 @@ void EditorNotebook::OnAnalysisTimer(wxTimerEvent&) {
 void EditorNotebook::OnPageChanged(wxAuiNotebookEvent& event) {
     analysis_timer_.Stop();
     AnalyzeActive();
+    if (!find_query_.empty()) RefreshFindHighlights();
     event.Skip();
 }
 
