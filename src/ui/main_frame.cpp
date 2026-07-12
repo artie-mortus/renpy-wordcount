@@ -18,6 +18,7 @@
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
+#include <wx/textdlg.h>
 #include <wx/choicdlg.h>
 #include <wx/dataview.h>
 
@@ -48,6 +49,9 @@ enum MenuId {
     kFindReplace,
     kFindReplaceAll,
     kFindClose,
+    kGoToLine,
+    kToggleComment,
+    kShortcutSheet,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -138,6 +142,9 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnOpenFind, this, wxID_FIND);
     Bind(wxEVT_MENU, &MainFrame::OnFindNext, this, kFindNext, kFindPrevious);
     Bind(wxEVT_CHAR_HOOK, &MainFrame::OnCharHook, this);
+    Bind(wxEVT_MENU, &MainFrame::OnGoToLine, this, kGoToLine);
+    Bind(wxEVT_MENU, &MainFrame::OnToggleComment, this, kToggleComment);
+    Bind(wxEVT_MENU, &MainFrame::OnShowShortcuts, this, kShortcutSheet);
 }
 
 MainFrame::~MainFrame() {
@@ -164,6 +171,9 @@ void MainFrame::BuildMenus() {
     edit->Append(wxID_FIND, "&Find and Replace…\tCtrl+F");
     edit->Append(kFindNext, "Find &Next\tF3");
     edit->Append(kFindPrevious, "Find &Previous\tShift+F3");
+    edit->AppendSeparator();
+    edit->Append(kGoToLine, "&Go to Line…\tCtrl+G");
+    edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
     auto* view = new wxMenu();
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
@@ -180,6 +190,7 @@ void MainFrame::BuildMenus() {
 
     auto* help = new wxMenu();
     help->Append(wxID_ABOUT, "&About", "About Say Count");
+    help->Append(kShortcutSheet, "Keyboard &Shortcuts\tCtrl+K");
 
     auto* menu_bar = new wxMenuBar();
     menu_bar->Append(file, "&File");
@@ -397,6 +408,36 @@ void MainFrame::OnCharHook(wxKeyEvent& event) {
         return;
     }
     event.Skip();
+}
+
+void MainFrame::OnGoToLine(wxCommandEvent&) {
+    wxTextEntryDialog dialog(this, "Enter a line number:", "Go to Line");
+    if (dialog.ShowModal() != wxID_OK) return;
+    long line = 1;
+    if (!dialog.GetValue().ToLong(&line)) line = 1;
+    notebook_->JumpToLine(static_cast<std::size_t>(std::max<long>(1, line)));
+}
+
+void MainFrame::OnToggleComment(wxCommandEvent&) {
+    notebook_->ToggleComments();
+}
+
+void MainFrame::OnShowShortcuts(wxCommandEvent&) {
+    const wxString shortcuts =
+        "Ctrl+F                 Find and replace\n"
+        "F3 / Shift+F3         Next / previous match\n"
+        "Ctrl+G                 Go to line\n"
+        "Ctrl+S                 Save\n"
+        "Ctrl+/                 Toggle comment\n"
+        "Alt+Up / Alt+Down      Move selected lines\n"
+        "Shift+Alt+Up/Down      Duplicate selected lines\n"
+        "Ctrl+Up / Ctrl+Down    Previous / next label\n"
+        "Ctrl+PageUp/PageDown   Switch tabs\n"
+        "Ctrl+= / - / 0         Editor font size\n"
+        "Ctrl+K                 This shortcut sheet\n"
+        "Quotes, (, [           Auto-close or wrap selection\n"
+        "Esc                    Close find";
+    wxMessageBox(shortcuts, "Keyboard Shortcuts", wxOK | wxICON_INFORMATION, this);
 }
 
 void MainFrame::RestoreWindow() {

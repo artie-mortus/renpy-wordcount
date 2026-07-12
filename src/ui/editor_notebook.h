@@ -15,9 +15,11 @@
 #include "core/autocomplete.h"
 #include "core/find_replace.h"
 #include "core/diagnostics.h"
+#include "core/editor_commands.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
+class wxKeyEvent;
 
 namespace say_count::ui {
 
@@ -60,6 +62,7 @@ public:
     void SetFindStatusHandler(FindStatusHandler handler);
     void SetDiagnosticsHandler(DiagnosticsHandler handler);
     void SelectDiagnostic(const Diagnostic& diagnostic);
+    void ToggleComments();
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;
@@ -78,6 +81,7 @@ private:
     void OnAutoCompCompleted(wxStyledTextEvent& event);
     void OnDwellStart(wxStyledTextEvent& event);
     void OnDwellEnd(wxStyledTextEvent& event);
+    void OnKeyDown(wxKeyEvent& event);
     void OnPageChanged(wxAuiNotebookEvent& event);
     void OnAnalysisTimer(wxTimerEvent& event);
     void AnalyzeActive();
@@ -86,6 +90,7 @@ private:
     FindStatus RefreshFindHighlights();
     void RefreshDiagnostics();
     void ApplyDiagnostics();
+    void ApplyCommandResult(wxStyledTextCtrl* editor, const EditorCommandResult& result);
 
     unsigned int next_untitled_number_ = 1;
     app::EditorSettings settings_;

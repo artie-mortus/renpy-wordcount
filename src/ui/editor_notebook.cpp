@@ -2,6 +2,7 @@
 #include "core/parser.h"
 #include "core/tokenizer.h"
 #include "core/autocomplete.h"
+#include "core/editor_commands.h"
 
 #include <algorithm>
 
@@ -127,6 +128,8 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->Bind(wxEVT_STC_DWELLSTART, &EditorNotebook::OnDwellStart, this);
     editor->Unbind(wxEVT_STC_DWELLEND, &EditorNotebook::OnDwellEnd, this);
     editor->Bind(wxEVT_STC_DWELLEND, &EditorNotebook::OnDwellEnd, this);
+    editor->Unbind(wxEVT_KEY_DOWN, &EditorNotebook::OnKeyDown, this);
+    editor->Bind(wxEVT_KEY_DOWN, &EditorNotebook::OnKeyDown, this);
     editor->SetMouseDwellTime(350);
     editor->AutoCompSetIgnoreCase(true);
     editor->AutoCompSetMaxHeight(8);
@@ -318,6 +321,81 @@ void EditorNotebook::OnDwellStart(wxStyledTextEvent& event) {
 
 void EditorNotebook::OnDwellEnd(wxStyledTextEvent& event) {
     if (auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject())) editor->CallTipCancel();
+}
+
+void EditorNotebook::ApplyCommandResult(wxStyledTextCtrl* editor, const EditorCommandResult& result) {
+    const std::string current = editor->GetText().ToStdString();
+    if (result.text != current) {
+        editor->BeginUndoAction();
+        editor->SetTargetStart(0);
+        editor->SetTargetEnd(editor->GetTextLength());
+        editor->ReplaceTarget(wxString::FromUTF8(result.text));
+        editor->EndUndoAction();
+    }
+    editor->SetSelection(static_cast<int>(result.selection_start),
+                         static_cast<int>(result.selection_end));
+    editor->EnsureCaretVisible();
+}
+
+void EditorNotebook::ToggleComments() {
+    const int page = GetSelection();
+    auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(page));
+    if (!editor) return;
+    ApplyCommandResult(editor, toggle_line_comments(editor->GetText().ToStdString(),
+        static_cast<std::size_t>(editor->GetSelectionStart()),
+        static_cast<std::size_t>(editor->GetSelectionEnd())));
+}
+
+void EditorNotebook::OnKeyDown(wxKeyEvent& event) {
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
+    if (!editor) { event.Skip(); return; }
+    const int key = event.GetKeyCode();
+    const bool control = event.ControlDown() || event.CmdDown();
+    if (control && !event.AltDown()) {
+        if (!event.ShiftDown() && (key == WXK_UP || key == WXK_DOWN)) {
+            const auto target = adjacent_label_line(editor->GetText().ToStdString(),
+                static_cast<std::size_t>(editor->LineFromPosition(editor->GetCurrentPos()) + 1),
+                key == WXK_DOWN ? 1 : -1);
+            if (target) JumpToLine(*target);
+            return;
+        }
+        if (!event.ShiftDown() && (key == WXK_PAGEUP || key == WXK_PAGEDOWN)) {
+            if (GetPageCount() == 0) return;
+            const int current = GetSelection();
+            const int offset = key == WXK_PAGEDOWN ? 1 : -1;
+            const int next = (current + offset + static_cast<int>(GetPageCount())) %
+                             static_cast<int>(GetPageCount());
+            SetSelection(static_cast<size_t>(next));
+            if (auto* selected = EditorAt(static_cast<size_t>(next))) selected->SetFocus();
+            return;
+        }
+        const int unicode = event.GetUnicodeKey();
+        if (!event.ShiftDown() && (unicode == '/' || key == '/')) {
+            ToggleComments();
+            return;
+        }
+    }
+    if (!control && event.AltDown() && (key == WXK_UP || key == WXK_DOWN)) {
+        editor->AutoCompCancel();
+        const std::string source = editor->GetText().ToStdString();
+        const auto start = static_cast<std::size_t>(editor->GetSelectionStart());
+        const auto end = static_cast<std::size_t>(editor->GetSelectionEnd());
+        const int direction = key == WXK_DOWN ? 1 : -1;
+        ApplyCommandResult(editor, event.ShiftDown()
+            ? duplicate_selected_lines(source, start, end, direction)
+            : move_selected_lines(source, start, end, direction));
+        return;
+    }
+    if (!control && !event.AltDown()) {
+        const int unicode = event.GetUnicodeKey();
+        if (unicode == '"' || unicode == '(' || unicode == '[' || unicode == ')' || unicode == ']') {
+            const auto result = apply_pair_input(editor->GetText().ToStdString(),
+                static_cast<std::size_t>(editor->GetSelectionStart()),
+                static_cast<std::size_t>(editor->GetSelectionEnd()), static_cast<char>(unicode));
+            if (result) { ApplyCommandResult(editor, *result); return; }
+        }
+    }
+    event.Skip();
 }
 
 void EditorNotebook::AnalyzeActive() {

@@ -51,6 +51,9 @@ private:
     void OnReplaceAll(wxCommandEvent& event);
     void OnCloseFind(wxCommandEvent& event);
     void OnCharHook(wxKeyEvent& event);
+    void OnGoToLine(wxCommandEvent& event);
+    void OnToggleComment(wxCommandEvent& event);
+    void OnShowShortcuts(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
