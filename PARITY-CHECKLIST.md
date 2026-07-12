@@ -51,7 +51,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 45 | speaker colors: `Character(..., color="#c8ffc8")` tints the alias in the editor and adds swatches to the speaker, balance, and counted-line lists | Pending |
 | 46 | autocomplete while typing: speaker aliases at line start, label names after `jump`/`call` (arrows to pick, Tab/Enter to accept, Esc to dismiss) | Done (Step 4.2) |
 | 47 | Ren'Py-aware autocomplete for image names after `show`, audio paths after `play`, screen names after `call screen`, and declared variables after `$` | Done (Step 4.3) |
-| 48 | inline editor diagnostics for syntax, unresolved-label, quote, speaker, and long-line checks | Partial — core lint engine (syntax, duplicate/missing label, empty block, python opacity, support-file suppression) landed (Step 2.6B); editor UI pending |
+| 48 | inline editor diagnostics for syntax, unresolved-label, quote, speaker, and long-line checks | Partial — complete wx-free engine landed (Step 4.6); editor UI pending Step 4.7 |
 | 49 | project-wide text search across every `.rpy` file in the connected game folder (or all open tabs offline) | Done for all open tabs (Step 4.5); connected-folder coverage follows folder sync |
 | 50 | folder-sync conflict review with a side-by-side local/disk comparison before choosing a version | Pending |
 | 51 | safe project-wide character-alias and label rename with an affected-line preview before applying | Pending |
