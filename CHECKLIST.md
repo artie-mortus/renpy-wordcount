@@ -30,7 +30,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 3.2 — Live document analysis · mini · ≤550,000 tok — done 2026-07-11, commit `18fc1a4`
 - [x] Step 3.3 — Speaker statistics panel · mini · ≤700,000 tok — done 2026-07-11, commit `414ab59`
 - [x] Step 3.4 — Scene and label statistics · mini · ≤650,000 tok — done 2026-07-11, commit `a1c962c`
-- [ ] Step 3.5 — Counted-lines browser · mini · ≤600,000 tok
+- [x] Step 3.5 — Counted-lines browser · mini · ≤600,000 tok — done 2026-07-12, commit `90bb7e2`
 - [ ] Step 3.6 — Statistics export · mini · ≤650,000 tok
 - [ ] Step 3.7 — Version comparison · mini · ≤700,000 tok
 

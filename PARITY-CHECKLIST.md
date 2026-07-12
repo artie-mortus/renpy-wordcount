@@ -27,7 +27,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 21 | reading-time estimate (~200 wpm) and words-written-this-session counter | Pending |
 | 22 | version diff: paste an old script to see words added or cut per speaker | Pending |
 | 23 | scene/label breakdown | Done (Step 3.4) |
-| 24 | counted-line speaker/search filters | Pending |
+| 24 | counted-line speaker/search filters | Done (Step 3.5) |
 | 25 | CSV/JSON stats export | Pending |
 | 26 | complete project import/export, including files, targets, and settings | Pending |
 | 27 | standalone HTML report export | Pending |
