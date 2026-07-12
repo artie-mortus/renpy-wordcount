@@ -1,10 +1,10 @@
 # Status
 
-- Completed: Steps 0.1 through 4.8.
-- Editing shortcuts now cover go-to-line, comment toggle, line move/duplicate, previous/next label, and tab switching.
-- Ctrl+K opens a shortcut cheat sheet; menu accelerators expose go-to-line and comment toggle alongside their keyboard handling.
-- Quotes, parentheses, and brackets auto-close or wrap selected text; existing closers type over and escaped quotes insert normally.
-- Selection-aware transformations live in wx-free core code, preserve indentation/selection, and apply to Scintilla as one undo action.
-- Verified (2026-07-12): `cmake --build build -j` succeeded; `ctest --test-dir build --output-on-failure` passed 67/67, including comment, move, duplicate, pair/type-over, escaped-quote, label-navigation, and parser parity tests.
+- Completed: Steps 0.1 through 4.9 (Phase 4 complete).
+- View → Focus Mode (Ctrl+Shift+F) saves the full wxAUI perspective and hides every managed pane except the editor.
+- Leaving focus mode reloads the exact saved perspective, restoring prior visibility, docking positions, sizes, and find/diagnostics state.
+- A floating bottom-right pill shows the active document's live dialogue-word count and refits/repositions on edits and frame resizing.
+- The pill is unmanaged by wxAUI, so it cannot contaminate the serialized layout being preserved.
+- Verified (2026-07-12): `cmake --build build -j` succeeded; `ctest --test-dir build --output-on-failure` passed 67/67, including all editing-command coverage and parser parity tests.
 - Known issues: pre-existing Step 1.3-era re-entrant quit/discard-modal `ConfirmCloseAll` crash remains; not reproducible in normal flows.
-- Next step: Phase 4, Step 4.9 — focus mode.
+- Next step: Phase 5, Step 5.1 — project folder model.

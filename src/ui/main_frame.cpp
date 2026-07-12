@@ -52,6 +52,7 @@ enum MenuId {
     kGoToLine,
     kToggleComment,
     kShortcutSheet,
+    kFocusMode,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -97,11 +98,17 @@ MainFrame::MainFrame()
                                  std::to_string(analysis.dialogue_lines) + " dialogue lines \xc2\xb7 " +
                                  std::to_string(analysis.reading_minutes) + " min reading time";
         SetStatusText(wxString::FromUTF8(text));
+        if (focus_count_) {
+            focus_count_->SetLabel(wxString::FromUTF8(
+                std::to_string(analysis.total_words) + " dialogue words"));
+            if (focus_mode_) PositionFocusPill();
+        }
         speaker_stats_->SetAnalysis(analysis);
         outline_->SetDocument(source, analysis);
     });
     BuildFindBar();
     BuildFindResults();
+    BuildFocusPill();
     notebook_->SetDiagnosticsHandler([this](const std::vector<Diagnostic>& diagnostics) {
         diagnostics_->SetDiagnostics(diagnostics);
     });
@@ -145,6 +152,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnGoToLine, this, kGoToLine);
     Bind(wxEVT_MENU, &MainFrame::OnToggleComment, this, kToggleComment);
     Bind(wxEVT_MENU, &MainFrame::OnShowShortcuts, this, kShortcutSheet);
+    Bind(wxEVT_MENU, &MainFrame::OnToggleFocus, this, kFocusMode);
+    Bind(wxEVT_SIZE, &MainFrame::OnSize, this);
 }
 
 MainFrame::~MainFrame() {
@@ -177,6 +186,7 @@ void MainFrame::BuildMenus() {
     auto* view = new wxMenu();
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
+    view->AppendCheckItem(kFocusMode, "&Focus Mode\tCtrl+Shift+F", "Hide nonessential panels");
     view->AppendSeparator();
     view->Append(kFontIncrease, "Increase Font Size\tCtrl+=");
     view->Append(kFontDecrease, "Decrease Font Size\tCtrl+-");
@@ -266,6 +276,29 @@ void MainFrame::BuildFindResults() {
     find_results_->AppendTextColumn("Preview", wxDATAVIEW_CELL_INERT, 600, wxALIGN_LEFT,
                                     wxDATAVIEW_COL_RESIZABLE);
     find_results_->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &MainFrame::OnFindResultActivated, this);
+}
+
+void MainFrame::BuildFocusPill() {
+    focus_pill_ = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE);
+    focus_pill_->SetBackgroundColour(wxColour("#fff3c4"));
+    auto* layout = new wxBoxSizer(wxHORIZONTAL);
+    focus_count_ = new wxStaticText(focus_pill_, wxID_ANY,
+        wxString::FromUTF8(std::to_string(analysis_.total_words) + " dialogue words"));
+    focus_count_->SetForegroundColour(wxColour("#6f4d00"));
+    focus_count_->SetFont(focus_count_->GetFont().Bold());
+    layout->Add(focus_count_, 0, wxALL, 9);
+    focus_pill_->SetSizerAndFit(layout);
+    focus_pill_->Hide();
+}
+
+void MainFrame::PositionFocusPill() {
+    if (!focus_pill_ || !focus_pill_->IsShown()) return;
+    focus_pill_->Fit();
+    const wxSize client = GetClientSize();
+    const wxSize pill = focus_pill_->GetSize();
+    focus_pill_->SetPosition(wxPoint(std::max(8, client.x - pill.x - 16),
+                                     std::max(8, client.y - pill.y - 16)));
+    focus_pill_->Raise();
 }
 
 FindOptions MainFrame::CurrentFindOptions() const {
@@ -435,9 +468,37 @@ void MainFrame::OnShowShortcuts(wxCommandEvent&) {
         "Ctrl+PageUp/PageDown   Switch tabs\n"
         "Ctrl+= / - / 0         Editor font size\n"
         "Ctrl+K                 This shortcut sheet\n"
+        "Ctrl+Shift+F           Focus mode\n"
         "Quotes, (, [           Auto-close or wrap selection\n"
         "Esc                    Close find";
     wxMessageBox(shortcuts, "Keyboard Shortcuts", wxOK | wxICON_INFORMATION, this);
+}
+
+void MainFrame::OnToggleFocus(wxCommandEvent& event) {
+    const bool enable = event.IsChecked();
+    if (enable == focus_mode_) return;
+    if (enable) {
+        focus_perspective_ = manager_.SavePerspective();
+        auto& panes = manager_.GetAllPanes();
+        for (std::size_t index = 0; index < panes.GetCount(); ++index) {
+            if (panes.Item(index).name != "editor") panes.Item(index).Hide();
+        }
+        focus_mode_ = true;
+        manager_.Update();
+        focus_pill_->Show();
+        PositionFocusPill();
+    } else {
+        focus_pill_->Hide();
+        focus_mode_ = false;
+        if (!focus_perspective_.empty()) manager_.LoadPerspective(focus_perspective_, true);
+        manager_.Update();
+        notebook_->SetFocus();
+    }
+}
+
+void MainFrame::OnSize(wxSizeEvent& event) {
+    event.Skip();
+    if (focus_mode_) PositionFocusPill();
 }
 
 void MainFrame::RestoreWindow() {

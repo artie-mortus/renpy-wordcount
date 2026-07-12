@@ -31,6 +31,8 @@ private:
     void BuildMenus();
     void BuildFindBar();
     void BuildFindResults();
+    void BuildFocusPill();
+    void PositionFocusPill();
     void RestoreWindow();
     void OnAbout(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -54,6 +56,8 @@ private:
     void OnGoToLine(wxCommandEvent& event);
     void OnToggleComment(wxCommandEvent& event);
     void OnShowShortcuts(wxCommandEvent& event);
+    void OnToggleFocus(wxCommandEvent& event);
+    void OnSize(wxSizeEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -73,11 +77,15 @@ private:
     wxCheckBox* find_all_ = nullptr;
     wxStaticText* find_count_ = nullptr;
     wxDataViewListCtrl* find_results_ = nullptr;
+    wxPanel* focus_pill_ = nullptr;
+    wxStaticText* focus_count_ = nullptr;
     std::vector<ProjectFindMatch> project_matches_;
     wxAuiManager manager_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
     ScriptAnalysis analysis_;
+    bool focus_mode_ = false;
+    wxString focus_perspective_;
 };
 
 }  // namespace say_count::ui

@@ -41,7 +41,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 35 | snippets in autocomplete: `label`, `menu`, `define` expand to full blocks with the placeholder selected | Done (Step 4.2) |
 | 36 | word wrap toggle for long dialogue lines (hides line numbers while on) | Pending |
 | 37 | current-line highlight, adjustable editor font size (persisted) | Pending |
-| 38 | collapsible side panels (fold state remembered), focus mode with floating word-count pill, draggable editor/stats divider | Pending |
+| 38 | collapsible side panels (fold state remembered), focus mode with floating word-count pill, draggable editor/stats divider | Partial — exact-layout focus mode and live word-count pill done (Step 4.9); fold persistence/divider pending |
 | 39 | tabs: dirty dot when a file differs from what's on disk, inline rename on double-click | Pending |
 | 40 | snapshots: automatic backup every 10 minutes plus manual "Snapshot now"; restore or diff any point (last 50 kept) | Pending |
 | 41 | outline panel: labels with word counts, menu choices, and jumps/calls — click to navigate; jumps to missing labels shown in red | Done (Step 4.1) |
