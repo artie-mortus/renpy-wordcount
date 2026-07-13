@@ -33,6 +33,7 @@
 #include "ui/conflict_dialog.h"
 #include "ui/snapshot_dialog.h"
 #include "ui/rename_dialog.h"
+#include "ui/runtime_preset_dialog.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -76,6 +77,7 @@ enum MenuId {
     kShowRenpyLog,
     kWarpRenpy,
     kDirectorRenpy,
+    kRuntimePresets,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -113,6 +115,8 @@ MainFrame::MainFrame()
     snapshot_store_ = std::make_unique<SnapshotStore>(
         (settings_.data_directory() + wxFILE_SEP_PATH + "snapshots").ToStdString(), 50);
     renpy_log_path_ = settings_.data_directory() + wxFILE_SEP_PATH + "renpy-launch.log";
+    runtime_presets_ = std::make_unique<RuntimePresetStore>(
+        (settings_.data_directory() + wxFILE_SEP_PATH + "runtime-presets.dat").ToStdString());
     BuildMenus();
     CreateStatusBar();
     speaker_stats_ = new SpeakerStatsPanel(
@@ -207,6 +211,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnShowRenpyLog, this, kShowRenpyLog);
     Bind(wxEVT_MENU, &MainFrame::OnWarpRenpy, this, kWarpRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnDirectorRenpy, this, kDirectorRenpy);
+    Bind(wxEVT_MENU, &MainFrame::OnRuntimePresets, this, kRuntimePresets);
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
@@ -280,6 +285,7 @@ void MainFrame::BuildMenus() {
     renpy_menu_->Append(kRunRenpy, "Run Project\tF6");
     renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
     renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
+    renpy_menu_->Append(kRuntimePresets, "Runtime State Presets…");
     renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
     renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
     renpy_menu_->AppendSeparator();
@@ -710,7 +716,7 @@ void MainFrame::DrainRenpyOutput() {
     if (renpy_process_->IsErrorAvailable()) drain(renpy_process_->GetErrorStream());
 }
 
-void MainFrame::OnRunRenpy(wxCommandEvent&) { LaunchRenpy({}); }
+void MainFrame::OnRunRenpy(wxCommandEvent&) { LaunchRenpyWithRuntime({}); }
 
 void MainFrame::OnStopRenpy(wxCommandEvent&) {
     if (!renpy_pid_) { SetStatusText("No Ren'Py process is running"); return; }
@@ -760,7 +766,7 @@ void MainFrame::OnWarpRenpy(wxCommandEvent&) {
     }
     if (!notebook_->SaveAll()) return;
     const std::string target = relative.generic_string() + ":" + std::to_string(notebook_->CurrentLine());
-    LaunchRenpy({"--warp", wxString::FromUTF8(target)});
+    LaunchRenpyWithRuntime({"--warp", wxString::FromUTF8(target)});
 }
 
 void MainFrame::OnDirectorRenpy(wxCommandEvent&) {
@@ -771,7 +777,36 @@ void MainFrame::OnDirectorRenpy(wxCommandEvent&) {
         return;
     }
     if (!notebook_->SaveAll()) return;
-    LaunchRenpy({"director"});
+    LaunchRenpyWithRuntime({"director"});
+}
+
+bool MainFrame::LaunchRenpyWithRuntime(const std::vector<wxString>& arguments) {
+    if (!project_) { return LaunchRenpy(arguments); }
+    const auto validation = validate_runtime_state(runtime_state_json_);
+    if (!validation.valid) {
+        wxMessageBox(wxString::FromUTF8(validation.error), "Invalid runtime state", wxOK | wxICON_ERROR, this);
+        return false;
+    }
+    std::string error;
+    if (!write_renpy_runtime(project_->scripts_root, &error)) {
+        wxMessageBox(wxString::FromUTF8(error), "Runtime helper not written", wxOK | wxICON_ERROR, this);
+        return false;
+    }
+    wxExecuteEnv environment;
+    wxGetEnvMap(&environment.env);
+    environment.cwd = wxString::FromUTF8(project_->root);
+    environment.env["SAY_COUNT_STATE"] = wxString::FromUTF8(runtime_state_json_);
+    environment.env["SAY_COUNT_COVERAGE"] = settings_.data_directory() + wxFILE_SEP_PATH + "renpy-coverage.jsonl";
+    return LaunchRenpy(arguments, &environment);
+}
+
+void MainFrame::OnRuntimePresets(wxCommandEvent&) {
+    RuntimePresetDialog dialog(this, *runtime_presets_, runtime_preset_name_, runtime_state_json_);
+    if (dialog.ShowModal() != wxID_OK) return;
+    runtime_preset_name_ = dialog.selected_name();
+    runtime_state_json_ = dialog.selected_json();
+    SetStatusText(runtime_preset_name_.empty() ? "Runtime state cleared"
+                                               : "Runtime preset selected: " + wxString::FromUTF8(runtime_preset_name_));
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {

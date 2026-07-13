@@ -12,6 +12,7 @@
 #include "core/project.h"
 #include "core/project_bundle.h"
 #include "core/renpy.h"
+#include "core/renpy_runtime.h"
 #include "core/snapshots.h"
 
 #include <optional>
@@ -101,6 +102,8 @@ private:
     void OnRenpyEnded(wxProcessEvent& event);
     void OnWarpRenpy(wxCommandEvent& event);
     void OnDirectorRenpy(wxCommandEvent& event);
+    void OnRuntimePresets(wxCommandEvent& event);
+    bool LaunchRenpyWithRuntime(const std::vector<wxString>& arguments);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -146,6 +149,9 @@ private:
     std::unique_ptr<wxProcess> renpy_process_;
     long renpy_pid_ = 0;
     wxString renpy_log_path_;
+    std::unique_ptr<RuntimePresetStore> runtime_presets_;
+    std::string runtime_preset_name_;
+    std::string runtime_state_json_ = "{}";
 };
 
 }  // namespace say_count::ui
