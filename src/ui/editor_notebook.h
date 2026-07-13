@@ -67,6 +67,9 @@ public:
                                       std::string_view replacement);
     std::vector<NamedScript> ProjectScripts() const;
     bool RestoreProjectScripts(const std::vector<NamedScript>& scripts);
+    std::size_t CurrentFileIndex() const;
+    void SelectFileIndex(std::size_t index);
+    void SetCountMenuChoices(bool enabled);
     void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);
@@ -116,6 +119,7 @@ private:
     FindStatusHandler find_status_handler_;
     std::vector<Diagnostic> diagnostics_;
     DiagnosticsHandler diagnostics_handler_;
+    bool count_menu_choices_ = false;
 };
 
 }  // namespace say_count::ui

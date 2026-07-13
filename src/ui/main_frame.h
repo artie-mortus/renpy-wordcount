@@ -9,6 +9,7 @@
 #include "core/parser.h"
 #include "core/find_replace.h"
 #include "core/project.h"
+#include "core/project_bundle.h"
 #include "core/snapshots.h"
 
 #include <optional>
@@ -82,6 +83,8 @@ private:
     void OnSnapshotNow(wxCommandEvent& event);
     void OnManageSnapshots(wxCommandEvent& event);
     void OnSnapshotTimer(wxTimerEvent& event);
+    void OnImportProject(wxCommandEvent& event);
+    void OnExportProject(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -118,6 +121,8 @@ private:
     std::unordered_map<std::string, ExternalConflict> external_conflicts_;
     bool conflict_review_open_ = false;
     std::unique_ptr<SnapshotStore> snapshot_store_;
+    std::optional<ProjectBundle> imported_bundle_;
+    bool count_menu_choices_ = false;
 };
 
 }  // namespace say_count::ui

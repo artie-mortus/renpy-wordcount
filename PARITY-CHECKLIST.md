@@ -29,7 +29,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 23 | scene/label breakdown | Done (Step 3.4) |
 | 24 | counted-line speaker/search filters | Done (Step 3.5) |
 | 25 | CSV/JSON stats export | Done (Step 3.6) |
-| 26 | complete project import/export, including files, targets, and settings | Pending |
+| 26 | complete project import/export, including files, targets, and settings | Done (Step 5.6) — browser-app version-1 bundle import/export with round-trip coverage |
 | 27 | standalone HTML report export | Done (Step 3.6) |
 | 28 | dark mode | Partial — system/light/dark editor themes landed (Step 1.4); app-wide dark mode pending |
 | 29 | import `.rpy` files (multi-select or drag & drop onto the editor), copy script, download `.rpy` | Partial — multi-select open and drag & drop landed (Step 1.3); copy script and download pending |

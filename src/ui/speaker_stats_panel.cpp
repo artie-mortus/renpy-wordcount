@@ -86,6 +86,35 @@ void SpeakerStatsPanel::SetLineJumpHandler(std::function<void(std::size_t)> hand
     line_jump_handler_ = std::move(handler);
 }
 
+std::pair<std::map<std::string, ProjectTarget>, std::map<std::string, ProjectTarget>>
+SpeakerStatsPanel::ExportTargets() const {
+    std::map<std::string, ProjectTarget> speakers, scenes;
+    for (const auto& [name, target] : speaker_targets_) speakers[name] = {target.words, target.lines};
+    for (const auto& [name, target] : scene_targets_) scenes[name] = {target.words, target.lines};
+    return {std::move(speakers), std::move(scenes)};
+}
+
+ProjectTarget SpeakerStatsPanel::ExportProjectTarget() const {
+    return {project_words_, project_lines_};
+}
+
+void SpeakerStatsPanel::ImportTargets(long project_words, long project_lines,
+                                      const std::map<std::string, ProjectTarget>& speakers,
+                                      const std::map<std::string, ProjectTarget>& scenes) {
+    project_words_ = std::max(0L, project_words);
+    project_lines_ = std::max(0L, project_lines);
+    speaker_targets_.clear();
+    scene_targets_.clear();
+    for (const auto& [name, target] : speakers)
+        if (target.words > 0 || target.lines > 0)
+            speaker_targets_[name] = {std::max(0L, target.words), std::max(0L, target.lines)};
+    for (const auto& [name, target] : scenes)
+        if (target.words > 0 || target.lines > 0)
+            scene_targets_[name] = {std::max(0L, target.words), std::max(0L, target.lines)};
+    SaveTargets();
+    Rebuild();
+}
+
 void SpeakerStatsPanel::RefreshCountedLines() {
     if (!counted_lines_) return;
     counted_lines_->DeleteAllItems();

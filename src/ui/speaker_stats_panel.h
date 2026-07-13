@@ -8,6 +8,7 @@
 #include <wx/string.h>
 
 #include "core/parser.h"
+#include "core/project_bundle.h"
 
 class wxBoxSizer;
 class wxTextCtrl;
@@ -21,6 +22,12 @@ public:
     SpeakerStatsPanel(wxWindow* parent, wxString targets_path);
     void SetAnalysis(const ScriptAnalysis& analysis);
     void SetLineJumpHandler(std::function<void(std::size_t)> handler);
+    std::pair<std::map<std::string, ProjectTarget>, std::map<std::string, ProjectTarget>>
+        ExportTargets() const;
+    ProjectTarget ExportProjectTarget() const;
+    void ImportTargets(long project_words, long project_lines,
+                       const std::map<std::string, ProjectTarget>& speakers,
+                       const std::map<std::string, ProjectTarget>& scenes);
 
 private:
     struct Targets { long words = 0; long lines = 0; };

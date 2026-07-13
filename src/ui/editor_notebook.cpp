@@ -260,7 +260,7 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
 void EditorNotebook::RefreshSpeakers(wxStyledTextCtrl* editor) {
     auto& aliases = speakers_[editor];
     aliases.clear();
-    const auto analysis = analyze_script(editor->GetText().ToStdString());
+    const auto analysis = analyze_script(editor->GetText().ToStdString(), {count_menu_choices_});
     for (const auto& [alias, name] : analysis.character_names) {
         (void)name;
         aliases.insert(alias);
@@ -476,7 +476,7 @@ void EditorNotebook::AnalyzeActive() {
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || !analysis_handler_) return;
     const wxString source = editor->GetText();
-    analysis_handler_(source, analyze_script(source.ToStdString()));
+    analysis_handler_(source, analyze_script(source.ToStdString(), {count_menu_choices_}));
     RefreshDiagnostics();
 }
 
@@ -631,9 +631,27 @@ std::vector<NamedScript> EditorNotebook::ProjectScripts() const {
     return scripts;
 }
 
+std::size_t EditorNotebook::CurrentFileIndex() const {
+    const int selection = GetSelection();
+    return selection == wxNOT_FOUND ? 0 : static_cast<std::size_t>(selection);
+}
+
+void EditorNotebook::SelectFileIndex(std::size_t index) {
+    if (index < GetPageCount()) SetSelection(index);
+}
+
+void EditorNotebook::SetCountMenuChoices(bool enabled) {
+    if (count_menu_choices_ == enabled) return;
+    count_menu_choices_ = enabled;
+    RefreshDiagnostics();
+    AnalyzeActive();
+}
+
 bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {
     if (scripts.empty()) return false;
     std::unordered_set<wxStyledTextCtrl*> retained;
+    std::vector<wxStyledTextCtrl*> ordered;
+    ordered.reserve(scripts.size());
     for (const auto& script : scripts) {
         wxStyledTextCtrl* editor = nullptr;
         for (size_t index = 0; index < GetPageCount(); ++index) {
@@ -658,6 +676,7 @@ bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scrip
         editor->Colourise(0, -1);
         UpdateTabLabel(editor);
         retained.insert(editor);
+        ordered.push_back(editor);
     }
     for (size_t index = GetPageCount(); index-- > 0;) {
         auto* editor = EditorAt(index);
@@ -667,6 +686,9 @@ bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scrip
         RemovePage(index);
         editor->Destroy();
     }
+    while (GetPageCount()) RemovePage(0);
+    for (auto* editor : ordered)
+        AddPage(editor, editor->GetName() + (editor->GetModify() ? " ●" : ""), false);
     SetSelection(0);
     RefreshCompletionIndex();
     RefreshDiagnostics();

@@ -62,6 +62,8 @@ enum MenuId {
     kReviewConflicts = kRecentProjectLast + 1,
     kSnapshotNow,
     kManageSnapshots,
+    kImportProject,
+    kExportProject,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -172,6 +174,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnReviewConflicts, this, kReviewConflicts);
     Bind(wxEVT_MENU, &MainFrame::OnSnapshotNow, this, kSnapshotNow);
     Bind(wxEVT_MENU, &MainFrame::OnManageSnapshots, this, kManageSnapshots);
+    Bind(wxEVT_MENU, &MainFrame::OnImportProject, this, kImportProject);
+    Bind(wxEVT_MENU, &MainFrame::OnExportProject, this, kExportProject);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
     snapshot_timer_.Start(10 * 60 * 1000);
 }
@@ -194,12 +198,15 @@ void MainFrame::BuildMenus() {
     file->Append(kReviewConflicts, "Review External &Conflicts…");
     file->Append(kSnapshotNow, "&Snapshot Now", "Store a backup of every open script");
     file->Append(kManageSnapshots, "Manage Snapshots…", "Preview, compare, and restore snapshots");
+    file->Append(kImportProject, "Import Say Count Project…", "Import a browser-app project bundle");
     RebuildRecentProjectsMenu();
     file->AppendSeparator();
     auto* export_menu = new wxMenu();
     export_menu->Append(kExportCsv, "Speaker statistics (CSV)…");
     export_menu->Append(kExportJson, "Full statistics (JSON)…");
     export_menu->Append(kExportHtml, "Standalone report (HTML)…");
+    export_menu->AppendSeparator();
+    export_menu->Append(kExportProject, "Complete Say Count project…");
     file->AppendSubMenu(export_menu, "Export &Statistics");
     file->AppendSeparator();
     file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
@@ -402,7 +409,7 @@ bool MainFrame::TakeSnapshot(bool automatic, std::string label) {
     if (automatic && std::none_of(files.begin(), files.end(), [](const auto& file) {
         return file.content.find_first_not_of(" \t\r\n") != std::string::npos;
     })) return true;
-    const auto words = analyze_project(files).total_words;
+    const auto words = analyze_project(files, {count_menu_choices_}).total_words;
     if (label.empty()) label = automatic ? "Automatic snapshot" : "Manual snapshot";
     const auto result = snapshot_store_->Create(files, std::move(label), automatic,
                                                 project_ ? project_->root : std::string{}, words);
@@ -446,6 +453,72 @@ void MainFrame::OnManageSnapshots(wxCommandEvent&) {
 
 void MainFrame::OnSnapshotTimer(wxTimerEvent&) {
     TakeSnapshot(true);
+}
+
+void MainFrame::OnImportProject(wxCommandEvent&) {
+    wxFileDialog dialog(this, "Import Say Count project", wxEmptyString, wxEmptyString,
+                        "Say Count projects (*.saycount.json;*.json)|*.saycount.json;*.json|JSON files (*.json)|*.json",
+                        wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dialog.ShowModal() != wxID_OK) return;
+    wxFile file(dialog.GetPath());
+    wxString text;
+    if (!file.IsOpened() || !file.ReadAll(&text, wxConvUTF8)) {
+        wxMessageBox("Could not read the selected project.", "Import failed", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    auto parsed = parse_project_bundle(text.ToStdString());
+    if (!parsed.bundle) {
+        wxMessageBox("Project import failed: " + wxString::FromUTF8(parsed.error), "Import failed",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    if (!TakeSnapshot(false, "Before project import")) return;
+    ProjectBundle bundle = std::move(*parsed.bundle);
+    if (!notebook_->RestoreProjectScripts(bundle.files)) return;
+    notebook_->SelectFileIndex(bundle.active_file);
+    count_menu_choices_ = bundle.settings.count_menu_choices;
+    notebook_->SetCountMenuChoices(count_menu_choices_);
+    editor_settings_.theme = bundle.settings.theme == "dark" ? app::EditorTheme::Dark
+                                                               : app::EditorTheme::Light;
+    notebook_->SetTheme(editor_settings_.theme);
+    settings_.SaveEditor(editor_settings_);
+    auto positive = [](const std::string& value) {
+        try { return std::max(0L, std::stol(value)); } catch (...) { return 0L; }
+    };
+    speaker_stats_->ImportTargets(positive(bundle.settings.target),
+                                  positive(bundle.settings.line_target),
+                                  bundle.speaker_targets, bundle.scene_targets);
+    imported_bundle_ = std::move(bundle);
+    SetStatusText(wxString::Format("Imported project with %zu files", notebook_->ProjectScripts().size()));
+}
+
+void MainFrame::OnExportProject(wxCommandEvent&) {
+    wxFileDialog dialog(this, "Export Say Count project", wxEmptyString,
+                        "say-count-project.saycount.json",
+                        "Say Count projects (*.saycount.json)|*.saycount.json|JSON files (*.json)|*.json",
+                        wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dialog.ShowModal() != wxID_OK) return;
+    ProjectBundle bundle = imported_bundle_.value_or(ProjectBundle{});
+    bundle.files = notebook_->ProjectScripts();
+    bundle.active_file = notebook_->CurrentFileIndex();
+    bundle.exported_at = wxDateTime::UNow().FormatISOCombined('T').ToStdString() + "Z";
+    const auto [speakers, scenes] = speaker_stats_->ExportTargets();
+    bundle.speaker_targets = speakers;
+    bundle.scene_targets = scenes;
+    const auto project_target = speaker_stats_->ExportProjectTarget();
+    bundle.settings.target = project_target.words > 0 ? std::to_string(project_target.words) : "";
+    bundle.settings.line_target = project_target.lines > 0 ? std::to_string(project_target.lines) : "";
+    bundle.settings.count_menu_choices = count_menu_choices_;
+    bundle.settings.theme = editor_settings_.theme == app::EditorTheme::Dark ? "dark" : "light";
+    wxFile file;
+    const std::string json = project_bundle_json(bundle);
+    if (!file.Create(dialog.GetPath(), true) || !file.Write(wxString::FromUTF8(json), wxConvUTF8) ||
+        !file.Close()) {
+        wxMessageBox("Could not write the project bundle.", "Export failed", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    imported_bundle_ = bundle;
+    SetStatusText("Project exported");
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {
