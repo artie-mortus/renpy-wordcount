@@ -70,8 +70,8 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 ## Phase 7 — Routes and flow map
 
 - [x] Step 7.1 — Route graph data model · full · ≤850,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `6d66c65`
-- [ ] Step 7.2 — Route walker · full · ≤950,000 tok — **HIGH REASONING REQUIRED**
-- [ ] Step 7.3 — Route details UI · mini · ≤650,000 tok
+- [x] Step 7.2 — Route walker · full · ≤950,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `6deae21`
+- [x] Step 7.3 — Route details UI · mini · ≤650,000 tok — done 2026-07-12, commit `5aed522`
 - [ ] Step 7.4 — Basic flow map rendering · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 7.5 — Flow map layout and interaction · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED**
 
