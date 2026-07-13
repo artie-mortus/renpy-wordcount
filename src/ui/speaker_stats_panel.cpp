@@ -48,18 +48,41 @@ wxString TargetText(std::size_t current, long target, const char* unit) {
     return wxString::FromUTF8(text);
 }
 
-void AddProgress(wxWindow* parent, wxBoxSizer* sizer, std::size_t current, long target,
-                 const char* unit) {
+std::pair<wxGauge*, wxStaticText*> AddProgress(wxWindow* parent, wxBoxSizer* sizer,
+                                               std::size_t current, long target,
+                                               const char* unit) {
     const int percent = target ? static_cast<int>(std::min<long>(100, std::lround(current * 100.0 / target))) : 0;
     auto* gauge = new wxGauge(parent, wxID_ANY, 100, wxDefaultPosition, wxSize(-1, 8));
     gauge->SetValue(percent);
     sizer->Add(gauge, 0, wxEXPAND | wxTOP, 3);
-    sizer->Add(new wxStaticText(parent, wxID_ANY, TargetText(current, target, unit)), 0, wxTOP, 2);
+    auto* label = new wxStaticText(parent, wxID_ANY, TargetText(current, target, unit));
+    sizer->Add(label, 0, wxTOP, 2);
+    return {gauge, label};
 }
 
 wxTextCtrl* TargetInput(wxWindow* parent, long value) {
     return new wxTextCtrl(parent, wxID_ANY, value > 0 ? wxString::Format("%ld", value) : wxString{},
                           wxDefaultPosition, wxSize(72, -1), wxTE_PROCESS_ENTER);
+}
+
+std::vector<std::string> RowStructure(const ScriptAnalysis& analysis) {
+    std::vector<std::string> result;
+    for (const auto& speaker : analysis.speakers) {
+        const auto color = analysis.speaker_colors.find(speaker.name);
+        result.push_back("speaker:" + speaker.name + ":" +
+                         (color == analysis.speaker_colors.end() ? "" : color->second));
+    }
+    for (const auto& scene : analysis.scenes)
+        if (scene.words || scene.lines) result.push_back("scene:" + scene.name);
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+wxString CountText(const AggregateStats& stats, int share) {
+    std::string count = std::to_string(stats.words) + " words \xc2\xb7 " +
+                        std::to_string(stats.lines) + " lines";
+    if (share >= 0) count += " \xc2\xb7 " + std::to_string(share) + "%";
+    return wxString::FromUTF8(count);
 }
 
 }  // namespace
@@ -76,10 +99,13 @@ SpeakerStatsPanel::SpeakerStatsPanel(wxWindow* parent, wxString targets_path)
 }
 
 void SpeakerStatsPanel::SetAnalysis(const ScriptAnalysis& analysis) {
-    analysis_ = analysis;
-    std::stable_sort(analysis_.speakers.begin(), analysis_.speakers.end(),
+    ScriptAnalysis updated = analysis;
+    std::stable_sort(updated.speakers.begin(), updated.speakers.end(),
                      [](const auto& left, const auto& right) { return left.words > right.words; });
-    Rebuild();
+    const bool structure_changed = RowStructure(updated) != row_structure_;
+    analysis_ = std::move(updated);
+    if (structure_changed) Rebuild();
+    else RefreshValues();
 }
 
 void SpeakerStatsPanel::SetLineJumpHandler(std::function<void(std::size_t)> handler) {
@@ -117,6 +143,7 @@ void SpeakerStatsPanel::ImportTargets(long project_words, long project_lines,
 
 void SpeakerStatsPanel::RefreshCountedLines() {
     if (!counted_lines_) return;
+    counted_lines_->Freeze();
     counted_lines_->DeleteAllItems();
     const wxString speaker = speaker_filter_->GetStringSelection();
     const wxString text = text_filter_->GetValue().Strip(wxString::both).Lower();
@@ -135,6 +162,7 @@ void SpeakerStatsPanel::RefreshCountedLines() {
         counted_lines_->SetItem(inserted, 3, wxString::FromUTF8(item.text));
         counted_lines_->SetItemData(inserted, static_cast<long>(index));
     }
+    counted_lines_->Thaw();
 }
 
 void SpeakerStatsPanel::RefreshVersionComparison() {
@@ -164,7 +192,49 @@ SpeakerStatsPanel::Targets SpeakerStatsPanel::ReadTargets(wxTextCtrl* words,
     return {Positive(words), Positive(lines)};
 }
 
+void SpeakerStatsPanel::RefreshValues() {
+    auto stored = [](const std::map<std::string, Targets>& store, const std::string& name) {
+        const auto found = store.find(name);
+        return found == store.end() ? Targets{} : found->second;
+    };
+    auto refresh = [&](const std::string& key, const AggregateStats& stats,
+                       Targets targets, int share) {
+        const auto found = rows_.find(key);
+        if (found == rows_.end()) return;
+        auto& row = found->second;
+        if (row.count) row.count->SetLabel(CountText(stats, share));
+        if (row.balance) row.balance->SetValue(std::clamp(share, 0, 100));
+        const auto update_progress = [&](wxGauge* gauge, wxStaticText* label,
+                                         std::size_t current, long target, const char* unit) {
+            const int percent = target ? static_cast<int>(std::min<long>(
+                100, std::lround(current * 100.0 / target))) : 0;
+            if (gauge) gauge->SetValue(percent);
+            if (label) label->SetLabel(TargetText(current, target, unit));
+        };
+        update_progress(row.words_gauge, row.words_progress, stats.words, targets.words, "words");
+        update_progress(row.lines_gauge, row.lines_progress, stats.lines, targets.lines, "lines");
+    };
+
+    refresh("project", {"Project", analysis_.total_words, analysis_.dialogue_lines},
+            {project_words_, project_lines_}, -1);
+    for (const auto& speaker : analysis_.speakers) {
+        const int share = analysis_.total_words == 0 ? 0 : static_cast<int>(
+            std::lround(static_cast<double>(speaker.words) * 100.0 / analysis_.total_words));
+        refresh("speaker:" + speaker.name, speaker, stored(speaker_targets_, speaker.name), share);
+    }
+    for (const auto& scene : analysis_.scenes) {
+        if (!scene.words && !scene.lines) continue;
+        refresh("scene:" + scene.name, scene, stored(scene_targets_, scene.name), -1);
+    }
+    RefreshCountedLines();
+    RefreshVersionComparison();
+    Layout();
+}
+
 void SpeakerStatsPanel::Rebuild() {
+    int scroll_x = 0, scroll_y = 0;
+    GetViewStart(&scroll_x, &scroll_y);
+    Freeze();
     const wxString selected_speaker = speaker_filter_ ? speaker_filter_->GetStringSelection() : wxString{};
     const wxString text_query = text_filter_ ? text_filter_->GetValue() : wxString{};
     const wxString label_query = label_filter_ ? label_filter_->GetValue() : wxString{};
@@ -175,14 +245,17 @@ void SpeakerStatsPanel::Rebuild() {
     counted_lines_ = nullptr;
     version_input_ = nullptr;
     version_result_ = nullptr;
+    rows_.clear();
     auto add_heading = [&](const wxString& text) {
         auto* label = new wxStaticText(this, wxID_ANY, text);
         label->SetFont(label->GetFont().Bold());
         content_->Add(label, 0, wxLEFT | wxRIGHT | wxTOP, 12);
     };
     // color null = no swatch; share < 0 = no dialogue-balance bar (speakers only).
-    auto add_row = [&](const std::string& name, const AggregateStats& stats, Targets targets,
+    auto add_row = [&](const std::string& key, const std::string& name,
+                       const AggregateStats& stats, Targets targets,
                        std::map<std::string, Targets>* store, const wxColour* color, int share) {
+        RowWidgets widgets;
         auto* box = new wxBoxSizer(wxVERTICAL);
         auto* name_row = new wxBoxSizer(wxHORIZONTAL);
         if (color) {
@@ -193,14 +266,12 @@ void SpeakerStatsPanel::Rebuild() {
         name_row->Add(new wxStaticText(this, wxID_ANY, wxString::FromUTF8(name)), 0,
                       wxALIGN_CENTER_VERTICAL);
         box->Add(name_row, 0, wxBOTTOM, 2);
-        std::string count = std::to_string(stats.words) + " words \xc2\xb7 " +
-                            std::to_string(stats.lines) + " lines";
-        if (share >= 0) count += " \xc2\xb7 " + std::to_string(share) + "%";
-        box->Add(new wxStaticText(this, wxID_ANY, wxString::FromUTF8(count)), 0, wxBOTTOM, 4);
+        widgets.count = new wxStaticText(this, wxID_ANY, CountText(stats, share));
+        box->Add(widgets.count, 0, wxBOTTOM, 4);
         if (share >= 0) {
-            auto* balance = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(-1, 8));
-            balance->SetValue(share);
-            box->Add(balance, 0, wxEXPAND | wxBOTTOM, 4);
+            widgets.balance = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(-1, 8));
+            widgets.balance->SetValue(share);
+            box->Add(widgets.balance, 0, wxEXPAND | wxBOTTOM, 4);
         }
         auto* inputs = new wxBoxSizer(wxHORIZONTAL);
         inputs->Add(new wxStaticText(this, wxID_ANY, "Words"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -210,8 +281,12 @@ void SpeakerStatsPanel::Rebuild() {
         auto* lines = TargetInput(this, targets.lines);
         inputs->Add(lines);
         box->Add(inputs, 0, wxBOTTOM, 2);
-        AddProgress(this, box, stats.words, targets.words, "words");
-        AddProgress(this, box, stats.lines, targets.lines, "lines");
+        const auto words_progress = AddProgress(this, box, stats.words, targets.words, "words");
+        widgets.words_gauge = words_progress.first;
+        widgets.words_progress = words_progress.second;
+        const auto lines_progress = AddProgress(this, box, stats.lines, targets.lines, "lines");
+        widgets.lines_gauge = lines_progress.first;
+        widgets.lines_progress = lines_progress.second;
         // Weak refs: Rebuild() destroys the inputs, which can fire KILL_FOCUS mid-destruction.
         wxWeakRef<wxTextCtrl> words_ref(words);
         wxWeakRef<wxTextCtrl> lines_ref(lines);
@@ -241,6 +316,7 @@ void SpeakerStatsPanel::Rebuild() {
             wxCommandEvent command; save(command); event.Skip();
         });
         content_->Add(box, 0, wxEXPAND | wxALL, 12);
+        rows_[key] = widgets;
     };
     auto stored = [](const std::map<std::string, Targets>& store, const std::string& name) {
         const auto found = store.find(name);
@@ -248,7 +324,7 @@ void SpeakerStatsPanel::Rebuild() {
     };
 
     add_heading("Project targets");
-    add_row("Project", {"Project", analysis_.total_words, analysis_.dialogue_lines},
+    add_row("project", "Project", {"Project", analysis_.total_words, analysis_.dialogue_lines},
             {project_words_, project_lines_}, nullptr, nullptr, -1);
 
     add_heading("Characters");
@@ -262,7 +338,8 @@ void SpeakerStatsPanel::Rebuild() {
         }
         const int share = analysis_.total_words == 0 ? 0 : static_cast<int>(
             std::lround(static_cast<double>(speaker.words) * 100.0 / analysis_.total_words));
-        add_row(speaker.name, speaker, stored(speaker_targets_, speaker.name),
+        add_row("speaker:" + speaker.name, speaker.name, speaker,
+                stored(speaker_targets_, speaker.name),
                 &speaker_targets_, &color, share);
     }
 
@@ -271,7 +348,8 @@ void SpeakerStatsPanel::Rebuild() {
     for (const auto& scene : analysis_.scenes) {
         if (!scene.words && !scene.lines) continue;
         any_scene = true;
-        add_row(scene.name, scene, stored(scene_targets_, scene.name), &scene_targets_,
+        add_row("scene:" + scene.name, scene.name, scene,
+                stored(scene_targets_, scene.name), &scene_targets_,
                 nullptr, -1);
     }
     if (!any_scene) content_->Add(new wxStaticText(this, wxID_ANY, "No labels with dialogue yet."), 0, wxALL, 12);
@@ -339,6 +417,9 @@ void SpeakerStatsPanel::Rebuild() {
     RefreshVersionComparison();
     Layout();
     FitInside();
+    row_structure_ = RowStructure(analysis_);
+    Scroll(scroll_x, scroll_y);
+    Thaw();
 }
 
 void SpeakerStatsPanel::LoadTargets() {

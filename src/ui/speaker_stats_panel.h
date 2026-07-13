@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <functional>
+#include <vector>
 
 #include <wx/scrolwin.h>
 #include <wx/string.h>
@@ -14,6 +15,8 @@ class wxBoxSizer;
 class wxTextCtrl;
 class wxChoice;
 class wxListCtrl;
+class wxGauge;
+class wxStaticText;
 
 namespace say_count::ui {
 
@@ -31,8 +34,17 @@ public:
 
 private:
     struct Targets { long words = 0; long lines = 0; };
+    struct RowWidgets {
+        wxStaticText* count = nullptr;
+        wxGauge* balance = nullptr;
+        wxGauge* words_gauge = nullptr;
+        wxStaticText* words_progress = nullptr;
+        wxGauge* lines_gauge = nullptr;
+        wxStaticText* lines_progress = nullptr;
+    };
 
     void Rebuild();
+    void RefreshValues();
     void SaveTargets() const;
     void LoadTargets();
     Targets ReadTargets(wxTextCtrl* words, wxTextCtrl* lines) const;
@@ -45,6 +57,8 @@ private:
     long project_lines_ = 0;
     std::map<std::string, Targets> speaker_targets_;
     std::map<std::string, Targets> scene_targets_;
+    std::map<std::string, RowWidgets> rows_;
+    std::vector<std::string> row_structure_;
     wxBoxSizer* content_ = nullptr;
     wxChoice* speaker_filter_ = nullptr;
     wxTextCtrl* text_filter_ = nullptr;
