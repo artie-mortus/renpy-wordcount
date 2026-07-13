@@ -49,7 +49,7 @@ RenameDialog::RenameDialog(wxWindow* parent, const std::vector<NamedScript>& fil
 }
 
 std::string RenameDialog::original_name() const {
-    return from_->GetValue().Strip(wxString::both).ToStdString();
+    return from_->GetValue().Strip(wxString::both).ToStdString(wxConvUTF8);
 }
 
 void RenameDialog::Invalidate() {
@@ -60,7 +60,7 @@ void RenameDialog::Invalidate() {
 void RenameDialog::Preview() {
     const auto kind = kind_->GetSelection() == 0 ? RenameKind::SpeakerAlias : RenameKind::Label;
     const std::string from = original_name();
-    const std::string to = to_->GetValue().Strip(wxString::both).ToStdString();
+    const std::string to = to_->GetValue().Strip(wxString::both).ToStdString(wxConvUTF8);
     RenamePlan candidate = plan_symbol_rename(files_, kind, from, to);
     if (!candidate.error.empty()) {
         preview_->SetValue(wxString::FromUTF8(candidate.error));

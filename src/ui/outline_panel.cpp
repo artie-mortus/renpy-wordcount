@@ -20,7 +20,7 @@ void OutlinePanel::SetDocument(const wxString& source, const ScriptAnalysis& ana
     list_->DeleteAllItems(); jump_lines_.clear();
     std::map<std::string, std::size_t> words;
     for (const auto& scene : analysis.scenes) words[scene.name] = scene.words;
-    for (const auto& item : build_outline(source.ToStdString())) {
+    for (const auto& item : build_outline(source.ToStdString(wxConvUTF8))) {
         wxString text;
         switch (item.kind) {
         case OutlineKind::Label: text = wxString::FromUTF8(item.name); break;

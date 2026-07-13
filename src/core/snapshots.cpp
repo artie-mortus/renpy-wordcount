@@ -114,7 +114,9 @@ SnapshotComparison compare_snapshot(const std::vector<NamedScript>& current,
     }
     for (const auto& file : snapshot.files) result.snapshot_words += count_words(file.content);
     std::sort(result.files.begin(), result.files.end(), [](const auto& left, const auto& right) {
-        if (left.status != right.status) return left.status != SnapshotFileStatus::Unchanged;
+        const bool left_changed = left.status != SnapshotFileStatus::Unchanged;
+        const bool right_changed = right.status != SnapshotFileStatus::Unchanged;
+        if (left_changed != right_changed) return left_changed;
         return left.name < right.name;
     });
     return result;

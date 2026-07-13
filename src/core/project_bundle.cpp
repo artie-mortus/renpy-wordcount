@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -49,11 +50,28 @@ private:
         else if (value <= 0x7ff) {
             out.push_back(static_cast<char>(0xc0 | (value >> 6)));
             out.push_back(static_cast<char>(0x80 | (value & 0x3f)));
-        } else {
+        } else if (value <= 0xffff) {
             out.push_back(static_cast<char>(0xe0 | (value >> 12)));
             out.push_back(static_cast<char>(0x80 | ((value >> 6) & 0x3f)));
             out.push_back(static_cast<char>(0x80 | (value & 0x3f)));
+        } else {
+            out.push_back(static_cast<char>(0xf0 | (value >> 18)));
+            out.push_back(static_cast<char>(0x80 | ((value >> 12) & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | ((value >> 6) & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | (value & 0x3f)));
         }
+    }
+    unsigned Hex4() {
+        unsigned code = 0;
+        for (int index = 0; index < 4; ++index) {
+            const char digit = Take();
+            code <<= 4;
+            if (digit >= '0' && digit <= '9') code += digit - '0';
+            else if (digit >= 'a' && digit <= 'f') code += digit - 'a' + 10;
+            else if (digit >= 'A' && digit <= 'F') code += digit - 'A' + 10;
+            else throw std::runtime_error("Invalid JSON Unicode escape");
+        }
+        return code;
     }
     std::string String() {
         Space();
@@ -72,14 +90,16 @@ private:
             else if (escaped == 'r') result.push_back('\r');
             else if (escaped == 't') result.push_back('\t');
             else if (escaped == 'u') {
-                unsigned code = 0;
-                for (int index = 0; index < 4; ++index) {
-                    const char digit = Take();
-                    code <<= 4;
-                    if (digit >= '0' && digit <= '9') code += digit - '0';
-                    else if (digit >= 'a' && digit <= 'f') code += digit - 'a' + 10;
-                    else if (digit >= 'A' && digit <= 'F') code += digit - 'A' + 10;
-                    else throw std::runtime_error("Invalid JSON Unicode escape");
+                unsigned code = Hex4();
+                // Non-BMP characters arrive as surrogate pairs; recombine them.
+                if (code >= 0xd800 && code <= 0xdbff && position_ + 1 < source_.size() &&
+                    source_[position_] == '\\' && source_[position_ + 1] == 'u') {
+                    const std::size_t rewind = position_;
+                    position_ += 2;
+                    const unsigned low = Hex4();
+                    if (low >= 0xdc00 && low <= 0xdfff)
+                        code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
+                    else position_ = rewind;
                 }
                 Utf8(result, code);
             } else throw std::runtime_error("Invalid JSON escape");
@@ -171,7 +191,10 @@ std::string Compact(const Json& json) {
     if (std::holds_alternative<std::nullptr_t>(json.value)) return "null";
     if (const auto* value = std::get_if<bool>(&json.value)) return *value ? "true" : "false";
     if (const auto* value = std::get_if<double>(&json.value)) {
-        std::ostringstream out; out << std::setprecision(17) << *value; return out.str();
+        // Shortest round-trip form, matching JSON.stringify for preserved fields.
+        char buffer[32];
+        const auto [end, ec] = std::to_chars(buffer, buffer + sizeof(buffer), *value);
+        return ec == std::errc{} ? std::string(buffer, end) : "0";
     }
     if (const auto* value = std::get_if<std::string>(&json.value)) return Escape(*value);
     if (const auto* values = std::get_if<Json::Array>(&json.value)) {
@@ -202,6 +225,13 @@ const std::string* StringMember(const Json::Object& object, const char* key) {
     return value ? std::get_if<std::string>(&value->value) : nullptr;
 }
 
+long ClampToLong(double value) {
+    // A cast from a double outside long's range is undefined behavior.
+    constexpr auto kLimit = 9007199254740992.0;  // 2^53, exactly representable
+    if (!(value >= -kLimit && value <= kLimit)) return 0;
+    return static_cast<long>(value);
+}
+
 std::map<std::string, ProjectTarget> ReadTargets(const Json& json) {
     const auto* object = std::get_if<Json::Object>(&json.value);
     if (!object) throw std::runtime_error("Project bundle contains invalid targets");
@@ -211,9 +241,9 @@ std::map<std::string, ProjectTarget> ReadTargets(const Json& json) {
         if (!values) continue;
         ProjectTarget target;
         if (const auto* words = Member(*values, "words"))
-            if (const auto* number = std::get_if<double>(&words->value)) target.words = static_cast<long>(*number);
+            if (const auto* number = std::get_if<double>(&words->value)) target.words = ClampToLong(*number);
         if (const auto* lines = Member(*values, "lines"))
-            if (const auto* number = std::get_if<double>(&lines->value)) target.lines = static_cast<long>(*number);
+            if (const auto* number = std::get_if<double>(&lines->value)) target.lines = ClampToLong(*number);
         result[name] = target;
     }
     return result;
@@ -260,7 +290,8 @@ ProjectBundleParseResult parse_project_bundle(std::string_view json) {
         if (bundle.files.empty()) throw std::runtime_error("Project bundle contains invalid files");
         if (const auto* active = Member(*object, "activeFile")) {
             if (const auto* number = std::get_if<double>(&active->value); number && *number >= 0)
-                bundle.active_file = std::min(static_cast<std::size_t>(*number), bundle.files.size() - 1);
+                bundle.active_file = static_cast<std::size_t>(
+                    std::min(*number, static_cast<double>(bundle.files.size() - 1)));
         }
         const auto* raw_settings = Member(*object, "settings");
         const auto* settings = raw_settings ? std::get_if<Json::Object>(&raw_settings->value) : nullptr;

@@ -123,12 +123,12 @@ MainFrame::MainFrame()
     DetectRenpy();
     recent_projects_ = settings_.LoadRecentProjects();
     snapshot_store_ = std::make_unique<SnapshotStore>(
-        (settings_.data_directory() + wxFILE_SEP_PATH + "snapshots").ToStdString(), 50);
+        (settings_.data_directory() + wxFILE_SEP_PATH + "snapshots").ToStdString(wxConvUTF8), 50);
     renpy_log_path_ = settings_.data_directory() + wxFILE_SEP_PATH + "renpy-launch.log";
     runtime_presets_ = std::make_unique<RuntimePresetStore>(
-        (settings_.data_directory() + wxFILE_SEP_PATH + "runtime-presets.dat").ToStdString());
+        (settings_.data_directory() + wxFILE_SEP_PATH + "runtime-presets.dat").ToStdString(wxConvUTF8));
     manual_coverage_store_ = std::make_unique<ManualCoverageStore>(
-        (settings_.data_directory() + wxFILE_SEP_PATH + "manual-coverage.dat").ToStdString());
+        (settings_.data_directory() + wxFILE_SEP_PATH + "manual-coverage.dat").ToStdString(wxConvUTF8));
     manual_coverage_projects_ = manual_coverage_store_->Load();
     BuildMenus();
     CreateStatusBar();
@@ -412,7 +412,7 @@ void MainFrame::RebuildRecentProjectsMenu() {
 
 bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     std::string error;
-    auto discovered = discover_project_folder(selected_path.ToStdString(), &error);
+    auto discovered = discover_project_folder(selected_path.ToStdString(wxConvUTF8), &error);
     if (!discovered) {
         wxMessageBox(wxString::FromUTF8(error), "Project connection failed",
                      wxOK | wxICON_ERROR, this);
@@ -429,7 +429,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     external_conflicts_.clear();
     std::vector<std::string> recent;
     recent.reserve(recent_projects_.size());
-    for (const auto& path : recent_projects_) recent.push_back(path.ToStdString());
+    for (const auto& path : recent_projects_) recent.push_back(path.ToStdString(wxConvUTF8));
     recent = update_recent_projects(recent, project_->root, 8);
     recent_projects_.clear();
     for (const auto& path : recent) recent_projects_.push_back(wxString::FromUTF8(path));
@@ -478,7 +478,7 @@ void MainFrame::HandleExternalScriptChange(const wxString& path) {
     const auto update = notebook_->ReloadExternalFile(path);
     const auto result = update.result;
     const wxFileName file(path);
-    const std::string key = file.GetFullPath().ToStdString();
+    const std::string key = file.GetFullPath().ToStdString(wxConvUTF8);
     if (result == ExternalFileResult::Reloaded) {
         external_conflicts_.erase(key);
         SetStatusText("Reloaded external changes to " + file.GetFullName());
@@ -543,7 +543,7 @@ void MainFrame::ReviewExternalConflict(const std::string& key) {
             return;
         }
     } else if (!TakeSnapshot(false, "Before using disk version of " +
-                             wxFileName(wxString::FromUTF8(conflict.path)).GetFullName().ToStdString())) {
+                             wxFileName(wxString::FromUTF8(conflict.path)).GetFullName().ToStdString(wxConvUTF8))) {
         return;
     }
     if (notebook_->ApplyExternalVersion(wxString::FromUTF8(conflict.path), conflict.disk_content, true)) {
@@ -624,7 +624,7 @@ void MainFrame::OnImportProject(wxCommandEvent&) {
         wxMessageBox("Could not read the selected project.", "Import failed", wxOK | wxICON_ERROR, this);
         return;
     }
-    auto parsed = parse_project_bundle(text.ToStdString());
+    auto parsed = parse_project_bundle(text.ToStdString(wxConvUTF8));
     if (!parsed.bundle) {
         wxMessageBox("Project import failed: " + wxString::FromUTF8(parsed.error), "Import failed",
                      wxOK | wxICON_ERROR, this);
@@ -659,7 +659,7 @@ void MainFrame::OnExportProject(wxCommandEvent&) {
     ProjectBundle bundle = imported_bundle_.value_or(ProjectBundle{});
     bundle.files = notebook_->ProjectScripts();
     bundle.active_file = notebook_->CurrentFileIndex();
-    bundle.exported_at = wxDateTime::UNow().FormatISOCombined('T').ToStdString() + "Z";
+    bundle.exported_at = wxDateTime::UNow().FormatISOCombined('T').ToStdString(wxConvUTF8) + "Z";
     const auto [speakers, scenes] = speaker_stats_->ExportTargets();
     bundle.speaker_targets = speakers;
     bundle.scene_targets = scenes;
@@ -701,10 +701,10 @@ void MainFrame::DetectRenpy() {
 #else
     wxStringTokenizer tokenizer(path_value, ":");
 #endif
-    while (tokenizer.HasMoreTokens()) paths.push_back(tokenizer.GetNextToken().ToStdString());
-    renpy_sdk_ = detect_renpy_sdk({editor_settings_.renpy_sdk_path.ToStdString(),
-                                   environment.ToStdString(), std::move(paths),
-                                   wxGetHomeDir().ToStdString()});
+    while (tokenizer.HasMoreTokens()) paths.push_back(tokenizer.GetNextToken().ToStdString(wxConvUTF8));
+    renpy_sdk_ = detect_renpy_sdk({editor_settings_.renpy_sdk_path.ToStdString(wxConvUTF8),
+                                   environment.ToStdString(wxConvUTF8), std::move(paths),
+                                   wxGetHomeDir().ToStdString(wxConvUTF8)});
 }
 
 void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
@@ -712,7 +712,7 @@ void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
                         "Ren'Py launcher (renpy;renpy.sh;renpy.exe)|renpy;renpy.sh;renpy.exe|All files|*",
                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dialog.ShowModal() != wxID_OK) return;
-    if (!is_renpy_executable(dialog.GetPath().ToStdString())) {
+    if (!is_renpy_executable(dialog.GetPath().ToStdString(wxConvUTF8))) {
         wxMessageBox("The selected file is not executable.", "Invalid Ren'Py SDK",
                      wxOK | wxICON_ERROR, this);
         return;
@@ -730,7 +730,7 @@ void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
         wxString combined;
         for (const auto& line : output) combined += line + "\n";
         for (const auto& line : errors) combined += line + "\n";
-        const std::string probed = parse_renpy_version(combined.ToStdString());
+        const std::string probed = parse_renpy_version(combined.ToStdString(wxConvUTF8));
         if (!probed.empty()) renpy_sdk_->version = probed;
     }
     if (auto* item = renpy_menu_->FindItem(kRenpyStatus))
@@ -883,7 +883,7 @@ void MainFrame::OnWarpRenpy(wxCommandEvent&) {
         return;
     }
     std::error_code ec;
-    const auto relative = std::filesystem::relative(path.ToStdString(), project_->scripts_root, ec);
+    const auto relative = std::filesystem::relative(path.ToStdString(wxConvUTF8), project_->scripts_root, ec);
     if (ec || relative.empty() || *relative.begin() == "..") {
         wxMessageBox("The active script is outside the connected project's game folder.",
                      "Warp unavailable", wxOK | wxICON_ERROR, this);
@@ -961,7 +961,7 @@ void MainFrame::RunLocalizationTool(bool dialogue) {
                  : "Language to generate (for example, spanish or pt_br):",
         dialogue ? "Export Ren'Py dialogue" : "Generate Ren'Py translations");
     if (prompt.ShowModal() != wxID_OK) return;
-    const std::string language = prompt.GetValue().Strip(wxString::both).ToStdString();
+    const std::string language = prompt.GetValue().Strip(wxString::both).ToStdString(wxConvUTF8);
     if (!valid_renpy_language(language)) {
         wxMessageBox("Enter a language containing only letters, numbers, and underscores.",
                      "Invalid language", wxOK | wxICON_ERROR, this);
@@ -1006,7 +1006,7 @@ void MainFrame::SetupCoverageProject() {
     coverage_tail_.Reset();
     playthrough_coverage_.clear();
     coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
-    for (const auto& label : coverage_tail_.Read(coverage_path_.ToStdString()))
+    for (const auto& label : coverage_tail_.Read(coverage_path_.ToStdString(wxConvUTF8)))
         playthrough_coverage_.insert(label);
     RefreshCoveragePanel();
 }
@@ -1026,7 +1026,7 @@ void MainFrame::RefreshCoveragePanel() {
 
 void MainFrame::OnCoverageTimer(wxTimerEvent&) {
     if (!project_ || coverage_path_.empty()) return;
-    const auto labels = coverage_tail_.Read(coverage_path_.ToStdString());
+    const auto labels = coverage_tail_.Read(coverage_path_.ToStdString(wxConvUTF8));
     if (labels.empty()) return;
     playthrough_coverage_.insert(labels.begin(), labels.end());
     RefreshCoveragePanel();
@@ -1044,15 +1044,20 @@ void MainFrame::OnShowCoverage(wxCommandEvent&) {
 
 void MainFrame::RefreshRoutes() {
     if (!notebook_ || !route_panel_) return;
+    // Route computation walks every script and enumerates paths; the analysis
+    // callback invokes this per edit, so skip the work while the pane is hidden.
+    // OnShowRoutes recomputes when the pane reopens.
+    const auto& pane = manager_.GetPane("routes");
+    if (pane.IsOk() && !pane.IsShown()) return;
     const auto scripts = notebook_->ProjectScripts();
     const auto project_analysis = analyze_project(scripts, {count_menu_choices_});
     route_panel_->SetReport(compute_routes(project_analysis, scripts));
 }
 
 void MainFrame::OnShowRoutes(wxCommandEvent&) {
-    RefreshRoutes();
     manager_.GetPane("routes").Show(true);
     manager_.Update();
+    RefreshRoutes();
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {
@@ -1215,7 +1220,7 @@ void MainFrame::RefreshProjectFindResults(bool valid) {
     find_results_->DeleteAllItems();
     project_matches_.clear();
     auto& pane = manager_.GetPane(find_results_);
-    const std::string query = find_input_->GetValue().ToStdString();
+    const std::string query = find_input_->GetValue().ToStdString(wxConvUTF8);
     if (!find_all_->GetValue() || query.empty() || !valid) {
         if (pane.IsShown()) { pane.Hide(); manager_.Update(); }
         return;
@@ -1246,7 +1251,7 @@ void MainFrame::OnOpenFind(wxCommandEvent&) {
         find_input_->SetValue(wxString::FromUTF8(selected));
     find_input_->SetFocus();
     find_input_->SelectAll();
-    notebook_->SetFindQuery(find_input_->GetValue().ToStdString(), CurrentFindOptions());
+    notebook_->SetFindQuery(find_input_->GetValue().ToStdString(wxConvUTF8), CurrentFindOptions());
 }
 
 void MainFrame::OnFindNext(wxCommandEvent& event) {
@@ -1260,21 +1265,21 @@ void MainFrame::OnFindNext(wxCommandEvent& event) {
 }
 
 void MainFrame::OnFindChanged(wxCommandEvent&) {
-    notebook_->SetFindQuery(find_input_->GetValue().ToStdString(), CurrentFindOptions());
+    notebook_->SetFindQuery(find_input_->GetValue().ToStdString(wxConvUTF8), CurrentFindOptions());
 }
 
 void MainFrame::OnReplace(wxCommandEvent&) {
-    notebook_->ReplaceCurrent(replace_input_->GetValue().ToStdString(), find_all_->GetValue());
+    notebook_->ReplaceCurrent(replace_input_->GetValue().ToStdString(wxConvUTF8), find_all_->GetValue());
 }
 
 void MainFrame::OnReplaceAll(wxCommandEvent&) {
     std::size_t count = 0;
     if (!find_all_->GetValue()) {
-        count = notebook_->ReplaceAll(replace_input_->GetValue().ToStdString());
+        count = notebook_->ReplaceAll(replace_input_->GetValue().ToStdString(wxConvUTF8));
     } else {
         const auto scripts = notebook_->ProjectScripts();
         const auto preview = preview_project_replacement(
-            scripts, find_input_->GetValue().ToStdString(), CurrentFindOptions());
+            scripts, find_input_->GetValue().ToStdString(wxConvUTF8), CurrentFindOptions());
         if (preview.empty()) {
             SetStatusText("No matches to replace");
             return;
@@ -1306,7 +1311,7 @@ void MainFrame::OnReplaceAll(wxCommandEvent&) {
         if (wxMessageBox(wxString::FromUTF8(question), "Confirm project replacement",
                          wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES) return;
         count = notebook_->ReplaceAllAcrossFiles(selected_files,
-                                                 replace_input_->GetValue().ToStdString());
+                                                 replace_input_->GetValue().ToStdString(wxConvUTF8));
     }
     SetStatusText(count == 0 ? "No matches to replace"
                              : wxString::FromUTF8("Replaced " + std::to_string(count) + " match" +
@@ -1449,7 +1454,7 @@ void MainFrame::OnExport(wxCommandEvent& event) {
         contents = wxString::FromUTF8(statistics_json(analysis_));
     } else {
         filename = "say-count-report.html"; wildcard = "HTML files (*.html)|*.html";
-        const auto generated = wxDateTime::Now().FormatISOCombined(' ').ToStdString();
+        const auto generated = wxDateTime::Now().FormatISOCombined(' ').ToStdString(wxConvUTF8);
         contents = wxString::FromUTF8(statistics_html(analysis_, "Say Count report", generated));
     }
     wxFileDialog dialog(this, "Export statistics", wxEmptyString, filename, wildcard,

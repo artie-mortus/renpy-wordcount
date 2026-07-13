@@ -44,7 +44,7 @@ std::optional<std::string> ReadString(const std::string& json, const char* key) 
 }
 
 std::optional<std::string> ReadFile(const wxString& path) {
-    std::ifstream input(path.ToStdString());
+    std::ifstream input(path.ToStdString(wxConvUTF8));
     if (!input) return std::nullopt;
     std::ostringstream contents;
     contents << input.rdbuf();
@@ -164,7 +164,7 @@ bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSe
     }
 
     const wxString temporary = path_ + ".tmp";
-    std::ofstream output(temporary.ToStdString(), std::ios::trunc);
+    std::ofstream output(temporary.ToStdString(wxConvUTF8), std::ios::trunc);
     const char* theme = editor.theme == EditorTheme::Light ? "light" :
                         editor.theme == EditorTheme::Dark ? "dark" : "system";
     output << "{\n";
@@ -181,12 +181,12 @@ bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSe
            << "    \"fontSize\": " << editor.font_size << ",\n"
            << "    \"wordWrap\": " << (editor.word_wrap ? "true" : "false") << ",\n"
            << "    \"theme\": \"" << theme << "\",\n"
-           << "    \"renpySdkPath\": \"" << JsonEscape(editor.renpy_sdk_path.ToStdString()) << "\"\n"
+           << "    \"renpySdkPath\": \"" << JsonEscape(editor.renpy_sdk_path.ToStdString(wxConvUTF8)) << "\"\n"
            << "  },\n"
            << "  \"recentProjects\": [";
     for (std::size_t index = 0; index < recent_projects.size(); ++index) {
         if (index) output << ", ";
-        output << "\"" << JsonEscape(recent_projects[index].ToStdString()) << "\"";
+        output << "\"" << JsonEscape(recent_projects[index].ToStdString(wxConvUTF8)) << "\"";
     }
     output << "]\n}\n";
     output.close();

@@ -47,7 +47,7 @@ public:
                    AnalysisHandler analysis_handler);
 
     void NewTab();
-    bool OpenFiles(const std::vector<wxString>& paths);
+    bool OpenFiles(const std::vector<wxString>& paths, bool focus_existing = true);
     bool OpenProjectFiles(const std::vector<wxString>& paths);
     bool SaveCurrent();
     bool SaveCurrentAs();

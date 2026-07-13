@@ -72,7 +72,7 @@ void EditorNotebook::SetFilePath(wxStyledTextCtrl* editor, const wxString& path)
     UpdateTabLabel(editor);
 }
 
-bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
+bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_existing) {
     bool opened = false;
     for (const auto& path : paths) {
         const wxString absolute_path = wxFileName(path).GetAbsolutePath();
@@ -84,7 +84,7 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
             }
         }
         if (existing != wxNOT_FOUND) {
-            SetSelection(static_cast<size_t>(existing));
+            if (focus_existing) SetSelection(static_cast<size_t>(existing));
             opened = true;
             continue;
         }
@@ -116,12 +116,23 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths) {
 
 bool EditorNotebook::OpenProjectFiles(const std::vector<wxString>& paths) {
     if (paths.empty()) return true;
-    const bool opened = OpenFiles(paths);
+    // Project refresh must not steal focus from the tab the user is editing.
+    const bool opened = OpenFiles(paths, false);
     if (!opened) return false;
+    bool removed = false;
     for (size_t index = GetPageCount(); index-- > 0;) {
         auto* editor = EditorAt(index);
         if (GetPageCount() > 1 && editor && FilePath(editor).empty() && !editor->GetModify() &&
-            editor->GetText().empty()) DeletePage(index);
+            editor->GetText().empty()) {
+            speakers_.erase(editor);
+            completions_.erase(editor);
+            DeletePage(index);
+            removed = true;
+        }
+    }
+    if (removed) {
+        RefreshCompletionIndex();
+        AnalyzeActive();
     }
     return true;
 }
@@ -134,14 +145,14 @@ ExternalFileUpdate EditorNotebook::ReloadExternalFile(const wxString& path) {
         if (candidate && FilePath(candidate) == absolute_path) { editor = candidate; break; }
     }
     if (!editor) return {ExternalFileResult::NotOpen, {}, {}};
-    const std::string local = editor->GetText().ToStdString();
+    const std::string local = editor->GetText().ToStdString(wxConvUTF8);
     if (!wxFileName::FileExists(absolute_path)) return {ExternalFileResult::Missing, local, {}};
     wxFile file(absolute_path);
     wxString content;
     if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8))
         return {ExternalFileResult::Failed, local, {}};
     content = NormalizeTabs(content);
-    const std::string disk = content.ToStdString();
+    const std::string disk = content.ToStdString(wxConvUTF8);
     const auto decision = classify_external_change(local, disk, editor->GetModify());
     if (decision == ExternalChangeDecision::Unchanged)
         return {ExternalFileResult::Unchanged, local, disk};
@@ -260,7 +271,7 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
 void EditorNotebook::RefreshSpeakers(wxStyledTextCtrl* editor) {
     auto& aliases = speakers_[editor];
     aliases.clear();
-    const auto analysis = analyze_script(editor->GetText().ToStdString(), {count_menu_choices_});
+    const auto analysis = analyze_script(editor->GetText().ToStdString(wxConvUTF8), {count_menu_choices_});
     for (const auto& [alias, name] : analysis.character_names) {
         (void)name;
         aliases.insert(alias);
@@ -273,7 +284,7 @@ void EditorNotebook::RefreshCompletionIndex() {
     for (size_t index = 0; index < GetPageCount(); ++index) {
         auto* editor = EditorAt(index);
         if (!editor) continue;
-        scripts.push_back({editor->GetName().ToStdString(), editor->GetText().ToStdString()});
+        scripts.push_back({editor->GetName().ToStdString(wxConvUTF8), editor->GetText().ToStdString(wxConvUTF8)});
     }
     completion_index_ = build_completion_index(scripts);
 }
@@ -292,7 +303,7 @@ void EditorNotebook::OnStyleNeeded(wxStyledTextEvent& event) {
     for (int line_number = start_line; line_number <= end_line; ++line_number) {
         const int line_start = editor->PositionFromLine(line_number);
         const int line_end = editor->GetLineEndPosition(line_number);
-        const std::string line = editor->GetTextRange(line_start, line_end).ToStdString();
+        const std::string line = editor->GetTextRange(line_start, line_end).ToStdString(wxConvUTF8);
         const auto spans = highlight_line(line, speakers_[editor]);
         int local = 0;
         for (const auto& span : spans) {
@@ -335,7 +346,7 @@ void EditorNotebook::OnModified(wxStyledTextEvent& event) {
 void EditorNotebook::OnCharAdded(wxStyledTextEvent& event) {
     auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
     if (!editor) return;
-    const std::string source = editor->GetText().ToStdString();
+    const std::string source = editor->GetText().ToStdString(wxConvUTF8);
     auto result = project_completions(source, static_cast<std::size_t>(editor->GetCurrentPos()),
                                       completion_index_);
     if (result.items.empty()) {
@@ -359,7 +370,7 @@ void EditorNotebook::OnAutoCompCompleted(wxStyledTextEvent& event) {
     auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
     const auto pending = editor ? completions_.find(editor) : completions_.end();
     if (!editor || pending == completions_.end()) return;
-    const std::string selected = event.GetText().ToStdString();
+    const std::string selected = event.GetText().ToStdString(wxConvUTF8);
     const auto item = std::find_if(pending->second.items.begin(), pending->second.items.end(),
                                    [&](const auto& candidate) { return candidate.text == selected; });
     if (item == pending->second.items.end()) return;
@@ -397,7 +408,7 @@ void EditorNotebook::OnDwellEnd(wxStyledTextEvent& event) {
 }
 
 void EditorNotebook::ApplyCommandResult(wxStyledTextCtrl* editor, const EditorCommandResult& result) {
-    const std::string current = editor->GetText().ToStdString();
+    const std::string current = editor->GetText().ToStdString(wxConvUTF8);
     if (result.text != current) {
         editor->BeginUndoAction();
         editor->SetTargetStart(0);
@@ -414,7 +425,7 @@ void EditorNotebook::ToggleComments() {
     const int page = GetSelection();
     auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(page));
     if (!editor) return;
-    ApplyCommandResult(editor, toggle_line_comments(editor->GetText().ToStdString(),
+    ApplyCommandResult(editor, toggle_line_comments(editor->GetText().ToStdString(wxConvUTF8),
         static_cast<std::size_t>(editor->GetSelectionStart()),
         static_cast<std::size_t>(editor->GetSelectionEnd())));
 }
@@ -426,7 +437,7 @@ void EditorNotebook::OnKeyDown(wxKeyEvent& event) {
     const bool control = event.ControlDown() || event.CmdDown();
     if (control && !event.AltDown()) {
         if (!event.ShiftDown() && (key == WXK_UP || key == WXK_DOWN)) {
-            const auto target = adjacent_label_line(editor->GetText().ToStdString(),
+            const auto target = adjacent_label_line(editor->GetText().ToStdString(wxConvUTF8),
                 static_cast<std::size_t>(editor->LineFromPosition(editor->GetCurrentPos()) + 1),
                 key == WXK_DOWN ? 1 : -1);
             if (target) JumpToLine(*target);
@@ -450,7 +461,7 @@ void EditorNotebook::OnKeyDown(wxKeyEvent& event) {
     }
     if (!control && event.AltDown() && (key == WXK_UP || key == WXK_DOWN)) {
         editor->AutoCompCancel();
-        const std::string source = editor->GetText().ToStdString();
+        const std::string source = editor->GetText().ToStdString(wxConvUTF8);
         const auto start = static_cast<std::size_t>(editor->GetSelectionStart());
         const auto end = static_cast<std::size_t>(editor->GetSelectionEnd());
         const int direction = key == WXK_DOWN ? 1 : -1;
@@ -462,7 +473,7 @@ void EditorNotebook::OnKeyDown(wxKeyEvent& event) {
     if (!control && !event.AltDown()) {
         const int unicode = event.GetUnicodeKey();
         if (unicode == '"' || unicode == '(' || unicode == '[' || unicode == ')' || unicode == ']') {
-            const auto result = apply_pair_input(editor->GetText().ToStdString(),
+            const auto result = apply_pair_input(editor->GetText().ToStdString(wxConvUTF8),
                 static_cast<std::size_t>(editor->GetSelectionStart()),
                 static_cast<std::size_t>(editor->GetSelectionEnd()), static_cast<char>(unicode));
             if (result) { ApplyCommandResult(editor, *result); return; }
@@ -476,7 +487,7 @@ void EditorNotebook::AnalyzeActive() {
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || !analysis_handler_) return;
     const wxString source = editor->GetText();
-    analysis_handler_(source, analyze_script(source.ToStdString(), {count_menu_choices_}));
+    analysis_handler_(source, analyze_script(source.ToStdString(wxConvUTF8), {count_menu_choices_}));
     RefreshDiagnostics();
 }
 
@@ -552,7 +563,7 @@ void EditorNotebook::JumpToLine(std::size_t line_number) {
 std::string EditorNotebook::SelectedText() const {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
-    return editor ? editor->GetSelectedText().ToStdString() : std::string{};
+    return editor ? editor->GetSelectedText().ToStdString(wxConvUTF8) : std::string{};
 }
 
 void EditorNotebook::SetFindStatusHandler(FindStatusHandler handler) {
@@ -567,7 +578,7 @@ FindStatus EditorNotebook::RefreshFindHighlights() {
 
     editor->SetIndicatorCurrent(kFindIndicator);
     editor->IndicatorClearRange(0, editor->GetTextLength());
-    const auto found = find_matches(editor->GetText().ToStdString(), find_query_, find_options_);
+    const auto found = find_matches(editor->GetText().ToStdString(wxConvUTF8), find_query_, find_options_);
     status.valid = found.valid;
     status.total = found.matches.size();
     if (found.valid && found.matches.size() <= kMaxHighlightedMatches) {
@@ -599,7 +610,7 @@ FindStatus EditorNotebook::FindNext(int direction) {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || find_query_.empty()) return RefreshFindHighlights();
-    const auto found = find_matches(editor->GetText().ToStdString(), find_query_, find_options_);
+    const auto found = find_matches(editor->GetText().ToStdString(wxConvUTF8), find_query_, find_options_);
     if (!found.valid || found.matches.empty()) return RefreshFindHighlights();
 
     const std::size_t caret = static_cast<std::size_t>(
@@ -626,7 +637,7 @@ std::vector<NamedScript> EditorNotebook::ProjectScripts() const {
     scripts.reserve(GetPageCount());
     for (size_t index = 0; index < GetPageCount(); ++index) {
         if (auto* editor = EditorAt(index))
-            scripts.push_back({editor->GetName().ToStdString(), editor->GetText().ToStdString()});
+            scripts.push_back({editor->GetName().ToStdString(wxConvUTF8), editor->GetText().ToStdString(wxConvUTF8)});
     }
     return scripts;
 }
@@ -702,7 +713,7 @@ bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scrip
         for (size_t index = 0; index < GetPageCount(); ++index) {
             auto* candidate = EditorAt(index);
             if (candidate && retained.count(candidate) == 0 &&
-                candidate->GetName().ToStdString() == script.name) {
+                candidate->GetName().ToStdString(wxConvUTF8) == script.name) {
                 editor = candidate;
                 break;
             }
@@ -791,7 +802,7 @@ bool EditorNotebook::ReplaceCurrent(std::string_view replacement, bool across_fi
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || find_query_.empty()) return false;
-    const std::string source = editor->GetText().ToStdString();
+    const std::string source = editor->GetText().ToStdString(wxConvUTF8);
     const auto found = find_matches(source, find_query_, find_options_);
     const std::size_t start = static_cast<std::size_t>(editor->GetSelectionStart());
     const std::size_t end = static_cast<std::size_t>(editor->GetSelectionEnd());
@@ -822,7 +833,7 @@ std::size_t EditorNotebook::ReplaceAll(std::string_view replacement) {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || find_query_.empty()) return 0;
-    const auto changed = replace_all_matches(editor->GetText().ToStdString(), find_query_,
+    const auto changed = replace_all_matches(editor->GetText().ToStdString(wxConvUTF8), find_query_,
                                              replacement, find_options_);
     if (!changed.valid || changed.count == 0) {
         RefreshFindHighlights();
@@ -899,8 +910,14 @@ void EditorNotebook::SetTheme(app::EditorTheme theme) {
 }
 
 bool EditorNotebook::SaveEditor(wxStyledTextCtrl* editor, const wxString& path) {
+    // Write a sibling temp file and rename so a failed write never truncates the script.
+    const wxString temporary = path + ".saycount-tmp";
     wxFile file;
-    if (!file.Create(path, true) || !file.Write(editor->GetText(), wxConvUTF8) || !file.Close()) {
+    bool written = file.Create(temporary, true) &&
+                   file.Write(editor->GetText(), wxConvUTF8) && file.Close();
+    if (written) written = wxRenameFile(temporary, path, true);
+    if (!written) {
+        if (wxFileName::FileExists(temporary)) wxRemoveFile(temporary);
         wxMessageBox(wxString::Format("Could not save %s.", path), "Save failed",
                      wxOK | wxICON_ERROR, this);
         return false;
@@ -966,9 +983,17 @@ void EditorNotebook::CloseCurrentTab() {
     if (selection == wxNOT_FOUND || !ConfirmDiscard(static_cast<size_t>(selection))) {
         return;
     }
+    // DeletePage raises no close events, so drop per-editor state here.
+    if (auto* editor = EditorAt(static_cast<size_t>(selection))) {
+        speakers_.erase(editor);
+        completions_.erase(editor);
+    }
     DeletePage(static_cast<size_t>(selection));
     if (GetPageCount() == 0) {
         NewTab();
+    } else {
+        RefreshCompletionIndex();
+        AnalyzeActive();
     }
 }
 

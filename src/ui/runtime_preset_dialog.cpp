@@ -44,8 +44,8 @@ RuntimePresetDialog::RuntimePresetDialog(wxWindow* parent, RuntimePresetStore& s
     remove->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { DeletePreset(); });
     use->Bind(wxEVT_BUTTON, [this](wxCommandEvent& event) {
         if (!ValidateEditor()) { event.StopPropagation(); return; }
-        selected_name_ = name_->GetValue().Strip(wxString::both).ToStdString();
-        selected_json_ = json_->GetValue().ToStdString();
+        selected_name_ = name_->GetValue().Strip(wxString::both).ToStdString(wxConvUTF8);
+        selected_json_ = json_->GetValue().ToStdString(wxConvUTF8);
         EndModal(wxID_OK);
     });
     CentreOnParent();
@@ -60,29 +60,29 @@ void RuntimePresetDialog::RebuildChoices(const std::string& selection) {
 
 void RuntimePresetDialog::LoadSelection() {
     if (choices_->GetSelection() <= 0) { name_->Clear(); json_->SetValue("{}"); return; }
-    const std::string name = choices_->GetStringSelection().ToStdString();
+    const std::string name = choices_->GetStringSelection().ToStdString(wxConvUTF8);
     name_->SetValue(wxString::FromUTF8(name)); json_->SetValue(wxString::FromUTF8(presets_.at(name)));
 }
 
 bool RuntimePresetDialog::ValidateEditor() {
-    const auto validation = validate_runtime_state(json_->GetValue().ToStdString());
+    const auto validation = validate_runtime_state(json_->GetValue().ToStdString(wxConvUTF8));
     if (validation.valid) return true;
     wxMessageBox(wxString::FromUTF8(validation.error), "Invalid runtime state", wxOK | wxICON_ERROR, this);
     return false;
 }
 
 void RuntimePresetDialog::SavePreset() {
-    const std::string name = name_->GetValue().Strip(wxString::both).ToStdString();
+    const std::string name = name_->GetValue().Strip(wxString::both).ToStdString(wxConvUTF8);
     if (name.empty()) { wxMessageBox("Name the state preset.", "Preset name required", wxOK | wxICON_ERROR, this); return; }
     if (!ValidateEditor()) return;
-    presets_[name] = json_->GetValue().ToStdString();
+    presets_[name] = json_->GetValue().ToStdString(wxConvUTF8);
     std::string error;
     if (!store_.Save(presets_, &error)) { wxMessageBox(wxString::FromUTF8(error), "Preset save failed", wxOK | wxICON_ERROR, this); return; }
     RebuildChoices(name);
 }
 
 void RuntimePresetDialog::DeletePreset() {
-    const std::string name = name_->GetValue().Strip(wxString::both).ToStdString();
+    const std::string name = name_->GetValue().Strip(wxString::both).ToStdString(wxConvUTF8);
     if (name.empty() || presets_.erase(name) == 0) return;
     std::string error;
     if (!store_.Save(presets_, &error)) { wxMessageBox(wxString::FromUTF8(error), "Preset delete failed", wxOK | wxICON_ERROR, this); return; }

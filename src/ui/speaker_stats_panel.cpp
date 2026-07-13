@@ -144,7 +144,7 @@ void SpeakerStatsPanel::RefreshVersionComparison() {
         version_result_->SetValue("Paste or load an old version to compare.");
         return;
     }
-    const auto comparison = compare_versions(analyze_script(version_source_.ToStdString()), analysis_);
+    const auto comparison = compare_versions(analyze_script(version_source_.ToStdString(wxConvUTF8)), analysis_);
     auto signed_value = [](long value) { return value >= 0 ? "+" + std::to_string(value) : std::to_string(value); };
     std::string text = "Total: " + std::to_string(comparison.before_words) + " -> " +
         std::to_string(comparison.after_words) + " (" + signed_value(comparison.net_words) + ")\n" +
@@ -354,7 +354,7 @@ void SpeakerStatsPanel::LoadTargets() {
             Targets values;
             config.Read(key + "/words", &values.words, 0L);
             config.Read(key + "/lines", &values.lines, 0L);
-            if (values.words || values.lines) target[key.ToStdString()] = values;
+            if (values.words || values.lines) target[key.ToStdString(wxConvUTF8)] = values;
             more = config.GetNextGroup(key, index);
         }
         config.SetPath("/");

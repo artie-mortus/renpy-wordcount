@@ -42,6 +42,24 @@ TEST_CASE("native project exports reimport and preserve unknown root fields") {
     REQUIRE(parsed.bundle->extra_fields.at("pluginState") == R"({"value":3})");
 }
 
+TEST_CASE("project import decodes surrogate pairs and survives out-of-range numbers") {
+    const std::string json = R"({
+      "format":"say-count-project","version":1,
+      "files":[{"name":"emoji.rpy","content":"e \"go\ud83d\ude00\""}],
+      "activeFile":1e300,
+      "settings":{"target":"","lineTarget":"","countMenuChoices":false,"theme":"light"},
+      "targets":{"speakerTargets":{"Eileen":{"words":1e300,"lines":3}},"sceneTargets":{}},
+      "ratio":0.1
+    })";
+    const auto parsed = say_count::parse_project_bundle(json);
+    REQUIRE(parsed.bundle);
+    REQUIRE(parsed.bundle->files[0].content == "e \"go\xf0\x9f\x98\x80\"");
+    REQUIRE(parsed.bundle->active_file == 0);
+    REQUIRE(parsed.bundle->speaker_targets.at("Eileen").words == 0);
+    REQUIRE(parsed.bundle->speaker_targets.at("Eileen").lines == 3);
+    REQUIRE(parsed.bundle->extra_fields.at("ratio") == "0.1");
+}
+
 TEST_CASE("project import rejects incomplete or wrong-version bundles") {
     REQUIRE_FALSE(say_count::parse_project_bundle("{}").bundle);
     REQUIRE_FALSE(say_count::parse_project_bundle(
