@@ -58,3 +58,12 @@ TEST_CASE("RenPy version parsing accepts launcher output") {
     REQUIRE(say_count::parse_renpy_version("version 7.8") == "7.8");
     REQUIRE(say_count::parse_renpy_version("unknown").empty());
 }
+
+TEST_CASE("RenPy capabilities reject known legacy SDKs and allow modern or custom launchers") {
+    REQUIRE_FALSE(say_count::renpy_capabilities("6.18.3").warp);
+    REQUIRE(say_count::renpy_capabilities("6.99.14").warp);
+    REQUIRE(say_count::renpy_capabilities("7.8.4").director);
+    REQUIRE(say_count::renpy_capabilities("8.5.3").director);
+    REQUIRE(say_count::renpy_capabilities("").warp);
+    REQUIRE_FALSE(say_count::renpy_capabilities("invalid").director);
+}

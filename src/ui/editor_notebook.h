@@ -70,6 +70,9 @@ public:
     std::size_t CurrentFileIndex() const;
     void SelectFileIndex(std::size_t index);
     void SetCountMenuChoices(bool enabled);
+    wxString CurrentFilePath() const;
+    std::size_t CurrentLine() const;
+    bool SaveAll();
     void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);

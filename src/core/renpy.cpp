@@ -85,4 +85,23 @@ std::optional<RenpySdk> detect_renpy_sdk(const RenpyDetectionOptions& options) {
     return std::nullopt;
 }
 
+RenpyCapabilities renpy_capabilities(std::string_view version) {
+    if (version.empty()) return {true, true};
+    std::vector<int> parts;
+    std::size_t start = 0;
+    while (start < version.size()) {
+        const std::size_t end = version.find('.', start);
+        const auto token = version.substr(start, end == std::string_view::npos ? version.size() - start
+                                                                              : end - start);
+        try { parts.push_back(std::stoi(std::string(token))); } catch (...) { return {}; }
+        if (end == std::string_view::npos) break;
+        start = end + 1;
+    }
+    if (parts.empty()) return {};
+    const int major = parts[0];
+    const int minor = parts.size() > 1 ? parts[1] : 0;
+    const bool supported = major >= 7 || (major == 6 && minor >= 99);
+    return {supported, supported};
+}
+
 }  // namespace say_count

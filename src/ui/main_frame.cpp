@@ -1,6 +1,7 @@
 #include "ui/main_frame.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
 
 #include <wx/aboutdlg.h>
@@ -73,6 +74,8 @@ enum MenuId {
     kRunRenpy,
     kStopRenpy,
     kShowRenpyLog,
+    kWarpRenpy,
+    kDirectorRenpy,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -202,6 +205,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnRunRenpy, this, kRunRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnStopRenpy, this, kStopRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnShowRenpyLog, this, kShowRenpyLog);
+    Bind(wxEVT_MENU, &MainFrame::OnWarpRenpy, this, kWarpRenpy);
+    Bind(wxEVT_MENU, &MainFrame::OnDirectorRenpy, this, kDirectorRenpy);
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
@@ -273,6 +278,8 @@ void MainFrame::BuildMenus() {
     help->Append(kShortcutSheet, "Keyboard &Shortcuts\tCtrl+K");
     renpy_menu_ = new wxMenu();
     renpy_menu_->Append(kRunRenpy, "Run Project\tF6");
+    renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
+    renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
     renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
     renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
     renpy_menu_->AppendSeparator();
@@ -728,6 +735,43 @@ void MainFrame::OnRenpyEnded(wxProcessEvent& event) {
     renpy_pid_ = 0;
     renpy_process_.reset();
     SetStatusText(code == 0 ? "Ren'Py exited" : "Ren'Py failed — see launch log");
+}
+
+void MainFrame::OnWarpRenpy(wxCommandEvent&) {
+    if (!renpy_sdk_) { LaunchRenpy({}); return; }
+    if (!renpy_capabilities(renpy_sdk_->version).warp) {
+        wxMessageBox("This Ren'Py SDK version does not support line warping.", "Warp unsupported",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    if (!project_) { LaunchRenpy({}); return; }
+    const wxString path = notebook_->CurrentFilePath();
+    if (path.empty()) {
+        wxMessageBox("Save the active script inside the connected project before warping.",
+                     "Warp unavailable", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    std::error_code ec;
+    const auto relative = std::filesystem::relative(path.ToStdString(), project_->scripts_root, ec);
+    if (ec || relative.empty() || *relative.begin() == "..") {
+        wxMessageBox("The active script is outside the connected project's game folder.",
+                     "Warp unavailable", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    if (!notebook_->SaveAll()) return;
+    const std::string target = relative.generic_string() + ":" + std::to_string(notebook_->CurrentLine());
+    LaunchRenpy({"--warp", wxString::FromUTF8(target)});
+}
+
+void MainFrame::OnDirectorRenpy(wxCommandEvent&) {
+    if (!renpy_sdk_) { LaunchRenpy({}); return; }
+    if (!renpy_capabilities(renpy_sdk_->version).director) {
+        wxMessageBox("This Ren'Py SDK version does not support Interactive Director.",
+                     "Director unsupported", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    if (!notebook_->SaveAll()) return;
+    LaunchRenpy({"director"});
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {

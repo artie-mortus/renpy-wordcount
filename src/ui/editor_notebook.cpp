@@ -647,6 +647,32 @@ void EditorNotebook::SetCountMenuChoices(bool enabled) {
     AnalyzeActive();
 }
 
+wxString EditorNotebook::CurrentFilePath() const {
+    const int selection = GetSelection();
+    return selection == wxNOT_FOUND ? wxString{} : FilePath(EditorAt(static_cast<std::size_t>(selection)));
+}
+
+std::size_t EditorNotebook::CurrentLine() const {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
+    return editor ? static_cast<std::size_t>(editor->LineFromPosition(editor->GetCurrentPos()) + 1) : 0;
+}
+
+bool EditorNotebook::SaveAll() {
+    for (std::size_t index = 0; index < GetPageCount(); ++index) {
+        auto* editor = EditorAt(index);
+        if (!editor || !editor->GetModify()) continue;
+        const wxString path = FilePath(editor);
+        if (path.empty()) {
+            wxMessageBox("Save every modified tab to the connected project before launching Ren'Py.",
+                         "Unsaved script", wxOK | wxICON_ERROR, this);
+            return false;
+        }
+        if (!SaveEditor(editor, path)) return false;
+    }
+    return true;
+}
+
 bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {
     if (scripts.empty()) return false;
     std::unordered_set<wxStyledTextCtrl*> retained;

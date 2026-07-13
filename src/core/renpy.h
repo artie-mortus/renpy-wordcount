@@ -26,4 +26,11 @@ std::optional<RenpySdk> detect_renpy_sdk(const RenpyDetectionOptions& options);
 std::string parse_renpy_version(std::string_view text);
 std::string infer_renpy_version(std::string_view executable);
 
+struct RenpyCapabilities {
+    bool warp = false;
+    bool director = false;
+};
+
+RenpyCapabilities renpy_capabilities(std::string_view version);
+
 }  // namespace say_count

@@ -99,6 +99,8 @@ private:
     void OnShowRenpyLog(wxCommandEvent& event);
     void OnRenpyOutputTimer(wxTimerEvent& event);
     void OnRenpyEnded(wxProcessEvent& event);
+    void OnWarpRenpy(wxCommandEvent& event);
+    void OnDirectorRenpy(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
