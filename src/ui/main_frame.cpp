@@ -20,6 +20,7 @@
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 #include <wx/textdlg.h>
+#include <wx/tokenzr.h>
 #include <wx/choicdlg.h>
 #include <wx/dataview.h>
 
@@ -66,6 +67,8 @@ enum MenuId {
     kImportProject,
     kExportProject,
     kRenameSymbol,
+    kConfigureRenpy,
+    kRenpyStatus,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -98,6 +101,7 @@ MainFrame::MainFrame()
       manager_(this), snapshot_timer_(this) {
     SetMinSize(wxSize(400, 300));
     editor_settings_ = settings_.LoadEditor();
+    DetectRenpy();
     recent_projects_ = settings_.LoadRecentProjects();
     snapshot_store_ = std::make_unique<SnapshotStore>(
         (settings_.data_directory() + wxFILE_SEP_PATH + "snapshots").ToStdString(), 50);
@@ -179,6 +183,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnImportProject, this, kImportProject);
     Bind(wxEVT_MENU, &MainFrame::OnExportProject, this, kExportProject);
     Bind(wxEVT_MENU, &MainFrame::OnRenameSymbol, this, kRenameSymbol);
+    Bind(wxEVT_MENU, &MainFrame::OnConfigureRenpy, this, kConfigureRenpy);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
     snapshot_timer_.Start(10 * 60 * 1000);
 }
@@ -240,11 +245,18 @@ void MainFrame::BuildMenus() {
     auto* help = new wxMenu();
     help->Append(wxID_ABOUT, "&About", "About Say Count");
     help->Append(kShortcutSheet, "Keyboard &Shortcuts\tCtrl+K");
+    renpy_menu_ = new wxMenu();
+    renpy_menu_->Append(kConfigureRenpy, "Configure SDK Executable…");
+    auto* sdk_status = renpy_menu_->Append(kRenpyStatus, renpy_sdk_
+        ? "SDK: " + wxString::FromUTF8(renpy_sdk_->version.empty() ? "detected" : renpy_sdk_->version)
+        : "SDK: not found");
+    sdk_status->Enable(false);
 
     auto* menu_bar = new wxMenuBar();
     menu_bar->Append(file, "&File");
     menu_bar->Append(edit, "&Edit");
     menu_bar->Append(view, "&View");
+    menu_bar->Append(renpy_menu_, "&Ren'Py");
     menu_bar->Append(help, "&Help");
     SetMenuBar(menu_bar);
 }
@@ -535,6 +547,54 @@ void MainFrame::OnRenameSymbol(wxCommandEvent&) {
     notebook_->SelectFileIndex(active);
     SetStatusText(wxString::Format("Renamed symbol in %zu line%s — changes are unsaved", changes,
                                    changes == 1 ? "" : "s"));
+}
+
+void MainFrame::DetectRenpy() {
+    wxString environment, path_value;
+    wxGetEnv("RENPY_EXECUTABLE", &environment);
+    wxGetEnv("PATH", &path_value);
+    std::vector<std::string> paths;
+#ifdef _WIN32
+    wxStringTokenizer tokenizer(path_value, ";");
+#else
+    wxStringTokenizer tokenizer(path_value, ":");
+#endif
+    while (tokenizer.HasMoreTokens()) paths.push_back(tokenizer.GetNextToken().ToStdString());
+    renpy_sdk_ = detect_renpy_sdk({editor_settings_.renpy_sdk_path.ToStdString(),
+                                   environment.ToStdString(), std::move(paths),
+                                   wxGetHomeDir().ToStdString()});
+}
+
+void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
+    wxFileDialog dialog(this, "Choose the Ren'Py SDK executable", wxEmptyString, wxEmptyString,
+                        "Ren'Py launcher (renpy;renpy.sh;renpy.exe)|renpy;renpy.sh;renpy.exe|All files|*",
+                        wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dialog.ShowModal() != wxID_OK) return;
+    if (!is_renpy_executable(dialog.GetPath().ToStdString())) {
+        wxMessageBox("The selected file is not executable.", "Invalid Ren'Py SDK",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    editor_settings_.renpy_sdk_path = wxFileName(dialog.GetPath()).GetAbsolutePath();
+    if (!settings_.SaveEditor(editor_settings_)) {
+        wxMessageBox("Could not save the SDK setting.", "Settings failed", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    DetectRenpy();
+    wxArrayString output, errors;
+    if (renpy_sdk_) {
+        wxExecute("\"" + wxString::FromUTF8(renpy_sdk_->executable) + "\" --version",
+                  output, errors, wxEXEC_SYNC);
+        wxString combined;
+        for (const auto& line : output) combined += line + "\n";
+        for (const auto& line : errors) combined += line + "\n";
+        const std::string probed = parse_renpy_version(combined.ToStdString());
+        if (!probed.empty()) renpy_sdk_->version = probed;
+    }
+    if (auto* item = renpy_menu_->FindItem(kRenpyStatus))
+        item->SetItemLabel(renpy_sdk_ ? "SDK: " + wxString::FromUTF8(
+            renpy_sdk_->version.empty() ? "detected" : renpy_sdk_->version) : "SDK: not found");
+    SetStatusText(renpy_sdk_ ? "Ren'Py SDK configured" : "Ren'Py SDK not found");
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {

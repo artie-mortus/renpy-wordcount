@@ -20,6 +20,7 @@ struct EditorSettings {
     int font_size = 16;
     bool word_wrap = false;
     EditorTheme theme = EditorTheme::System;
+    wxString renpy_sdk_path;
 };
 
 class Settings final {

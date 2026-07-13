@@ -19,6 +19,7 @@ add_library(say_count_core STATIC
     src/core/project.cpp
     src/core/project_bundle.cpp
     src/core/rename.cpp
+    src/core/renpy.cpp
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
@@ -65,6 +66,7 @@ if(BUILD_TESTING)
         tests/project_test.cpp
         tests/project_bundle_test.cpp
         tests/rename_test.cpp
+        tests/renpy_test.cpp
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp

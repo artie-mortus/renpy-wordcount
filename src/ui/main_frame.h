@@ -10,6 +10,7 @@
 #include "core/find_replace.h"
 #include "core/project.h"
 #include "core/project_bundle.h"
+#include "core/renpy.h"
 #include "core/snapshots.h"
 
 #include <optional>
@@ -86,6 +87,8 @@ private:
     void OnImportProject(wxCommandEvent& event);
     void OnExportProject(wxCommandEvent& event);
     void OnRenameSymbol(wxCommandEvent& event);
+    void OnConfigureRenpy(wxCommandEvent& event);
+    void DetectRenpy();
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -124,6 +127,8 @@ private:
     std::unique_ptr<SnapshotStore> snapshot_store_;
     std::optional<ProjectBundle> imported_bundle_;
     bool count_menu_choices_ = false;
+    std::optional<RenpySdk> renpy_sdk_;
+    wxMenu* renpy_menu_ = nullptr;
 };
 
 }  // namespace say_count::ui

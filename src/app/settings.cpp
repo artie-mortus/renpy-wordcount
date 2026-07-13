@@ -134,6 +134,8 @@ EditorSettings Settings::LoadEditor() const {
         if (*theme == "light") result.theme = EditorTheme::Light;
         else if (*theme == "dark") result.theme = EditorTheme::Dark;
     }
+    if (const auto path = ReadString(*contents, "renpySdkPath"))
+        result.renpy_sdk_path = wxString::FromUTF8(*path);
     return result;
 }
 
@@ -178,7 +180,8 @@ bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSe
     output << "  \"editor\": {\n"
            << "    \"fontSize\": " << editor.font_size << ",\n"
            << "    \"wordWrap\": " << (editor.word_wrap ? "true" : "false") << ",\n"
-           << "    \"theme\": \"" << theme << "\"\n"
+           << "    \"theme\": \"" << theme << "\",\n"
+           << "    \"renpySdkPath\": \"" << JsonEscape(editor.renpy_sdk_path.ToStdString()) << "\"\n"
            << "  },\n"
            << "  \"recentProjects\": [";
     for (std::size_t index = 0; index < recent_projects.size(); ++index) {
