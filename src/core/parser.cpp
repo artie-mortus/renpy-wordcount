@@ -303,6 +303,31 @@ std::size_t count_words(std::string_view text) {
     return count;
 }
 
+std::vector<std::string> word_tokens(std::string_view text) {
+    const std::string clean = clean_renpy_text(text);
+    std::vector<std::string> result;
+    std::size_t word_start = std::string::npos;
+    for (std::size_t i = 0; i < clean.size();) {
+        const auto [point, length] = decode_utf8(clean, i);
+        if (word_codepoint(point)) {
+            if (word_start == std::string::npos) word_start = i;
+        } else {
+            const bool connector = point == '\'' || point == '-' || point == 0x2019;
+            const auto next_offset = i + length;
+            const bool followed_by_word = next_offset < clean.size() &&
+                word_codepoint(decode_utf8(clean, next_offset).first);
+            if (!(connector && word_start != std::string::npos && followed_by_word) &&
+                word_start != std::string::npos) {
+                result.push_back(clean.substr(word_start, i - word_start));
+                word_start = std::string::npos;
+            }
+        }
+        i += length;
+    }
+    if (word_start != std::string::npos) result.push_back(clean.substr(word_start));
+    return result;
+}
+
 ScriptAnalysis analyze_with_characters(std::string_view script,
                                        const std::map<std::string, std::string>& names,
                                        const std::map<std::string, std::string>& colors,

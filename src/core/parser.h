@@ -62,6 +62,7 @@ struct AnalysisOptions {
 
 std::string clean_renpy_text(std::string_view text);
 std::size_t count_words(std::string_view text);
+std::vector<std::string> word_tokens(std::string_view text);
 ScriptAnalysis analyze_script(std::string_view script, AnalysisOptions options = {});
 ScriptAnalysis analyze_project(const std::vector<NamedScript>& scripts, AnalysisOptions options = {});
 std::string analysis_json(const ScriptAnalysis& analysis);
