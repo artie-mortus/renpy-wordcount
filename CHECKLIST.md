@@ -72,8 +72,8 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 7.1 — Route graph data model · full · ≤850,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `6d66c65`
 - [x] Step 7.2 — Route walker · full · ≤950,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `6deae21`
 - [x] Step 7.3 — Route details UI · mini · ≤650,000 tok — done 2026-07-12, commit `5aed522`
-- [ ] Step 7.4 — Basic flow map rendering · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
-- [ ] Step 7.5 — Flow map layout and interaction · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED**
+- [x] Step 7.4 — Basic flow map rendering · full · ≤850,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `ed8b4ed`
+- [x] Step 7.5 — Flow map layout and interaction · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `1afca3d`
 
 ## Phase 8 — Long-tail production tools (deferred)
 
@@ -98,5 +98,5 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 
 - [x] M1 daily-driver editor usable (end of Phase 1 + 2.7) — reached 2026-07-11
 - [x] M2 parity harness green — correctness anchor (end of Phase 2) — reached 2026-07-11: ten JS/native parity tests, all diffs empty
-- [ ] Core parity (end of Phase 7)
+- [x] Core parity (end of Phase 7) — reached 2026-07-12
 - [ ] Release (end of Phase 9; Phase 8 deferred, optional)
