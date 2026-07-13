@@ -65,7 +65,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 6.5 — Lint integration · mini · ≤650,000 tok — done 2026-07-12, commit `26cb3fa`
 - [x] Step 6.6 — Translation and dialogue commands · mini · ≤650,000 tok — done 2026-07-12, commit `0aca757`
 - [x] Step 6.7 — Asset browser · mini · ≤850,000 tok — done 2026-07-12, commit `748476e`
-- [ ] Step 6.8 — Coverage collection · full · ≤900,000 tok
+- [x] Step 6.8 — Coverage collection · full · ≤900,000 tok — done 2026-07-12, commit `8188e3e`
 
 ## Phase 7 — Routes and flow map
 
