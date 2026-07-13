@@ -21,6 +21,7 @@
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
 class wxKeyEvent;
+class wxPanel;
 
 namespace say_count::ui {
 
@@ -71,6 +72,7 @@ public:
     void SelectFileIndex(std::size_t index);
     void SetCountMenuChoices(bool enabled);
     wxString CurrentFilePath() const;
+    wxString CurrentFileName() const;
     std::size_t CurrentLine() const;
     bool SaveAll();
     bool OpenAndJump(const wxString& path, std::size_t line);
@@ -91,6 +93,9 @@ private:
     bool SaveEditor(wxStyledTextCtrl* editor, const wxString& path);
     bool ConfirmDiscard(size_t index);
     void ConfigureEditor(wxStyledTextCtrl* editor);
+    void CreateEmptyHint(wxStyledTextCtrl* editor);
+    void UpdateEmptyHint(wxStyledTextCtrl* editor);
+    void PositionEmptyHint(wxStyledTextCtrl* editor);
     void UpdateTabLabel(wxStyledTextCtrl* editor);
     void OnPageClose(wxAuiNotebookEvent& event);
     void OnPageClosed(wxAuiNotebookEvent& event);
@@ -118,6 +123,7 @@ private:
     wxTimer analysis_timer_;
     std::unordered_map<wxStyledTextCtrl*, std::unordered_set<std::string>> speakers_;
     std::unordered_map<wxStyledTextCtrl*, CompletionResult> completions_;
+    std::unordered_map<wxStyledTextCtrl*, wxPanel*> empty_hints_;
     CompletionIndex completion_index_;
     std::string find_query_;
     FindOptions find_options_;

@@ -6,6 +6,8 @@
 
 #include <wx/aboutdlg.h>
 #include <wx/aui/dockart.h>
+#include <wx/control.h>
+#include <wx/dcbuffer.h>
 #include <wx/display.h>
 #include <wx/dnd.h>
 #include <wx/filedlg.h>
@@ -99,6 +101,71 @@ enum MenuId {
     kShowDiagnostics,
 };
 
+class CommandButton final : public wxControl {
+public:
+    CommandButton(wxWindow* parent, const wxString& label, bool primary = false)
+        : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                    wxBORDER_NONE | wxWANTS_CHARS), label_(label), primary_(primary) {
+        SetBackgroundStyle(wxBG_STYLE_PAINT);
+        SetFont(style::BodyFont(9, wxFONTWEIGHT_BOLD));
+        const wxSize text = GetTextExtent(label_);
+        SetMinSize(FromDIP(wxSize(text.x + 30, 36)));
+        Bind(wxEVT_PAINT, &CommandButton::OnPaint, this);
+        Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) { hovered_ = true; Refresh(); });
+        Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) { hovered_ = false; pressed_ = false; Refresh(); });
+        Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) { pressed_ = true; SetFocus(); CaptureMouse(); Refresh(); });
+        Bind(wxEVT_LEFT_UP, [this](wxMouseEvent& event) {
+            if (HasCapture()) ReleaseMouse();
+            const bool activate = pressed_ && GetClientRect().Contains(event.GetPosition());
+            pressed_ = false; Refresh();
+            if (activate) SendClick();
+        });
+        Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& event) {
+            if (event.GetKeyCode() == WXK_SPACE || event.GetKeyCode() == WXK_RETURN) SendClick();
+            else event.Skip();
+        });
+        Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) { Refresh(); event.Skip(); });
+        Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) { Refresh(); event.Skip(); });
+    }
+
+private:
+    void SendClick() {
+        wxCommandEvent event(wxEVT_BUTTON, GetId());
+        event.SetEventObject(this);
+        ProcessWindowEvent(event);
+    }
+
+    void OnPaint(wxPaintEvent&) {
+        wxAutoBufferedPaintDC dc(this);
+        dc.SetBackground(wxBrush(style::Colors().ink));
+        dc.Clear();
+        wxColour fill = primary_ ? style::Colors().cue : wxColour("#243650");
+        if (hovered_) fill = primary_ ? wxColour("#D6AB4B") : wxColour("#304660");
+        if (pressed_) fill = primary_ ? wxColour("#B8892D") : wxColour("#1E2D43");
+        dc.SetPen(wxPen(primary_ ? style::Colors().cue : wxColour("#526178"), 1));
+        dc.SetBrush(wxBrush(fill));
+        wxRect box = GetClientRect();
+        box.Deflate(1);
+        dc.DrawRoundedRectangle(box, FromDIP(6));
+        if (HasFocus()) {
+            wxRect focus = box;
+            focus.Deflate(3);
+            dc.SetPen(wxPen(primary_ ? style::Colors().ink : style::Colors().cue, 1, wxPENSTYLE_DOT));
+            dc.SetBrush(*wxTRANSPARENT_BRUSH);
+            dc.DrawRoundedRectangle(focus, FromDIP(4));
+        }
+        dc.SetFont(GetFont());
+        dc.SetTextForeground(primary_ ? style::Colors().ink : style::Colors().white);
+        const wxSize text = dc.GetTextExtent(label_);
+        dc.DrawText(label_, (GetClientSize().x - text.x) / 2, (GetClientSize().y - text.y) / 2);
+    }
+
+    wxString label_;
+    bool primary_ = false;
+    bool hovered_ = false;
+    bool pressed_ = false;
+};
+
 class ScriptDropTarget final : public wxFileDropTarget {
 public:
     explicit ScriptDropTarget(EditorNotebook* notebook) : notebook_(notebook) {}
@@ -164,7 +231,8 @@ MainFrame::MainFrame()
                 workspace_name_->SetLabel(wxFileName(wxString::FromUTF8(project_->root)).GetFullName());
             } else {
                 const wxString path = notebook_->CurrentFilePath();
-                workspace_name_->SetLabel(path.empty() ? "Loose script" : wxFileName(path).GetFullName());
+                workspace_name_->SetLabel(path.empty() ? notebook_->CurrentFileName()
+                                                        : wxFileName(path).GetFullName());
             }
         }
         if (focus_count_) {
@@ -302,7 +370,7 @@ MainFrame::MainFrame()
                          .Caption("Speaker Statistics").BestSize(340, 500).MinSize(260, 180)
                          .CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(outline_, wxAuiPaneInfo().Left().Name("outline").Caption("Outline")
-                         .BestSize(280, 500).MinSize(200, 160).CloseButton(true).MaximizeButton(true));
+                         .BestSize(280, 500).MinSize(200, 160).CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(renpy_log_, wxAuiPaneInfo().Bottom().Name("renpy-log").Caption("Ren'Py Log")
                          .BestSize(-1, 190).MinSize(320, 100).CloseButton(true).Hide());
     manager_.AddPane(renpy_lint_, wxAuiPaneInfo().Bottom().Name("renpy-lint").Caption("Official Ren'Py Lint")
@@ -421,7 +489,9 @@ void MainFrame::BuildCommandBar() {
     layout->Add(divider, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 20);
 
     auto* context = new wxBoxSizer(wxVERTICAL);
-    workspace_name_ = new wxStaticText(command_bar_, wxID_ANY, "Loose script");
+    const wxString initial_name = notebook_ ? notebook_->CurrentFileName() : wxString{};
+    workspace_name_ = new wxStaticText(command_bar_, wxID_ANY,
+                                        initial_name.empty() ? "Loose script" : initial_name);
     workspace_name_->SetFont(style::BodyFont(10, wxFONTWEIGHT_BOLD));
     workspace_name_->SetForegroundColour(colors.white);
     cue_summary_ = new wxStaticText(command_bar_, wxID_ANY, wxString::FromUTF8(
@@ -435,24 +505,18 @@ void MainFrame::BuildCommandBar() {
     layout->Add(context, 0, wxALIGN_CENTER_VERTICAL);
     layout->AddStretchSpacer();
 
-    auto make_action = [&](const wxString& label) {
-        auto* button = new wxButton(command_bar_, wxID_ANY, label, wxDefaultPosition,
-                                    wxDefaultSize, wxBU_EXACTFIT);
-        button->SetFont(style::BodyFont(9, wxFONTWEIGHT_BOLD));
-        button->SetForegroundColour(colors.white);
-        button->SetBackgroundColour(wxColour("#2A3A52"));
-        button->SetMinSize(wxSize(-1, 34));
+    auto make_action = [&](const wxString& label, bool primary = false) {
+        auto* button = new CommandButton(command_bar_, label, primary);
         layout->Add(button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
         return button;
     };
-    auto* find = make_action("Find");
+    auto* open = make_action("Open script");
     auto* save = make_action("Save");
     auto* production = make_action("Production");
-    auto* run = make_action("Run project");
-    style::StylePrimaryButton(run);
+    auto* run = make_action("Run project", true);
     layout->AddSpacer(8);
 
-    find->Bind(wxEVT_BUTTON, &MainFrame::OnOpenFind, this);
+    open->Bind(wxEVT_BUTTON, &MainFrame::OnOpen, this);
     save->Bind(wxEVT_BUTTON, &MainFrame::OnSave, this);
     production->Bind(wxEVT_BUTTON, &MainFrame::OnShowProduction, this);
     run->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
@@ -501,7 +565,6 @@ void MainFrame::BuildMenus() {
     view->AppendCheckItem(kFocusMode, "&Focus Mode\tCtrl+Shift+F", "Hide nonessential panels");
     view->AppendSeparator();
     view->AppendCheckItem(kShowOutline, "Outline panel");
-    view->Check(kShowOutline, true);
     view->AppendCheckItem(kShowSpeakerStats, "Speaker statistics panel");
     view->AppendCheckItem(kShowDiagnostics, "Diagnostics panel");
     view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");

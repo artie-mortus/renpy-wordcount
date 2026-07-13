@@ -11,6 +11,9 @@
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/msgdlg.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
 #include <wx/stc/stc.h>
 #include <wx/settings.h>
 #include <wx/aui/tabart.h>
@@ -124,6 +127,7 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_ex
             if (editor && FilePath(editor).empty() && !editor->GetModify() && editor->GetText().empty()) {
                 speakers_.erase(editor);
                 completions_.erase(editor);
+                empty_hints_.erase(editor);
                 DeletePage(index);
             }
         }
@@ -145,6 +149,7 @@ bool EditorNotebook::OpenProjectFiles(const std::vector<wxString>& paths) {
             editor->GetText().empty()) {
             speakers_.erase(editor);
             completions_.erase(editor);
+            empty_hints_.erase(editor);
             DeletePage(index);
             removed = true;
         }
@@ -294,6 +299,80 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->MarkerDefine(kDiagnosticWarningMarker, wxSTC_MARK_CIRCLE, wxColour("#ffffff"), wxColour("#d49a13"));
     editor->MarkerDefine(kDiagnosticNoticeMarker, wxSTC_MARK_CIRCLE, wxColour("#ffffff"), wxColour("#4186c9"));
     editor->Colourise(0, -1);
+    CreateEmptyHint(editor);
+    UpdateEmptyHint(editor);
+}
+
+void EditorNotebook::CreateEmptyHint(wxStyledTextCtrl* editor) {
+    if (!editor || empty_hints_.count(editor)) return;
+    auto* hint = new wxPanel(editor, wxID_ANY, wxDefaultPosition, editor->FromDIP(wxSize(480, 230)));
+    hint->SetName("empty-script-hint");
+    auto* layout = new wxBoxSizer(wxVERTICAL);
+
+    auto* kicker = new wxStaticText(hint, wxID_ANY, "NEW SCENE");
+    kicker->SetName("empty-kicker");
+    kicker->SetFont(style::UtilityFont(8, wxFONTWEIGHT_BOLD));
+    auto* heading = new wxStaticText(hint, wxID_ANY, "Give the scene a place to begin.");
+    heading->SetFont(style::BodyFont(18, wxFONTWEIGHT_BOLD));
+    auto* detail = new wxStaticText(
+        hint, wxID_ANY,
+        "Start typing, open an existing .rpy script, or connect a project folder.");
+    detail->SetFont(style::BodyFont(10));
+    auto* example = new wxStaticText(
+        hint, wxID_ANY, "label start:\n    narrator \"The story starts here.\"");
+    example->SetName("empty-code");
+    example->SetFont(style::UtilityFont(10));
+    auto* shortcuts = new wxStaticText(
+        hint, wxID_ANY, "CTRL+O  OPEN SCRIPT     CTRL+N  NEW TAB     CTRL+K  SHORTCUTS");
+    shortcuts->SetName("empty-shortcuts");
+    shortcuts->SetFont(style::UtilityFont(8, wxFONTWEIGHT_BOLD));
+
+    layout->Add(kicker, 0, wxBOTTOM, 8);
+    layout->Add(heading, 0, wxBOTTOM, 8);
+    layout->Add(detail, 0, wxBOTTOM, 20);
+    layout->Add(example, 0, wxBOTTOM, 20);
+    layout->Add(shortcuts);
+    hint->SetSizer(layout);
+    empty_hints_[editor] = hint;
+    editor->Bind(wxEVT_SIZE, [this, editor](wxSizeEvent& event) {
+        PositionEmptyHint(editor);
+        event.Skip();
+    });
+    PositionEmptyHint(editor);
+}
+
+void EditorNotebook::UpdateEmptyHint(wxStyledTextCtrl* editor) {
+    const auto found = empty_hints_.find(editor);
+    if (found == empty_hints_.end() || !found->second) return;
+    auto* hint = found->second;
+    const bool empty = editor->GetText().Strip(wxString::both).empty();
+    hint->Show(empty);
+    if (!empty) return;
+    const bool dark = settings_.theme == app::EditorTheme::Dark ||
+                      (settings_.theme == app::EditorTheme::System &&
+                       wxSystemSettings::GetAppearance().IsDark());
+    const wxColour background(dark ? "#111B2B" : "#FCFBF8");
+    hint->SetBackgroundColour(background);
+    for (auto* child : hint->GetChildren()) {
+        child->SetBackgroundColour(background);
+        const wxString& name = child->GetName();
+        child->SetForegroundColour(name == "empty-kicker" ? style::Colors().cue :
+            name == "empty-code" ? (dark ? wxColour("#C29AB8") : style::Colors().plum) :
+            name == "empty-shortcuts" ? (dark ? wxColour("#8190A4") : style::Colors().ink_soft) :
+            (dark ? wxColour("#E8ECF1") : style::Colors().ink));
+    }
+    hint->Raise();
+    PositionEmptyHint(editor);
+}
+
+void EditorNotebook::PositionEmptyHint(wxStyledTextCtrl* editor) {
+    const auto found = empty_hints_.find(editor);
+    if (found == empty_hints_.end() || !found->second) return;
+    auto* hint = found->second;
+    const wxSize size = hint->GetSize();
+    const wxSize client = editor->GetClientSize();
+    hint->SetPosition(wxPoint(std::max(editor->FromDIP(72), (client.x - size.x) / 2),
+                              std::max(editor->FromDIP(72), (client.y - size.y) / 3)));
 }
 
 void EditorNotebook::RefreshSpeakers(wxStyledTextCtrl* editor) {
@@ -358,6 +437,7 @@ void EditorNotebook::OnModified(wxStyledTextEvent& event) {
         event.Skip();
         return;
     }
+    UpdateEmptyHint(editor);
     const wxString changed = event.GetText();
     const int line_number = editor->LineFromPosition(std::max(0, event.GetPosition()));
     const wxString current = editor->GetLine(line_number);
@@ -691,6 +771,12 @@ wxString EditorNotebook::CurrentFilePath() const {
     return selection == wxNOT_FOUND ? wxString{} : FilePath(EditorAt(static_cast<std::size_t>(selection)));
 }
 
+wxString EditorNotebook::CurrentFileName() const {
+    const int selection = GetSelection();
+    const auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
+    return editor ? editor->GetName() : wxString{};
+}
+
 std::size_t EditorNotebook::CurrentLine() const {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
@@ -774,6 +860,7 @@ bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scrip
         if (!editor || retained.count(editor) != 0) continue;
         speakers_.erase(editor);
         completions_.erase(editor);
+        empty_hints_.erase(editor);
         RemovePage(index);
         editor->Destroy();
     }
@@ -1015,6 +1102,7 @@ void EditorNotebook::CloseCurrentTab() {
     if (auto* editor = EditorAt(static_cast<size_t>(selection))) {
         speakers_.erase(editor);
         completions_.erase(editor);
+        empty_hints_.erase(editor);
     }
     DeletePage(static_cast<size_t>(selection));
     if (GetPageCount() == 0) {
@@ -1045,6 +1133,7 @@ void EditorNotebook::OnPageClose(wxAuiNotebookEvent& event) {
     auto* editor = EditorAt(static_cast<size_t>(selection));
     speakers_.erase(editor);
     completions_.erase(editor);
+    empty_hints_.erase(editor);
     event.Skip();
 }
 
