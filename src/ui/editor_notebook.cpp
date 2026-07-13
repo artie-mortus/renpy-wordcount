@@ -671,7 +671,14 @@ bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scrip
             editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
             AddPage(editor, editor->GetName(), false);
         }
-        editor->SetText(NormalizeTabs(wxString::FromUTF8(script.content)));
+        const wxString restored = NormalizeTabs(wxString::FromUTF8(script.content));
+        if (editor->GetText() != restored) {
+            editor->BeginUndoAction();
+            editor->SetTargetStart(0);
+            editor->SetTargetEnd(editor->GetTextLength());
+            editor->ReplaceTarget(restored);
+            editor->EndUndoAction();
+        }
         RefreshSpeakers(editor);
         editor->Colourise(0, -1);
         UpdateTabLabel(editor);

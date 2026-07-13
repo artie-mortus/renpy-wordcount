@@ -54,7 +54,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 48 | inline editor diagnostics for syntax, unresolved-label, quote, speaker, and long-line checks | Done — engine (Step 4.6), squiggles/gutter/tooltips/panel (Step 4.7) |
 | 49 | project-wide text search across every `.rpy` file in the connected game folder (or all open tabs offline) | Done — open tabs (Step 4.5), recursively connected folder (Step 5.1) |
 | 50 | folder-sync conflict review with a side-by-side local/disk comparison before choosing a version | Done (Step 5.3) |
-| 51 | safe project-wide character-alias and label rename with an affected-line preview before applying | Pending |
+| 51 | safe project-wide character-alias and label rename with an affected-line preview before applying | Done (Step 5.7) |
 | 52 | prose panel: vocabulary size, average sentence length per speaker, and overused words/phrases as clickable chips that open find | Pending |
 | 53 | local browser autosave | Pending |
 | 54 | optional save folder: pick a directory on your computer (Chrome/Edge) and autosave writes the `.rpy` files there | Pending |

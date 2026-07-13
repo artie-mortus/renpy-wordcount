@@ -18,6 +18,7 @@ add_library(say_count_core STATIC
     src/core/editor_commands.cpp
     src/core/project.cpp
     src/core/project_bundle.cpp
+    src/core/rename.cpp
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
@@ -32,6 +33,7 @@ add_executable(say-count
     src/ui/conflict_dialog.cpp
     src/ui/snapshot_dialog.cpp
     src/ui/main_frame.cpp
+    src/ui/rename_dialog.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
 )
@@ -62,6 +64,7 @@ if(BUILD_TESTING)
         tests/editor_commands_test.cpp
         tests/project_test.cpp
         tests/project_bundle_test.cpp
+        tests/rename_test.cpp
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp

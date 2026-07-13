@@ -29,6 +29,7 @@
 #include "ui/diagnostics_panel.h"
 #include "ui/conflict_dialog.h"
 #include "ui/snapshot_dialog.h"
+#include "ui/rename_dialog.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -64,6 +65,7 @@ enum MenuId {
     kManageSnapshots,
     kImportProject,
     kExportProject,
+    kRenameSymbol,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -176,6 +178,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnManageSnapshots, this, kManageSnapshots);
     Bind(wxEVT_MENU, &MainFrame::OnImportProject, this, kImportProject);
     Bind(wxEVT_MENU, &MainFrame::OnExportProject, this, kExportProject);
+    Bind(wxEVT_MENU, &MainFrame::OnRenameSymbol, this, kRenameSymbol);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
     snapshot_timer_.Start(10 * 60 * 1000);
 }
@@ -218,6 +221,7 @@ void MainFrame::BuildMenus() {
     edit->AppendSeparator();
     edit->Append(kGoToLine, "&Go to Line…\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
+    edit->Append(kRenameSymbol, "Rename Ren'Py Symbol…", "Preview and safely rename an alias or label project-wide");
     auto* view = new wxMenu();
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
@@ -519,6 +523,18 @@ void MainFrame::OnExportProject(wxCommandEvent&) {
     }
     imported_bundle_ = bundle;
     SetStatusText("Project exported");
+}
+
+void MainFrame::OnRenameSymbol(wxCommandEvent&) {
+    RenameDialog dialog(this, notebook_->ProjectScripts());
+    if (dialog.ShowModal() != wxID_OK || !dialog.plan()) return;
+    const std::size_t active = notebook_->CurrentFileIndex();
+    if (!TakeSnapshot(false, "Before renaming " + dialog.original_name())) return;
+    const std::size_t changes = dialog.plan()->changes.size();
+    if (!notebook_->RestoreProjectScripts(dialog.plan()->files)) return;
+    notebook_->SelectFileIndex(active);
+    SetStatusText(wxString::Format("Renamed symbol in %zu line%s — changes are unsaved", changes,
+                                   changes == 1 ? "" : "s"));
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {

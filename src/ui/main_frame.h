@@ -85,6 +85,7 @@ private:
     void OnSnapshotTimer(wxTimerEvent& event);
     void OnImportProject(wxCommandEvent& event);
     void OnExportProject(wxCommandEvent& event);
+    void OnRenameSymbol(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
