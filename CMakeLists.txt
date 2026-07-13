@@ -24,6 +24,7 @@ add_library(say_count_core STATIC
     src/core/renpy_lint.cpp
     src/core/assets.cpp
     src/core/coverage.cpp
+    src/core/routes.cpp
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
@@ -79,6 +80,7 @@ if(BUILD_TESTING)
         tests/renpy_lint_test.cpp
         tests/assets_test.cpp
         tests/coverage_test.cpp
+        tests/routes_test.cpp
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp
