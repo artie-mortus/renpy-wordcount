@@ -59,7 +59,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 ## Phase 6 — Ren'Py integration
 
 - [x] Step 6.1 — Ren'Py SDK detection and settings · mini · ≤550,000 tok — done 2026-07-12, commit `cd1404c`
-- [ ] Step 6.2 — Launch and stop Ren'Py · mini · ≤800,000 tok
+- [x] Step 6.2 — Launch and stop Ren'Py · mini · ≤800,000 tok — done 2026-07-12, commit `3b1436d`
 - [ ] Step 6.3 — Warp and Interactive Director · full · ≤750,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 6.4 — Runtime state presets · full · ≤850,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 6.5 — Lint integration · mini · ≤650,000 tok
