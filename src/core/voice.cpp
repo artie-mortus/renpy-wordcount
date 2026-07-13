@@ -106,6 +106,72 @@ std::optional<VoiceStatus> parse_voice_status(std::string_view status) {
     return std::nullopt;
 }
 
+std::string voice_tracking_csv(const std::vector<VoiceLine>& rows,
+                               const std::map<std::string, VoiceEntry>& entries) {
+    auto quote = [](std::string_view value) {
+        std::string result = "\"";
+        for (const char character : value) { result += character; if (character == '\"') result += '\"'; }
+        return result + '\"';
+    };
+    std::ostringstream output;
+    output << "id,file,line,speaker,text,status,voice_file,notes\n";
+    for (const auto& row : voice_script_rows(rows)) {
+        const auto found = entries.find(row.id);
+        const VoiceEntry entry = found == entries.end() ? VoiceEntry{} : found->second;
+        output << quote(row.id) << ',' << quote(row.file) << ',' << quote(std::to_string(row.line)) << ','
+               << quote(row.speaker) << ',' << quote(row.text) << ','
+               << quote(voice_status_name(entry.status)) << ',' << quote(entry.voice_file) << ','
+               << quote(entry.notes) << '\n';
+    }
+    return output.str();
+}
+
+std::string voice_script_html(const std::vector<VoiceLine>& rows,
+                              const std::map<std::string, VoiceEntry>& entries,
+                              std::string_view speaker, bool include_source) {
+    auto escape = [](std::string_view value) {
+        std::string result;
+        for (const char character : value) {
+            switch (character) {
+                case '&': result += "&amp;"; break;
+                case '<': result += "&lt;"; break;
+                case '>': result += "&gt;"; break;
+                case '\"': result += "&quot;"; break;
+                case '\'': result += "&#39;"; break;
+                default: result += character;
+            }
+        }
+        return result;
+    };
+    const auto selected = voice_script_rows(rows, speaker);
+    const std::string title = speaker.empty() ? "Full Cast — Voice Actor Script"
+                                               : std::string(speaker) + " — Voice Actor Script";
+    std::ostringstream output;
+    output << "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>"
+           << escape(title) << "</title><style>body{max-width:800px;margin:auto;padding:2rem;font:17px Georgia,serif;color:#191713}h1{border-bottom:3px double #8b6b31;padding-bottom:1rem}h2{margin-top:2rem;border-bottom:1px solid #cabd9e}.line{display:grid;grid-template-columns:2rem 1fr;gap:.8rem;padding:1rem 0;border-bottom:1px solid #ded4bd;break-inside:avoid}.speaker,.meta{font:12px ui-monospace,monospace}.speaker{font-weight:bold;text-transform:uppercase}.meta{color:#6c6253}@media print{body{padding:0}}</style></head><body><h1>"
+           << escape(title) << "</h1><p>" << selected.size() << " lines</p>";
+    std::string scene;
+    for (std::size_t index = 0; index < selected.size(); ++index) {
+        const auto& row = selected[index];
+        const std::string next_scene = row.file + ":" + row.label;
+        if (next_scene != scene) {
+            scene = next_scene;
+            output << "<h2>" << escape(row.label) << "</h2>";
+            if (include_source) output << "<p class=\"meta\">" << escape(row.file) << "</p>";
+        }
+        const auto found = entries.find(row.id);
+        const VoiceEntry entry = found == entries.end() ? VoiceEntry{} : found->second;
+        output << "<article class=\"line\"><div>" << index + 1 << "</div><div><div class=\"speaker\">"
+               << escape(row.speaker) << "</div><p>" << escape(row.text) << "</p><p class=\"meta\">"
+               << escape(voice_status_name(entry.status));
+        if (!entry.voice_file.empty()) output << " · Voice file: " << escape(entry.voice_file);
+        if (!entry.notes.empty()) output << " · " << escape(entry.notes);
+        if (include_source) output << " · Source " << escape(row.file) << ':' << row.line;
+        output << "</p></div></article>";
+    }
+    return output.str() + "</body></html>\n";
+}
+
 std::map<std::string, VoiceEntry> VoiceStore::Load(std::string* error) const {
     std::map<std::string, VoiceEntry> result;
     std::ifstream input(path_, std::ios::binary);

@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <filesystem>
 
 #include "core/voice.h"
@@ -40,4 +41,25 @@ TEST_CASE("voice tracker state saves and reloads filenames notes and statuses") 
     CHECK(loaded.at("script.rpy:3").notes == "Clean take\nkeep");
     CHECK(loaded.at("章.rpy:8").status == VoiceStatus::retake);
     std::filesystem::remove(path);
+}
+
+TEST_CASE("voice exports preserve role totals statuses context and escaping") {
+    const auto rows = parse_voice_dialogue({{
+        "script.rpy", "define e = Character(\"Eileen\")\nlabel start:\n    e \"Hello & goodbye.\"\n    \"Narration.\"",
+    }});
+    const std::map<std::string, VoiceEntry> entries{
+        {"script.rpy:3", {VoiceStatus::approved, "eileen,003.ogg", "Use \"final\""}},
+    };
+    const auto csv = voice_tracking_csv(rows, entries);
+    CHECK(csv.find("\"eileen,003.ogg\"") != std::string::npos);
+    CHECK(csv.find("\"Use \"\"final\"\"\"") != std::string::npos);
+    CHECK(std::count(csv.begin(), csv.end(), '\n') == 3);
+
+    const auto role = voice_script_html(rows, entries, "Eileen", true);
+    CHECK(role.find("1 lines") != std::string::npos);
+    CHECK(role.find("Hello &amp; goodbye.") != std::string::npos);
+    CHECK(role.find("Source script.rpy:3") != std::string::npos);
+    CHECK(role.find("Narration") == std::string::npos);
+    const auto no_context = voice_script_html(rows, entries, {}, false);
+    CHECK(no_context.find("Source script.rpy") == std::string::npos);
 }

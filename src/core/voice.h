@@ -35,6 +35,11 @@ std::vector<VoiceLine> voice_script_rows(const std::vector<VoiceLine>& rows,
                                          std::string_view speaker = {});
 std::string voice_status_name(VoiceStatus status);
 std::optional<VoiceStatus> parse_voice_status(std::string_view status);
+std::string voice_tracking_csv(const std::vector<VoiceLine>& rows,
+                               const std::map<std::string, VoiceEntry>& entries);
+std::string voice_script_html(const std::vector<VoiceLine>& rows,
+                              const std::map<std::string, VoiceEntry>& entries,
+                              std::string_view speaker = {}, bool include_source = true);
 
 class VoiceStore {
 public:
