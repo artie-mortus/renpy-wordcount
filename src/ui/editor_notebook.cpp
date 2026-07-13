@@ -798,6 +798,36 @@ bool EditorNotebook::SaveAll() {
     return true;
 }
 
+std::vector<WorkspaceFileState> EditorNotebook::CaptureWorkspaceFiles() const {
+    std::vector<WorkspaceFileState> files;
+    for (std::size_t index = 0; index < GetPageCount(); ++index) {
+        auto* editor = EditorAt(index);
+        const wxString path = FilePath(editor);
+        if (!editor || path.empty()) continue;
+        files.push_back({path.ToStdString(wxConvUTF8),
+                         static_cast<std::size_t>(std::max(0, editor->GetCurrentPos())),
+                         static_cast<std::size_t>(std::max(0, editor->GetFirstVisibleLine()))});
+    }
+    return files;
+}
+
+void EditorNotebook::RestoreWorkspaceViews(const std::vector<WorkspaceFileState>& files,
+                                           std::string_view active_file) {
+    for (const auto& saved : files) {
+        const wxString path = wxFileName(wxString::FromUTF8(saved.path)).GetAbsolutePath();
+        for (std::size_t index = 0; index < GetPageCount(); ++index) {
+            auto* editor = EditorAt(index);
+            if (!editor || FilePath(editor) != path) continue;
+            editor->GotoPos(std::min<int>(static_cast<int>(saved.caret), editor->GetTextLength()));
+            editor->SetFirstVisibleLine(std::min<int>(static_cast<int>(saved.first_visible_line),
+                                                       std::max(0, editor->GetLineCount() - 1)));
+            if (saved.path == active_file) SetSelection(index);
+            break;
+        }
+    }
+    AnalyzeActive();
+}
+
 bool EditorNotebook::OpenAndJump(const wxString& path, std::size_t line) {
     const wxString absolute = wxFileName(path).GetAbsolutePath();
     if (!OpenFiles({absolute})) return false;

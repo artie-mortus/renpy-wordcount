@@ -43,8 +43,11 @@
 #include "ui/route_panel.h"
 #include "ui/production_panel.h"
 #include "ui/style.h"
+#include "ui/palette_dialog.h"
 #include "core/version.h"
 #include "core/indent.h"
+#include "core/navigator.h"
+#include "core/workspace.h"
 
 namespace say_count::ui {
 namespace {
@@ -99,6 +102,8 @@ enum MenuId {
     kShowOutline,
     kShowSpeakerStats,
     kShowDiagnostics,
+    kQuickOpen,
+    kCommandPalette,
 };
 
 class CommandButton final : public wxControl {
@@ -396,6 +401,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnQuit, this, wxID_EXIT);
     Bind(wxEVT_MENU, &MainFrame::OnNewTab, this, wxID_NEW);
     Bind(wxEVT_MENU, &MainFrame::OnOpen, this, wxID_OPEN);
+    Bind(wxEVT_MENU, &MainFrame::OnQuickOpen, this, kQuickOpen);
+    Bind(wxEVT_MENU, &MainFrame::OnCommandPalette, this, kCommandPalette);
     Bind(wxEVT_MENU, &MainFrame::OnSave, this, wxID_SAVE);
     Bind(wxEVT_MENU, &MainFrame::OnSaveAs, this, wxID_SAVEAS);
     Bind(wxEVT_MENU, &MainFrame::OnCloseTab, this, wxID_CLOSE);
@@ -442,6 +449,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
+    RestoreWorkspace();
     snapshot_timer_.Start(10 * 60 * 1000);
     coverage_timer_.Start(750);
 }
@@ -527,6 +535,7 @@ void MainFrame::BuildMenus() {
     auto* file = new wxMenu();
     file->Append(wxID_NEW, "&New\tCtrl+N", "Create a new tab");
     file->Append(wxID_OPEN, "&Open...\tCtrl+O", "Open one or more Ren'Py scripts");
+    file->Append(kQuickOpen, "&Quick Open...\tCtrl+P", "Find a project file, label, or character");
     file->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current script");
     file->Append(wxID_SAVEAS, "Save &As...\tCtrl+Shift+S", "Save the current script under a new name");
     file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
@@ -551,6 +560,8 @@ void MainFrame::BuildMenus() {
     file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
 
     auto* edit = new wxMenu();
+    edit->Append(kCommandPalette, "Command &Palette...\tCtrl+Shift+P");
+    edit->AppendSeparator();
     edit->Append(wxID_FIND, "&Find and Replace...\tCtrl+F");
     edit->Append(kFindNext, "Find &Next\tF3");
     edit->Append(kFindPrevious, "Find &Previous\tShift+F3");
@@ -1613,6 +1624,8 @@ void MainFrame::OnToggleComment(wxCommandEvent&) {
 void MainFrame::OnShowShortcuts(wxCommandEvent&) {
     const wxString shortcuts =
         "Ctrl+F                 Find and replace\n"
+        "Ctrl+P                 Quick Open files, labels, characters\n"
+        "Ctrl+Shift+P           Command Palette\n"
         "F3 / Shift+F3         Next / previous match\n"
         "Ctrl+G                 Go to line\n"
         "Ctrl+S                 Save\n"
@@ -1694,6 +1707,108 @@ void MainFrame::RestoreWindow() {
     if (window->maximized) {
         Maximize();
     }
+}
+
+void MainFrame::RestoreWorkspace() {
+    WorkspaceStore store((settings_.data_directory() + wxFILE_SEP_PATH + "workspace.dat")
+                             .ToStdString(wxConvUTF8));
+    const auto state = store.Load();
+    if (!state) return;
+    if (!state->project_root.empty() && std::filesystem::exists(state->project_root))
+        ConnectProjectFolder(wxString::FromUTF8(state->project_root));
+    std::vector<wxString> paths;
+    for (const auto& file : state->files)
+        if (wxFileName::FileExists(wxString::FromUTF8(file.path)))
+            paths.push_back(wxString::FromUTF8(file.path));
+    if (!paths.empty()) notebook_->OpenFiles(paths, false);
+    notebook_->RestoreWorkspaceViews(state->files, state->active_file);
+    if (!state->perspective.empty()) {
+        manager_.LoadPerspective(wxString::FromUTF8(state->perspective), true);
+        manager_.GetPane("command-bar").Show(true);
+        manager_.Update();
+    }
+    if (GetMenuBar()) {
+        GetMenuBar()->Check(kShowOutline, manager_.GetPane("outline").IsShown());
+        GetMenuBar()->Check(kShowSpeakerStats, manager_.GetPane("speaker-statistics").IsShown());
+        GetMenuBar()->Check(kShowDiagnostics, manager_.GetPane("diagnostics").IsShown());
+    }
+}
+
+void MainFrame::SaveWorkspace() {
+    WorkspaceState state;
+    if (project_) state.project_root = project_->root;
+    state.files = notebook_->CaptureWorkspaceFiles();
+    state.active_file = notebook_->CurrentFilePath().ToStdString(wxConvUTF8);
+    state.perspective = (focus_mode_ ? focus_perspective_ : manager_.SavePerspective())
+                            .ToStdString(wxConvUTF8);
+    WorkspaceStore store((settings_.data_directory() + wxFILE_SEP_PATH + "workspace.dat")
+                             .ToStdString(wxConvUTF8));
+    store.Save(state);
+}
+
+void MainFrame::OnQuickOpen(wxCommandEvent&) {
+    const auto navigation = build_navigation_index(notebook_->ProjectScripts());
+    std::vector<PaletteEntry> entries;
+    entries.reserve(navigation.size());
+    for (std::size_t index = 0; index < navigation.size(); ++index)
+        entries.push_back({wxString::FromUTF8(navigation[index].title),
+                           wxString::FromUTF8(navigation[index].detail),
+                           static_cast<int>(index)});
+    PaletteDialog dialog(this, "Quick Open", "Search files, labels, and characters", std::move(entries));
+    if (dialog.ShowModal() != wxID_OK || dialog.SelectedId() < 0) return;
+    const auto& selected = navigation[static_cast<std::size_t>(dialog.SelectedId())];
+    notebook_->SelectFileIndex(selected.file_index);
+    if (selected.kind != say_count::NavigationKind::File) notebook_->JumpToLine(selected.line);
+    else notebook_->SetFocus();
+}
+
+void MainFrame::DispatchCommand(int id) {
+    wxCommandEvent command(wxEVT_MENU, id);
+    command.SetEventObject(this);
+    if (id == kToggleWrap || id == kFocusMode || id == kShowOutline ||
+        id == kShowSpeakerStats || id == kShowDiagnostics) {
+        const bool checked = id == kToggleWrap ? !editor_settings_.word_wrap :
+            id == kFocusMode ? !focus_mode_ :
+            id == kShowOutline ? !manager_.GetPane("outline").IsShown() :
+            id == kShowSpeakerStats ? !manager_.GetPane("speaker-statistics").IsShown() :
+                                      !manager_.GetPane("diagnostics").IsShown();
+        command.SetInt(checked ? 1 : 0);
+        if (GetMenuBar()) GetMenuBar()->Check(id, checked);
+    }
+    if (id >= kThemeSystem && id <= kThemeDark && GetMenuBar()) GetMenuBar()->Check(id, true);
+    ProcessWindowEvent(command);
+}
+
+void MainFrame::OnCommandPalette(wxCommandEvent&) {
+    const std::vector<PaletteEntry> commands{
+        {"New script", "Ctrl+N · File", wxID_NEW}, {"Open scripts", "Ctrl+O · File", wxID_OPEN},
+        {"Quick Open", "Ctrl+P · Navigation", kQuickOpen}, {"Save", "Ctrl+S · File", wxID_SAVE},
+        {"Save As", "Ctrl+Shift+S · File", wxID_SAVEAS}, {"Close tab", "Ctrl+W · File", wxID_CLOSE},
+        {"Connect project folder", "Project", kConnectProject}, {"Snapshot now", "Project", kSnapshotNow},
+        {"Manage snapshots", "Project", kManageSnapshots}, {"Review external conflicts", "Project", kReviewConflicts},
+        {"Import Say Count project", "File", kImportProject}, {"Export complete project", "File", kExportProject},
+        {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
+        {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},
+        {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
+        {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
+        {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
+        {"Toggle outline", "View", kShowOutline}, {"Toggle speaker statistics", "View", kShowSpeakerStats},
+        {"Toggle diagnostics", "View", kShowDiagnostics}, {"Route details", "View", kShowRoutes},
+        {"Production Desk", "View", kShowProduction}, {"Increase editor font", "Ctrl+= · View", kFontIncrease},
+        {"Decrease editor font", "Ctrl+- · View", kFontDecrease}, {"Reset editor font", "Ctrl+0 · View", kFontReset},
+        {"Use system theme", "View", kThemeSystem}, {"Use light theme", "View", kThemeLight},
+        {"Use dark theme", "View", kThemeDark},
+        {"Run project", "F6 · Ren'Py", kRunRenpy}, {"Run from caret", "F7 · Ren'Py", kWarpRenpy},
+        {"Interactive Director", "Ren'Py", kDirectorRenpy}, {"Runtime state presets", "Ren'Py", kRuntimePresets},
+        {"Run official lint", "Ren'Py", kRunRenpyLint}, {"Generate translations", "Ren'Py", kGenerateTranslations},
+        {"Export dialogue", "Ren'Py", kExportDialogue}, {"Browse project assets", "Ren'Py", kShowAssets},
+        {"Label coverage", "Ren'Py", kShowCoverage}, {"Stop running project", "Shift+F6 · Ren'Py", kStopRenpy},
+        {"Show launch log", "Ren'Py", kShowRenpyLog}, {"Configure Ren'Py SDK", "Ren'Py", kConfigureRenpy},
+        {"Keyboard shortcuts", "Ctrl+K · Help", kShortcutSheet}, {"About Say Count", "Help", wxID_ABOUT}
+    };
+    PaletteDialog dialog(this, "Command Palette", "Type an action", commands);
+    if (dialog.ShowModal() == wxID_OK && dialog.SelectedId() >= 0)
+        DispatchCommand(dialog.SelectedId());
 }
 
 void MainFrame::OnQuit(wxCommandEvent&) {
@@ -1797,6 +1912,7 @@ void MainFrame::OnClose(wxCloseEvent& event) {
     if (normal_geometry_.GetWidth() > 0 && normal_geometry_.GetHeight() > 0) {
         settings_.SaveWindow({normal_geometry_.GetPosition(), normal_geometry_.GetSize(), maximized});
     }
+    SaveWorkspace();
     event.Skip();
 }
 

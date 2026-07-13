@@ -68,6 +68,8 @@ add_library(say_count_core STATIC
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
+    src/core/workspace.cpp
+    src/core/navigator.cpp
 )
 target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VERSION}")
@@ -77,6 +79,7 @@ add_executable(say-count
     src/app/settings.cpp
     src/ui/editor_notebook.cpp
     src/ui/style.cpp
+    src/ui/palette_dialog.cpp
     src/ui/diagnostics_panel.cpp
     src/ui/conflict_dialog.cpp
     src/ui/snapshot_dialog.cpp
@@ -155,6 +158,8 @@ if(BUILD_TESTING)
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp
+        tests/workspace_test.cpp
+        tests/navigator_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 

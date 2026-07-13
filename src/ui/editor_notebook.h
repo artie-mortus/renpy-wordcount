@@ -17,6 +17,7 @@
 #include "core/diagnostics.h"
 #include "core/editor_commands.h"
 #include "core/project.h"
+#include "core/workspace.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
@@ -85,6 +86,9 @@ public:
     void ToggleComments();
     ExternalFileUpdate ReloadExternalFile(const wxString& path);
     bool ApplyExternalVersion(const wxString& path, std::string_view content, bool mark_clean);
+    std::vector<WorkspaceFileState> CaptureWorkspaceFiles() const;
+    void RestoreWorkspaceViews(const std::vector<WorkspaceFileState>& files,
+                               std::string_view active_file);
 
 private:
     wxStyledTextCtrl* EditorAt(size_t index) const;

@@ -2,6 +2,11 @@
 
 Say Count Native is a Linux C++17/wxWidgets conversion of the Say Count Ren'Py editor and dialogue word-counting application.
 
+The last clean workspace is restored automatically, including open files,
+caret/scroll positions, active tab, connected project, and dock layout. Use
+`Ctrl+P` to search project files, labels, and characters, or `Ctrl+Shift+P` to
+search application commands.
+
 ## Build
 
 Install CMake, a C++17 compiler, wxWidgets 3.2 or newer with the `core`, `base`, `stc`, `aui`, `adv`, `html`, and `xml` components, and network access for CMake to fetch Catch2 the first time. Then run:

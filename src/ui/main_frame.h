@@ -67,6 +67,11 @@ private:
     void ReviewExternalConflict(const std::string& key);
     bool TakeSnapshot(bool automatic, std::string label = {});
     void RestoreWindow();
+    void RestoreWorkspace();
+    void SaveWorkspace();
+    void OnQuickOpen(wxCommandEvent& event);
+    void OnCommandPalette(wxCommandEvent& event);
+    void DispatchCommand(int id);
     void OnAbout(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
     void OnCloseTab(wxCommandEvent& event);
