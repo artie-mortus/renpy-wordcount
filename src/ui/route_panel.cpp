@@ -6,6 +6,8 @@
 #include <wx/stattext.h>
 #include <wx/treectrl.h>
 
+#include "ui/flow_map_panel.h"
+
 namespace say_count::ui {
 namespace {
 
@@ -33,9 +35,11 @@ std::string PathName(std::size_t index, const RoutePath& path) {
 RoutePanel::RoutePanel(wxWindow* parent) : wxPanel(parent) {
     auto* layout = new wxBoxSizer(wxVERTICAL);
     summary_ = new wxStaticText(this, wxID_ANY, "No labels yet.");
+    flow_map_ = new FlowMapPanel(this);
     details_ = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                               wxTR_HAS_BUTTONS | wxTR_HIDE_ROOT | wxTR_SINGLE | wxBORDER_NONE);
     layout->Add(summary_, 0, wxEXPAND | wxALL, 10);
+    layout->Add(flow_map_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     layout->Add(details_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     SetSizer(layout);
     details_->Bind(wxEVT_TREE_ITEM_ACTIVATED, &RoutePanel::OnActivated, this);
@@ -44,6 +48,7 @@ RoutePanel::RoutePanel(wxWindow* parent) : wxPanel(parent) {
 
 void RoutePanel::SetReport(std::optional<RouteReport> report) {
     report_ = std::move(report);
+    flow_map_->SetReport(report_);
     Rebuild();
 }
 

@@ -258,7 +258,10 @@ std::optional<RouteReport> compute_routes(const ScriptAnalysis& analysis,
     if (!report.graph.start) return std::nullopt;
 
     std::unordered_map<std::string, std::size_t> words;
-    for (const auto& scene : analysis.scenes) words[scene.name] = scene.words;
+    for (const auto& scene : analysis.scenes) {
+        words[scene.name] = scene.words;
+        report.label_words[scene.name] = scene.words;
+    }
     auto words_of = [&](const std::string& name) {
         const auto found = words.find(name);
         return found == words.end() ? std::size_t{0} : found->second;

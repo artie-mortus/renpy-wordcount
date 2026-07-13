@@ -25,6 +25,7 @@ add_library(say_count_core STATIC
     src/core/assets.cpp
     src/core/coverage.cpp
     src/core/routes.cpp
+    src/core/flow_layout.cpp
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
@@ -45,6 +46,7 @@ add_executable(say-count
     src/ui/asset_panel.cpp
     src/ui/coverage_panel.cpp
     src/ui/route_panel.cpp
+    src/ui/flow_map_panel.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
 )
@@ -82,6 +84,7 @@ if(BUILD_TESTING)
         tests/assets_test.cpp
         tests/coverage_test.cpp
         tests/routes_test.cpp
+        tests/flow_layout_test.cpp
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp

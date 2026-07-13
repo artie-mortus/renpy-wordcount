@@ -82,6 +82,7 @@ struct RouteReport {
     std::size_t condition_branches = 0;
     std::vector<std::string> unreachable;
     bool loops = false;
+    std::map<std::string, std::size_t> label_words;
     std::map<std::string, std::vector<RouteBranchTotal>> branch_totals;
     std::vector<RoutePath> paths;
     bool paths_truncated = false;

@@ -14,6 +14,8 @@ class wxTreeEvent;
 
 namespace say_count::ui {
 
+class FlowMapPanel;
+
 class RoutePanel final : public wxPanel {
 public:
     using JumpHandler = std::function<void(const std::string&, std::size_t)>;
@@ -30,6 +32,7 @@ private:
     std::optional<RouteReport> report_;
     JumpHandler jump_handler_;
     wxStaticText* summary_ = nullptr;
+    FlowMapPanel* flow_map_ = nullptr;
     wxTreeCtrl* details_ = nullptr;
 };
 
