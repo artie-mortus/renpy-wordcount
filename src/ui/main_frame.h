@@ -109,6 +109,9 @@ private:
     void OnRuntimePresets(wxCommandEvent& event);
     bool LaunchRenpyWithRuntime(const std::vector<wxString>& arguments);
     void OnRunRenpyLint(wxCommandEvent& event);
+    void OnGenerateTranslations(wxCommandEvent& event);
+    void OnExportDialogue(wxCommandEvent& event);
+    void RunLocalizationTool(bool dialogue);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -151,6 +154,7 @@ private:
     std::optional<RenpySdk> renpy_sdk_;
     wxMenu* renpy_menu_ = nullptr;
     wxTextCtrl* renpy_log_ = nullptr;
+    wxTextCtrl* renpy_tool_output_ = nullptr;
     RenpyLintPanel* renpy_lint_ = nullptr;
     std::unique_ptr<wxProcess> renpy_process_;
     long renpy_pid_ = 0;

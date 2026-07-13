@@ -104,4 +104,14 @@ RenpyCapabilities renpy_capabilities(std::string_view version) {
     return {supported, supported};
 }
 
+bool valid_renpy_language(std::string_view language) {
+    bool alphanumeric = false;
+    for (const char c : language) {
+        if (c == '_') continue;
+        if (!std::isalnum(static_cast<unsigned char>(c))) return false;
+        alphanumeric = true;
+    }
+    return alphanumeric;
+}
+
 }  // namespace say_count

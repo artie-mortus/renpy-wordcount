@@ -32,5 +32,6 @@ struct RenpyCapabilities {
 };
 
 RenpyCapabilities renpy_capabilities(std::string_view version);
+bool valid_renpy_language(std::string_view language);
 
 }  // namespace say_count

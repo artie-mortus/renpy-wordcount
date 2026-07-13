@@ -80,6 +80,8 @@ enum MenuId {
     kDirectorRenpy,
     kRuntimePresets,
     kRunRenpyLint,
+    kGenerateTranslations,
+    kExportDialogue,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -152,6 +154,9 @@ MainFrame::MainFrame()
             renpy_log_->SetValue(text.length() > 30000 ? text.Right(30000) : text);
     }
     renpy_lint_ = new RenpyLintPanel(this);
+    renpy_tool_output_ = new wxTextCtrl(this, wxID_ANY, "No Ren'Py tool has run yet.",
+                                        wxDefaultPosition, wxDefaultSize,
+                                        wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
     renpy_lint_->SetJumpHandler([this](const RenpyLintIssue& issue) {
         if (!project_) return;
         std::filesystem::path path(issue.file);
@@ -192,6 +197,9 @@ MainFrame::MainFrame()
                          .BestSize(-1, 190).MinSize(320, 100).CloseButton(true).Hide());
     manager_.AddPane(renpy_lint_, wxAuiPaneInfo().Bottom().Name("renpy-lint").Caption("Official Ren'Py Lint")
                          .BestSize(-1, 210).MinSize(360, 120).CloseButton(true).Hide());
+    manager_.AddPane(renpy_tool_output_, wxAuiPaneInfo().Bottom().Name("renpy-tool-output")
+                         .Caption("Ren'Py Tool Output").BestSize(-1, 210).MinSize(360, 120)
+                         .CloseButton(true).Hide());
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
@@ -233,6 +241,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnDirectorRenpy, this, kDirectorRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnRuntimePresets, this, kRuntimePresets);
     Bind(wxEVT_MENU, &MainFrame::OnRunRenpyLint, this, kRunRenpyLint);
+    Bind(wxEVT_MENU, &MainFrame::OnGenerateTranslations, this, kGenerateTranslations);
+    Bind(wxEVT_MENU, &MainFrame::OnExportDialogue, this, kExportDialogue);
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
@@ -308,6 +318,8 @@ void MainFrame::BuildMenus() {
     renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
     renpy_menu_->Append(kRuntimePresets, "Runtime State Presets…");
     renpy_menu_->Append(kRunRenpyLint, "Run Official Lint");
+    renpy_menu_->Append(kGenerateTranslations, "Generate Translations…");
+    renpy_menu_->Append(kExportDialogue, "Export Dialogue…");
     renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
     renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
     renpy_menu_->AppendSeparator();
@@ -852,6 +864,44 @@ void MainFrame::OnRunRenpyLint(wxCommandEvent&) {
                                     : "Official Ren'Py lint found problems");
         })) {
         renpy_lint_->SetResults({}, -1, {});
+    }
+}
+
+void MainFrame::OnGenerateTranslations(wxCommandEvent&) { RunLocalizationTool(false); }
+
+void MainFrame::OnExportDialogue(wxCommandEvent&) { RunLocalizationTool(true); }
+
+void MainFrame::RunLocalizationTool(bool dialogue) {
+    wxTextEntryDialog prompt(this,
+        dialogue ? "Language for dialogue export (for example, english or pt_br):"
+                 : "Language to generate (for example, spanish or pt_br):",
+        dialogue ? "Export Ren'Py dialogue" : "Generate Ren'Py translations");
+    if (prompt.ShowModal() != wxID_OK) return;
+    const std::string language = prompt.GetValue().Strip(wxString::both).ToStdString();
+    if (!valid_renpy_language(language)) {
+        wxMessageBox("Enter a language containing only letters, numbers, and underscores.",
+                     "Invalid language", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    if (!notebook_->SaveAll()) return;
+    const wxString action = dialogue ? "Exporting dialogue" : "Generating translations";
+    renpy_tool_output_->SetValue(action + " for " + wxString::FromUTF8(language) + "…\n");
+    manager_.GetPane("renpy-tool-output").Show(true);
+    manager_.Update();
+    std::vector<wxString> arguments;
+    if (dialogue) arguments = {"dialogue", wxString::FromUTF8(language), "--text", "--strings"};
+    else arguments = {"translate", wxString::FromUTF8(language)};
+    if (!LaunchRenpy(arguments, nullptr,
+        [this, dialogue, language](int code, std::string output) {
+            const std::string heading = std::string(dialogue ? "Dialogue export" : "Translation generation") +
+                " for " + language + " exited with code " + std::to_string(code) + ".\n\n";
+            if (output.size() > 30000) output.erase(0, output.size() - 30000);
+            renpy_tool_output_->SetValue(wxString::FromUTF8(heading +
+                (output.empty() ? "Command completed without output." : output)));
+            SetStatusText(code == 0 ? (dialogue ? "Dialogue export completed" : "Translations generated")
+                                    : "Ren'Py localization command failed");
+        })) {
+        renpy_tool_output_->AppendText("Could not start the command.\n");
     }
 }
 

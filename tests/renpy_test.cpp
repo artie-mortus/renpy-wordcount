@@ -67,3 +67,12 @@ TEST_CASE("RenPy capabilities reject known legacy SDKs and allow modern or custo
     REQUIRE(say_count::renpy_capabilities("").warp);
     REQUIRE_FALSE(say_count::renpy_capabilities("invalid").director);
 }
+
+TEST_CASE("RenPy translation language validation accepts safe SDK identifiers") {
+    REQUIRE(say_count::valid_renpy_language("spanish"));
+    REQUIRE(say_count::valid_renpy_language("pt_br"));
+    REQUIRE_FALSE(say_count::valid_renpy_language(""));
+    REQUIRE_FALSE(say_count::valid_renpy_language("../english"));
+    REQUIRE_FALSE(say_count::valid_renpy_language("two words"));
+    REQUIRE_FALSE(say_count::valid_renpy_language("___"));
+}
