@@ -12,5 +12,6 @@
 - The native flow map ports the reference BFS layers, four-wide unreachable rows, node/edge styling, and 80-node cap; it supports scrolling, 50–200% zoom, fit-to-view, hover details, and click-to-jump.
 - Verified (2026-07-12): 116/116 tests passed; live UI inspection confirmed legible rendering and clicking `start.ending` navigated to its declared line.
 - Bug sweep (2026-07-12, 60d8aab): fixed surrogate-pair decoding and stale-offset reset in coverage tail, non-ASCII manual marks, stale Mark/Unmark toggle, wxProcess double free, UTF-8 chunk splits in the Ren'Py log, and the Step 1.3-era re-entrant quit/discard-modal `ConfirmCloseAll` crash (OnClose re-entry guard).
-- Known issues: none.
+- Bug sweep (2026-07-12, 3a98d2c): snapshot-sort strict-weak-ordering UB, stale editor state after DeletePage, bundle-import surrogate pairs and out-of-range casts, JSON.stringify-compatible doubles, wxConvUTF8 for all ToStdString sites, atomic temp+rename script saves, no focus-steal on project refresh, and routes recompute skipped while the pane is hidden.
+- Known issues: route/diagnostic jumps match scripts by basename, so duplicate `.rpy` names across subfolders jump to the first match (same as the JS app).
 - Next step: Phase 8, Step 8.1 — prose analysis engine (deferred long-tail work).
