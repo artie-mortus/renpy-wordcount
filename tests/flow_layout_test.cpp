@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cmath>
 
 #include "core/flow_layout.h"
 
@@ -8,6 +9,8 @@ using say_count::NamedScript;
 using say_count::analyze_project;
 using say_count::build_flow_layout;
 using say_count::compute_routes;
+using say_count::flow_fit_zoom;
+using say_count::hit_test_flow_node;
 
 TEST_CASE("flow layout layers reachable labels and groups unreachable labels") {
     const std::vector<NamedScript> scripts{{
@@ -82,4 +85,44 @@ TEST_CASE("flow layout preserves node words and enforces its drawing cap") {
     CHECK(capped.too_many_nodes);
     CHECK(capped.requested_nodes == 1);
     CHECK(capped.nodes.empty());
+}
+
+TEST_CASE("flow hit testing resolves every controlled node and rejects gaps") {
+    const std::vector<NamedScript> scripts{{
+        "hits.rpy",
+        "label start:\n"
+        "    if flag:\n"
+        "        jump left\n"
+        "    jump right\n"
+        "label left:\n"
+        "    return\n"
+        "label right:\n"
+        "    return",
+    }};
+    const auto report = compute_routes(analyze_project(scripts), scripts);
+    REQUIRE(report);
+    const auto layout = build_flow_layout(*report);
+
+    for (const auto& node : layout.nodes) {
+        const auto* hit = hit_test_flow_node(
+            layout, node.bounds.x + node.bounds.width / 2.0,
+            node.bounds.y + node.bounds.height / 2.0);
+        REQUIRE(hit);
+        CHECK(hit->name == node.name);
+        CHECK(hit->file == "hits.rpy");
+        CHECK(hit->line > 0);
+    }
+    CHECK(hit_test_flow_node(layout, -1, -1) == nullptr);
+    CHECK(hit_test_flow_node(layout, layout.width + 1, layout.height + 1) == nullptr);
+}
+
+TEST_CASE("flow fit zoom respects viewport padding and zoom limits") {
+    say_count::FlowLayout layout;
+    layout.width = 250;
+    layout.height = 263;
+    const double fitted = flow_fit_zoom(layout, 500, 300);
+    CHECK(std::abs(fitted - (268.0 / 263.0)) < 0.0001);
+    CHECK(flow_fit_zoom(layout, 2000, 2000) == 2.0);
+    CHECK(flow_fit_zoom(layout, 20, 20) == 0.5);
+    CHECK(flow_fit_zoom({}, 500, 300) == 1.0);
 }

@@ -4,10 +4,12 @@
 #include <cmath>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 #include <wx/button.h>
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
+#include <wx/cursor.h>
 #include <wx/scrolwin.h>
 #include <wx/settings.h>
 #include <wx/sizer.h>
@@ -36,21 +38,47 @@ public:
         SetBackgroundStyle(wxBG_STYLE_PAINT);
         SetScrollRate(10, 10);
         Bind(wxEVT_PAINT, &FlowMapCanvas::OnPaint, this);
+        Bind(wxEVT_LEFT_UP, &FlowMapCanvas::OnClick, this);
+        Bind(wxEVT_MOTION, &FlowMapCanvas::OnMotion, this);
+        Bind(wxEVT_LEAVE_WINDOW, &FlowMapCanvas::OnLeave, this);
     }
 
     void SetReport(const std::optional<RouteReport>& report) {
         layout_ = report ? build_flow_layout(*report) : FlowLayout{};
+        hovered_.clear();
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+        UnsetToolTip();
         UpdateVirtualSize();
         Refresh();
     }
 
     void SetZoom(double zoom) {
+        int scroll_x = 0, scroll_y = 0;
+        GetViewStart(&scroll_x, &scroll_y);
+        int pixels_x = 1, pixels_y = 1;
+        GetScrollPixelsPerUnit(&pixels_x, &pixels_y);
+        const wxSize client = GetClientSize();
+        const double center_x = (scroll_x * pixels_x + client.x / 2.0) / zoom_;
+        const double center_y = (scroll_y * pixels_y + client.y / 2.0) / zoom_;
         zoom_ = std::clamp(zoom, 0.5, 2.0);
         UpdateVirtualSize();
+        const int target_x = std::max(0, static_cast<int>(std::lround(
+            (center_x * zoom_ - client.x / 2.0) / std::max(1, pixels_x))));
+        const int target_y = std::max(0, static_cast<int>(std::lround(
+            (center_y * zoom_ - client.y / 2.0) / std::max(1, pixels_y))));
+        Scroll(target_x, target_y);
         Refresh();
     }
 
     double zoom() const noexcept { return zoom_; }
+    double FitZoom() const {
+        const wxSize client = GetClientSize();
+        return flow_fit_zoom(layout_, client.x, client.y);
+    }
+    void ScrollToOrigin() { Scroll(0, 0); }
+    void SetJumpHandler(std::function<void(const std::string&, std::size_t)> handler) {
+        jump_handler_ = std::move(handler);
+    }
 
 private:
     void UpdateVirtualSize() {
@@ -120,7 +148,8 @@ private:
         for (const auto& node : layout_.nodes) {
             wxColour border = faint;
             double width = 1.5;
-            if (node.start) { border = wxColour("#c48a00"); width = 2.0; }
+            if (node.name == hovered_) { border = wxColour("#c48a00"); width = 2.0; }
+            else if (node.start) { border = wxColour("#c48a00"); width = 2.0; }
             else if (node.ending) border = wxColour("#b3261e");
             const wxPenStyle style = node.unreachable ? wxPENSTYLE_SHORT_DASH : wxPENSTYLE_SOLID;
             graphics->SetPen(wxPen(border, width, style));
@@ -143,17 +172,59 @@ private:
         }
     }
 
+    const FlowNodeLayout* Hit(const wxPoint& position) const {
+        int virtual_x = 0, virtual_y = 0;
+        CalcUnscrolledPosition(position.x, position.y, &virtual_x, &virtual_y);
+        return hit_test_flow_node(layout_, virtual_x / zoom_, virtual_y / zoom_);
+    }
+
+    void OnClick(wxMouseEvent& event) {
+        const auto* node = Hit(event.GetPosition());
+        if (node && jump_handler_) jump_handler_(node->file, node->line);
+    }
+
+    void OnMotion(wxMouseEvent& event) {
+        const auto* node = Hit(event.GetPosition());
+        const std::string name = node ? node->name : std::string{};
+        if (name != hovered_) {
+            hovered_ = name;
+            SetCursor(wxCursor(node ? wxCURSOR_HAND : wxCURSOR_ARROW));
+            if (node) {
+                SetToolTip(wxString::FromUTF8(node->name + " — " +
+                    std::to_string(node->words) + " words. Click to jump."));
+            } else {
+                UnsetToolTip();
+            }
+            Refresh();
+        }
+        event.Skip();
+    }
+
+    void OnLeave(wxMouseEvent& event) {
+        if (!hovered_.empty()) {
+            hovered_.clear();
+            SetCursor(wxCursor(wxCURSOR_ARROW));
+            UnsetToolTip();
+            Refresh();
+        }
+        event.Skip();
+    }
+
     FlowLayout layout_;
     double zoom_ = 1.0;
+    std::string hovered_;
+    std::function<void(const std::string&, std::size_t)> jump_handler_;
 };
 
 FlowMapPanel::FlowMapPanel(wxWindow* parent) : wxPanel(parent) {
     auto* layout = new wxBoxSizer(wxVERTICAL);
     auto* controls = new wxBoxSizer(wxHORIZONTAL);
-    auto* zoom_out = new wxButton(this, wxID_ANY, "−", wxDefaultPosition, wxDefaultSize,
+    auto* zoom_out = new wxButton(this, wxID_ANY, "-", wxDefaultPosition, wxDefaultSize,
                                   wxBU_EXACTFIT);
-    auto* reset = new wxButton(this, wxID_ANY, "100%", wxDefaultPosition, wxDefaultSize,
+    auto* reset = new wxButton(this, wxID_ANY, "1:1", wxDefaultPosition, wxDefaultSize,
                                wxBU_EXACTFIT);
+    auto* fit = new wxButton(this, wxID_ANY, "Fit", wxDefaultPosition, wxDefaultSize,
+                             wxBU_EXACTFIT);
     auto* zoom_in = new wxButton(this, wxID_ANY, "+", wxDefaultPosition, wxDefaultSize,
                                  wxBU_EXACTFIT);
     zoom_label_ = new wxStaticText(this, wxID_ANY, "100%");
@@ -162,6 +233,7 @@ FlowMapPanel::FlowMapPanel(wxWindow* parent) : wxPanel(parent) {
     controls->AddStretchSpacer();
     controls->Add(zoom_out, 0, wxRIGHT, 3);
     controls->Add(reset, 0, wxRIGHT, 3);
+    controls->Add(fit, 0, wxRIGHT, 3);
     controls->Add(zoom_in, 0, wxRIGHT, 6);
     controls->Add(zoom_label_, 0, wxALIGN_CENTER_VERTICAL);
     canvas_ = new FlowMapCanvas(this);
@@ -171,16 +243,31 @@ FlowMapPanel::FlowMapPanel(wxWindow* parent) : wxPanel(parent) {
 
     zoom_out->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { SetZoom(canvas_->zoom() - 0.1); });
     reset->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { SetZoom(1.0); });
+    fit->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { FitToView(); });
     zoom_in->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { SetZoom(canvas_->zoom() + 0.1); });
+    canvas_->Bind(wxEVT_MOUSEWHEEL, [this](wxMouseEvent& event) {
+        if (!event.ControlDown()) { event.Skip(); return; }
+        SetZoom(canvas_->zoom() + (event.GetWheelRotation() > 0 ? 0.1 : -0.1));
+    });
 }
 
 void FlowMapPanel::SetReport(const std::optional<RouteReport>& report) {
     canvas_->SetReport(report);
 }
 
+void FlowMapPanel::SetJumpHandler(
+    std::function<void(const std::string&, std::size_t)> handler) {
+    canvas_->SetJumpHandler(std::move(handler));
+}
+
 void FlowMapPanel::SetZoom(double zoom) {
     canvas_->SetZoom(zoom);
     zoom_label_->SetLabel(wxString::Format("%d%%", static_cast<int>(std::lround(canvas_->zoom() * 100))));
+}
+
+void FlowMapPanel::FitToView() {
+    SetZoom(canvas_->FitZoom());
+    canvas_->ScrollToOrigin();
 }
 
 }  // namespace say_count::ui

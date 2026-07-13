@@ -103,4 +103,24 @@ FlowLayout build_flow_layout(const RouteReport& report, std::size_t maximum_node
     return layout;
 }
 
+const FlowNodeLayout* hit_test_flow_node(const FlowLayout& layout,
+                                         double x, double y) noexcept {
+    for (auto it = layout.nodes.rbegin(); it != layout.nodes.rend(); ++it) {
+        if (it->bounds.Contains(x, y)) return &*it;
+    }
+    return nullptr;
+}
+
+double flow_fit_zoom(const FlowLayout& layout, double viewport_width,
+                     double viewport_height, double padding,
+                     double minimum_zoom, double maximum_zoom) noexcept {
+    if (layout.width <= 0 || layout.height <= 0 || viewport_width <= 0 || viewport_height <= 0)
+        return std::clamp(1.0, minimum_zoom, maximum_zoom);
+    const double available_width = std::max(1.0, viewport_width - padding * 2.0);
+    const double available_height = std::max(1.0, viewport_height - padding * 2.0);
+    return std::clamp(std::min(available_width / layout.width,
+                               available_height / layout.height),
+                      minimum_zoom, maximum_zoom);
+}
+
 }  // namespace say_count

@@ -56,4 +56,11 @@ struct FlowLayout {
 FlowLayout build_flow_layout(const RouteReport& report,
                              std::size_t maximum_nodes = kFlowMaxNodes);
 
+const FlowNodeLayout* hit_test_flow_node(const FlowLayout& layout,
+                                         double x, double y) noexcept;
+
+double flow_fit_zoom(const FlowLayout& layout, double viewport_width,
+                     double viewport_height, double padding = 16.0,
+                     double minimum_zoom = 0.5, double maximum_zoom = 2.0) noexcept;
+
 }  // namespace say_count

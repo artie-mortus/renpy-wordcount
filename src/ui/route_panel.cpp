@@ -54,6 +54,7 @@ void RoutePanel::SetReport(std::optional<RouteReport> report) {
 
 void RoutePanel::SetJumpHandler(JumpHandler handler) {
     jump_handler_ = std::move(handler);
+    flow_map_->SetJumpHandler(jump_handler_);
 }
 
 void RoutePanel::Rebuild() {
