@@ -29,6 +29,7 @@ add_library(say_count_core STATIC
     src/core/prose.cpp
     src/core/voice.cpp
     src/core/translation.cpp
+    src/core/continuity.cpp
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
@@ -91,6 +92,7 @@ if(BUILD_TESTING)
         tests/prose_test.cpp
         tests/voice_test.cpp
         tests/translation_test.cpp
+        tests/continuity_test.cpp
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp
