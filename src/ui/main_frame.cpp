@@ -23,6 +23,7 @@
 #include <wx/tokenzr.h>
 #include <wx/choicdlg.h>
 #include <wx/dataview.h>
+#include <wx/stream.h>
 
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
@@ -69,6 +70,9 @@ enum MenuId {
     kRenameSymbol,
     kConfigureRenpy,
     kRenpyStatus,
+    kRunRenpy,
+    kStopRenpy,
+    kShowRenpyLog,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -98,13 +102,14 @@ bool IsGeometryVisible(const wxRect& rectangle) {
 
 MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, "Say Count", wxDefaultPosition, wxSize(kDefaultWidth, kDefaultHeight)),
-      manager_(this), snapshot_timer_(this) {
+      manager_(this), snapshot_timer_(this), renpy_output_timer_(this) {
     SetMinSize(wxSize(400, 300));
     editor_settings_ = settings_.LoadEditor();
     DetectRenpy();
     recent_projects_ = settings_.LoadRecentProjects();
     snapshot_store_ = std::make_unique<SnapshotStore>(
         (settings_.data_directory() + wxFILE_SEP_PATH + "snapshots").ToStdString(), 50);
+    renpy_log_path_ = settings_.data_directory() + wxFILE_SEP_PATH + "renpy-launch.log";
     BuildMenus();
     CreateStatusBar();
     speaker_stats_ = new SpeakerStatsPanel(
@@ -129,6 +134,14 @@ MainFrame::MainFrame()
     BuildFindBar();
     BuildFindResults();
     BuildFocusPill();
+    renpy_log_ = new wxTextCtrl(this, wxID_ANY, {}, wxDefaultPosition, wxDefaultSize,
+                                wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
+    if (wxFileName::FileExists(renpy_log_path_)) {
+        wxFile log(renpy_log_path_);
+        wxString text;
+        if (log.IsOpened() && log.ReadAll(&text, wxConvUTF8))
+            renpy_log_->SetValue(text.length() > 30000 ? text.Right(30000) : text);
+    }
     notebook_->SetDiagnosticsHandler([this](const std::vector<Diagnostic>& diagnostics) {
         diagnostics_->SetDiagnostics(diagnostics);
     });
@@ -150,6 +163,8 @@ MainFrame::MainFrame()
                          .CloseButton(true).MaximizeButton(true));
     manager_.AddPane(outline_, wxAuiPaneInfo().Left().Name("outline").Caption("Outline")
                          .BestSize(280, 500).MinSize(200, 160).CloseButton(true).MaximizeButton(true));
+    manager_.AddPane(renpy_log_, wxAuiPaneInfo().Bottom().Name("renpy-log").Caption("Ren'Py Log")
+                         .BestSize(-1, 190).MinSize(320, 100).CloseButton(true).Hide());
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
@@ -184,11 +199,22 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnExportProject, this, kExportProject);
     Bind(wxEVT_MENU, &MainFrame::OnRenameSymbol, this, kRenameSymbol);
     Bind(wxEVT_MENU, &MainFrame::OnConfigureRenpy, this, kConfigureRenpy);
+    Bind(wxEVT_MENU, &MainFrame::OnRunRenpy, this, kRunRenpy);
+    Bind(wxEVT_MENU, &MainFrame::OnStopRenpy, this, kStopRenpy);
+    Bind(wxEVT_MENU, &MainFrame::OnShowRenpyLog, this, kShowRenpyLog);
+    Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
+    Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
     snapshot_timer_.Start(10 * 60 * 1000);
 }
 
 MainFrame::~MainFrame() {
+    renpy_output_timer_.Stop();
+    if (renpy_process_) {
+        renpy_process_->Detach();
+        if (renpy_pid_) wxProcess::Kill(renpy_pid_, wxSIGTERM, wxKILL_CHILDREN);
+        renpy_process_.reset();
+    }
     manager_.UnInit();
 }
 
@@ -246,6 +272,10 @@ void MainFrame::BuildMenus() {
     help->Append(wxID_ABOUT, "&About", "About Say Count");
     help->Append(kShortcutSheet, "Keyboard &Shortcuts\tCtrl+K");
     renpy_menu_ = new wxMenu();
+    renpy_menu_->Append(kRunRenpy, "Run Project\tF6");
+    renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
+    renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
+    renpy_menu_->AppendSeparator();
     renpy_menu_->Append(kConfigureRenpy, "Configure SDK Executable…");
     auto* sdk_status = renpy_menu_->Append(kRenpyStatus, renpy_sdk_
         ? "SDK: " + wxString::FromUTF8(renpy_sdk_->version.empty() ? "detected" : renpy_sdk_->version)
@@ -595,6 +625,109 @@ void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
         item->SetItemLabel(renpy_sdk_ ? "SDK: " + wxString::FromUTF8(
             renpy_sdk_->version.empty() ? "detected" : renpy_sdk_->version) : "SDK: not found");
     SetStatusText(renpy_sdk_ ? "Ren'Py SDK configured" : "Ren'Py SDK not found");
+}
+
+bool MainFrame::LaunchRenpy(const std::vector<wxString>& arguments,
+                            const wxExecuteEnv* environment) {
+    if (renpy_pid_ != 0) {
+        wxMessageBox("A Ren'Py operation is already running.", "Ren'Py busy",
+                     wxOK | wxICON_INFORMATION, this);
+        return false;
+    }
+    if (!renpy_sdk_) {
+        wxMessageBox("Ren'Py was not found. Configure the SDK executable first.", "Ren'Py unavailable",
+                     wxOK | wxICON_ERROR, this);
+        return false;
+    }
+    if (!project_) {
+        wxMessageBox("Connect a Ren'Py project folder first.", "No project",
+                     wxOK | wxICON_ERROR, this);
+        return false;
+    }
+    wxArrayString command;
+    command.Add(wxString::FromUTF8(renpy_sdk_->executable));
+    command.Add(wxString::FromUTF8(project_->root));
+    for (const auto& argument : arguments) command.Add(argument);
+    wxString display = "Launching:";
+    for (const auto& argument : command) display += " \"" + argument + "\"";
+    AppendRenpyLog("\n" + wxDateTime::Now().FormatISOCombined(' ') + " " + display + "\n");
+    renpy_process_ = std::make_unique<wxProcess>(this);
+    renpy_process_->Redirect();
+    std::vector<wxCharBuffer> buffers;
+    buffers.reserve(command.size());
+    for (const auto& argument : command) buffers.push_back(argument.utf8_str());
+    std::vector<const char*> argv;
+    argv.reserve(buffers.size() + 1);
+    for (const auto& buffer : buffers) argv.push_back(buffer.data());
+    argv.push_back(nullptr);
+    renpy_pid_ = wxExecute(argv.data(), wxEXEC_ASYNC, renpy_process_.get(), environment);
+    if (renpy_pid_ <= 0) {
+        AppendRenpyLog("Launch failed before the process started.\n");
+        renpy_process_.reset();
+        renpy_pid_ = 0;
+        SetStatusText("Ren'Py launch failed");
+        return false;
+    }
+    renpy_output_timer_.Start(100);
+    SetStatusText("Ren'Py running");
+    return true;
+}
+
+void MainFrame::AppendRenpyLog(const wxString& text) {
+    if (renpy_log_) {
+        renpy_log_->AppendText(text);
+        if (renpy_log_->GetLastPosition() > 30000)
+            renpy_log_->Remove(0, renpy_log_->GetLastPosition() - 30000);
+    }
+    const wxString directory = wxFileName(renpy_log_path_).GetPath();
+    if (!wxFileName::DirExists(directory)) wxFileName::Mkdir(directory, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    wxFile file;
+    if (file.Open(renpy_log_path_, wxFile::write_append) ||
+        (!wxFileName::FileExists(renpy_log_path_) && file.Create(renpy_log_path_)))
+        file.Write(text, wxConvUTF8);
+}
+
+void MainFrame::DrainRenpyOutput() {
+    if (!renpy_process_) return;
+    auto drain = [this](wxInputStream* stream) {
+        if (!stream) return;
+        char buffer[4096];
+        while (stream->CanRead()) {
+            stream->Read(buffer, sizeof(buffer));
+            const std::size_t count = stream->LastRead();
+            if (!count) break;
+            AppendRenpyLog(wxString::FromUTF8(buffer, count));
+        }
+    };
+    if (renpy_process_->IsInputAvailable()) drain(renpy_process_->GetInputStream());
+    if (renpy_process_->IsErrorAvailable()) drain(renpy_process_->GetErrorStream());
+}
+
+void MainFrame::OnRunRenpy(wxCommandEvent&) { LaunchRenpy({}); }
+
+void MainFrame::OnStopRenpy(wxCommandEvent&) {
+    if (!renpy_pid_) { SetStatusText("No Ren'Py process is running"); return; }
+    const auto result = wxProcess::Kill(renpy_pid_, wxSIGTERM, wxKILL_CHILDREN);
+    AppendRenpyLog(result == wxKILL_OK ? "Stop requested.\n" : "Could not stop the process.\n");
+}
+
+void MainFrame::OnShowRenpyLog(wxCommandEvent&) {
+    auto& pane = manager_.GetPane("renpy-log");
+    pane.Show(true);
+    manager_.Update();
+}
+
+void MainFrame::OnRenpyOutputTimer(wxTimerEvent&) { DrainRenpyOutput(); }
+
+void MainFrame::OnRenpyEnded(wxProcessEvent& event) {
+    if (!renpy_process_ || event.GetPid() != renpy_pid_) return;
+    DrainRenpyOutput();
+    renpy_output_timer_.Stop();
+    const int code = event.GetExitCode();
+    AppendRenpyLog(wxString::Format("Process exited with code %d.\n", code));
+    renpy_pid_ = 0;
+    renpy_process_.reset();
+    SetStatusText(code == 0 ? "Ren'Py exited" : "Ren'Py failed — see launch log");
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {

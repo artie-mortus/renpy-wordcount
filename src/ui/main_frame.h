@@ -4,6 +4,7 @@
 #include <wx/aui/framemanager.h>
 #include <wx/fswatcher.h>
 #include <wx/timer.h>
+#include <wx/process.h>
 
 #include "app/settings.h"
 #include "core/parser.h"
@@ -89,6 +90,15 @@ private:
     void OnRenameSymbol(wxCommandEvent& event);
     void OnConfigureRenpy(wxCommandEvent& event);
     void DetectRenpy();
+    bool LaunchRenpy(const std::vector<wxString>& arguments,
+                     const wxExecuteEnv* environment = nullptr);
+    void AppendRenpyLog(const wxString& text);
+    void DrainRenpyOutput();
+    void OnRunRenpy(wxCommandEvent& event);
+    void OnStopRenpy(wxCommandEvent& event);
+    void OnShowRenpyLog(wxCommandEvent& event);
+    void OnRenpyOutputTimer(wxTimerEvent& event);
+    void OnRenpyEnded(wxProcessEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -114,6 +124,7 @@ private:
     std::vector<ProjectFindMatch> project_matches_;
     wxAuiManager manager_;
     wxTimer snapshot_timer_;
+    wxTimer renpy_output_timer_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
     ScriptAnalysis analysis_;
@@ -129,6 +140,10 @@ private:
     bool count_menu_choices_ = false;
     std::optional<RenpySdk> renpy_sdk_;
     wxMenu* renpy_menu_ = nullptr;
+    wxTextCtrl* renpy_log_ = nullptr;
+    std::unique_ptr<wxProcess> renpy_process_;
+    long renpy_pid_ = 0;
+    wxString renpy_log_path_;
 };
 
 }  // namespace say_count::ui
