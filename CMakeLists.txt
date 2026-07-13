@@ -53,6 +53,7 @@ add_executable(say-count
     src/ui/coverage_panel.cpp
     src/ui/route_panel.cpp
     src/ui/flow_map_panel.cpp
+    src/ui/production_panel.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
 )

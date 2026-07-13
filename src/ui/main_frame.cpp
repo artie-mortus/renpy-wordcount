@@ -38,7 +38,9 @@
 #include "ui/asset_panel.h"
 #include "ui/coverage_panel.h"
 #include "ui/route_panel.h"
+#include "ui/production_panel.h"
 #include "core/version.h"
+#include "core/indent.h"
 
 namespace say_count::ui {
 namespace {
@@ -88,6 +90,8 @@ enum MenuId {
     kShowAssets,
     kShowCoverage,
     kShowRoutes,
+    kShowProduction,
+    kFixIndents,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -137,6 +141,8 @@ MainFrame::MainFrame()
     outline_ = new OutlinePanel(this);
     diagnostics_ = new DiagnosticsPanel(this);
     route_panel_ = new RoutePanel(this);
+    production_panel_ = new ProductionPanel(
+        this, settings_.data_directory().ToStdString(wxConvUTF8));
     notebook_ = new EditorNotebook(this, editor_settings_, [this](const wxString& source, const ScriptAnalysis& analysis) {
         analysis_ = analysis;
         // wxString::Format aborts on %zu; compose the text without varargs.
@@ -152,8 +158,10 @@ MainFrame::MainFrame()
         speaker_stats_->SetAnalysis(analysis);
         outline_->SetDocument(source, analysis);
         if (notebook_) RefreshRoutes();
+        if (notebook_) RefreshProduction();
     });
     RefreshRoutes();
+    RefreshProduction();
     BuildFindBar();
     BuildFindResults();
     BuildFocusPill();
@@ -197,6 +205,23 @@ MainFrame::MainFrame()
             notebook_->JumpToLine(line);
             return;
         }
+    });
+    production_panel_->SetJumpHandler([this](const std::string& file, std::size_t line) {
+        const auto scripts = notebook_->ProjectScripts();
+        for (std::size_t index = 0; index < scripts.size(); ++index) {
+            if (scripts[index].name != file) continue;
+            notebook_->SelectFileIndex(index); notebook_->JumpToLine(line); return;
+        }
+        if (project_) {
+            const auto path = std::filesystem::path(project_->scripts_root) / file;
+            if (std::filesystem::exists(path))
+                notebook_->OpenAndJump(wxString::FromUTF8(path.string()), line);
+        }
+    });
+    production_panel_->SetSearchHandler([this](const std::string& term) {
+        manager_.GetPane(find_bar_).Show(); manager_.Update();
+        find_all_->SetValue(false); find_input_->SetValue(wxString::FromUTF8(term));
+        notebook_->SetFindQuery(term, CurrentFindOptions()); find_input_->SetFocus();
     });
     renpy_lint_->SetJumpHandler([this](const RenpyLintIssue& issue) {
         if (!project_) return;
@@ -248,6 +273,9 @@ MainFrame::MainFrame()
     manager_.AddPane(route_panel_, wxAuiPaneInfo().Right().Name("routes").Caption("Route Details")
                          .BestSize(380, 520).MinSize(280, 220).CloseButton(true).MaximizeButton(true)
                          .Hide());
+    manager_.AddPane(production_panel_, wxAuiPaneInfo().Bottom().Name("production-desk")
+                         .Caption("Production Desk").BestSize(-1, 420).MinSize(500, 260)
+                         .CloseButton(true).MaximizeButton(true).Hide());
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
@@ -294,6 +322,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnShowAssets, this, kShowAssets);
     Bind(wxEVT_MENU, &MainFrame::OnShowCoverage, this, kShowCoverage);
     Bind(wxEVT_MENU, &MainFrame::OnShowRoutes, this, kShowRoutes);
+    Bind(wxEVT_MENU, &MainFrame::OnShowProduction, this, kShowProduction);
+    Bind(wxEVT_MENU, &MainFrame::OnFixIndents, this, kFixIndents);
     Bind(wxEVT_TIMER, &MainFrame::OnCoverageTimer, this, coverage_timer_.GetId());
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
@@ -348,12 +378,14 @@ void MainFrame::BuildMenus() {
     edit->AppendSeparator();
     edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
+    edit->Append(kFixIndents, "Fix &Indents...", "Preview and repair indentation in the active file");
     edit->Append(kRenameSymbol, "Rename Ren'Py Symbol...", "Preview and safely rename an alias or label project-wide");
     auto* view = new wxMenu();
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
     view->AppendCheckItem(kFocusMode, "&Focus Mode\tCtrl+Shift+F", "Hide nonessential panels");
     view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");
+    view->Append(kShowProduction, "&Production Desk...", "Show prose and production tools");
     view->AppendSeparator();
     view->Append(kFontIncrease, "Increase Font Size\tCtrl+=");
     view->Append(kFontDecrease, "Decrease Font Size\tCtrl+-");
@@ -426,6 +458,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
     SetupCoverageProject();
     RefreshRoutes();
+    RefreshProduction();
     external_conflicts_.clear();
     std::vector<std::string> recent;
     recent.reserve(recent_projects_.size());
@@ -472,6 +505,7 @@ void MainFrame::RefreshProjectDiscovery() {
     coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
     RefreshCoveragePanel();
     RefreshRoutes();
+    RefreshProduction();
 }
 
 void MainFrame::HandleExternalScriptChange(const wxString& path) {
@@ -1058,6 +1092,44 @@ void MainFrame::OnShowRoutes(wxCommandEvent&) {
     manager_.GetPane("routes").Show(true);
     manager_.Update();
     RefreshRoutes();
+}
+
+void MainFrame::RefreshProduction() {
+    if (!notebook_ || !production_panel_) return;
+    const auto scripts = notebook_->ProjectScripts();
+    const std::size_t active = notebook_->CurrentFileIndex();
+    production_panel_->SetProject(
+        scripts, analyze_project(scripts, {count_menu_choices_}),
+        project_ ? project_->scripts_root : std::string{},
+        active < scripts.size() ? scripts[active].name : std::string{}, notebook_->CurrentLine());
+}
+
+void MainFrame::OnShowProduction(wxCommandEvent&) {
+    RefreshProduction();
+    manager_.GetPane("production-desk").Show(true); manager_.Update();
+}
+
+void MainFrame::OnFixIndents(wxCommandEvent&) {
+    auto scripts = notebook_->ProjectScripts();
+    const std::size_t active = notebook_->CurrentFileIndex();
+    if (active >= scripts.size()) return;
+    const auto preview = preview_indent_fix(scripts[active].content);
+    if (preview.changes.empty()) { SetStatusText("Indentation already clean"); return; }
+    std::string message = std::to_string(preview.changes.size()) +
+        " line(s) will change. A snapshot will be created first.\n\n";
+    for (std::size_t index = 0; index < std::min<std::size_t>(preview.changes.size(), 10); ++index) {
+        const auto& change = preview.changes[index];
+        message += "Line " + std::to_string(change.line) + ": " +
+                   std::to_string(change.before_width) + " → " +
+                   std::to_string(change.after_width) + " spaces\n";
+    }
+    if (wxMessageBox(wxString::FromUTF8(message), "Fix indentation preview",
+                     wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES) return;
+    if (!TakeSnapshot(false, "Before fixing indentation in " + scripts[active].name)) return;
+    scripts[active].content = preview.fixed;
+    if (notebook_->RestoreProjectScripts(scripts)) {
+        notebook_->SelectFileIndex(active); SetStatusText("Indentation fixed");
+    }
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {
