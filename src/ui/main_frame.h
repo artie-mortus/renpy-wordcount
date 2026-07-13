@@ -13,9 +13,11 @@
 #include "core/project_bundle.h"
 #include "core/renpy.h"
 #include "core/renpy_runtime.h"
+#include "core/renpy_lint.h"
 #include "core/snapshots.h"
 
 #include <optional>
+#include <functional>
 #include <memory>
 #include <unordered_set>
 #include <unordered_map>
@@ -34,6 +36,7 @@ class EditorNotebook;
 class SpeakerStatsPanel;
 class OutlinePanel;
 class DiagnosticsPanel;
+class RenpyLintPanel;
 struct FindStatus;
 
 class MainFrame final : public wxFrame {
@@ -92,7 +95,8 @@ private:
     void OnConfigureRenpy(wxCommandEvent& event);
     void DetectRenpy();
     bool LaunchRenpy(const std::vector<wxString>& arguments,
-                     const wxExecuteEnv* environment = nullptr);
+                     const wxExecuteEnv* environment = nullptr,
+                     std::function<void(int, std::string)> completion = {});
     void AppendRenpyLog(const wxString& text);
     void DrainRenpyOutput();
     void OnRunRenpy(wxCommandEvent& event);
@@ -104,6 +108,7 @@ private:
     void OnDirectorRenpy(wxCommandEvent& event);
     void OnRuntimePresets(wxCommandEvent& event);
     bool LaunchRenpyWithRuntime(const std::vector<wxString>& arguments);
+    void OnRunRenpyLint(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -146,12 +151,15 @@ private:
     std::optional<RenpySdk> renpy_sdk_;
     wxMenu* renpy_menu_ = nullptr;
     wxTextCtrl* renpy_log_ = nullptr;
+    RenpyLintPanel* renpy_lint_ = nullptr;
     std::unique_ptr<wxProcess> renpy_process_;
     long renpy_pid_ = 0;
     wxString renpy_log_path_;
     std::unique_ptr<RuntimePresetStore> runtime_presets_;
     std::string runtime_preset_name_;
     std::string runtime_state_json_ = "{}";
+    std::string renpy_operation_output_;
+    std::function<void(int, std::string)> renpy_completion_;
 };
 
 }  // namespace say_count::ui

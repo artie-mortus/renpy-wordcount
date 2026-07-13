@@ -673,6 +673,15 @@ bool EditorNotebook::SaveAll() {
     return true;
 }
 
+bool EditorNotebook::OpenAndJump(const wxString& path, std::size_t line) {
+    const wxString absolute = wxFileName(path).GetAbsolutePath();
+    if (!OpenFiles({absolute})) return false;
+    for (std::size_t index = 0; index < GetPageCount(); ++index) {
+        if (FilePath(EditorAt(index)) == absolute) { SetSelection(index); JumpToLine(line); return true; }
+    }
+    return false;
+}
+
 bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {
     if (scripts.empty()) return false;
     std::unordered_set<wxStyledTextCtrl*> retained;

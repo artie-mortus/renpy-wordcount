@@ -34,6 +34,7 @@
 #include "ui/snapshot_dialog.h"
 #include "ui/rename_dialog.h"
 #include "ui/runtime_preset_dialog.h"
+#include "ui/renpy_lint_panel.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -78,6 +79,7 @@ enum MenuId {
     kWarpRenpy,
     kDirectorRenpy,
     kRuntimePresets,
+    kRunRenpyLint,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -149,6 +151,22 @@ MainFrame::MainFrame()
         if (log.IsOpened() && log.ReadAll(&text, wxConvUTF8))
             renpy_log_->SetValue(text.length() > 30000 ? text.Right(30000) : text);
     }
+    renpy_lint_ = new RenpyLintPanel(this);
+    renpy_lint_->SetJumpHandler([this](const RenpyLintIssue& issue) {
+        if (!project_) return;
+        std::filesystem::path path(issue.file);
+        if (!path.is_absolute()) {
+            auto first = path.begin();
+            path = first != path.end() && first->string() == "game"
+                ? std::filesystem::path(project_->root) / path
+                : std::filesystem::path(project_->scripts_root) / path;
+        }
+        std::error_code ec;
+        const auto canonical = std::filesystem::weakly_canonical(path, ec);
+        const auto relative = std::filesystem::relative(canonical, project_->scripts_root, ec);
+        if (!ec && !relative.empty() && *relative.begin() != "..")
+            notebook_->OpenAndJump(wxString::FromUTF8(canonical.string()), issue.line);
+    });
     notebook_->SetDiagnosticsHandler([this](const std::vector<Diagnostic>& diagnostics) {
         diagnostics_->SetDiagnostics(diagnostics);
     });
@@ -172,6 +190,8 @@ MainFrame::MainFrame()
                          .BestSize(280, 500).MinSize(200, 160).CloseButton(true).MaximizeButton(true));
     manager_.AddPane(renpy_log_, wxAuiPaneInfo().Bottom().Name("renpy-log").Caption("Ren'Py Log")
                          .BestSize(-1, 190).MinSize(320, 100).CloseButton(true).Hide());
+    manager_.AddPane(renpy_lint_, wxAuiPaneInfo().Bottom().Name("renpy-lint").Caption("Official Ren'Py Lint")
+                         .BestSize(-1, 210).MinSize(360, 120).CloseButton(true).Hide());
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
@@ -212,6 +232,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnWarpRenpy, this, kWarpRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnDirectorRenpy, this, kDirectorRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnRuntimePresets, this, kRuntimePresets);
+    Bind(wxEVT_MENU, &MainFrame::OnRunRenpyLint, this, kRunRenpyLint);
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
@@ -286,6 +307,7 @@ void MainFrame::BuildMenus() {
     renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
     renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
     renpy_menu_->Append(kRuntimePresets, "Runtime State Presets…");
+    renpy_menu_->Append(kRunRenpyLint, "Run Official Lint");
     renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
     renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
     renpy_menu_->AppendSeparator();
@@ -641,7 +663,8 @@ void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
 }
 
 bool MainFrame::LaunchRenpy(const std::vector<wxString>& arguments,
-                            const wxExecuteEnv* environment) {
+                            const wxExecuteEnv* environment,
+                            std::function<void(int, std::string)> completion) {
     if (renpy_pid_ != 0) {
         wxMessageBox("A Ren'Py operation is already running.", "Ren'Py busy",
                      wxOK | wxICON_INFORMATION, this);
@@ -681,6 +704,8 @@ bool MainFrame::LaunchRenpy(const std::vector<wxString>& arguments,
         SetStatusText("Ren'Py launch failed");
         return false;
     }
+    renpy_operation_output_.clear();
+    renpy_completion_ = std::move(completion);
     renpy_output_timer_.Start(100);
     SetStatusText("Ren'Py running");
     return true;
@@ -709,7 +734,9 @@ void MainFrame::DrainRenpyOutput() {
             stream->Read(buffer, sizeof(buffer));
             const std::size_t count = stream->LastRead();
             if (!count) break;
-            AppendRenpyLog(wxString::FromUTF8(buffer, count));
+            const wxString text = wxString::FromUTF8(buffer, count);
+            renpy_operation_output_.append(buffer, count);
+            AppendRenpyLog(text);
         }
     };
     if (renpy_process_->IsInputAvailable()) drain(renpy_process_->GetInputStream());
@@ -740,7 +767,10 @@ void MainFrame::OnRenpyEnded(wxProcessEvent& event) {
     AppendRenpyLog(wxString::Format("Process exited with code %d.\n", code));
     renpy_pid_ = 0;
     renpy_process_.reset();
+    auto completion = std::move(renpy_completion_);
+    std::string output = std::move(renpy_operation_output_);
     SetStatusText(code == 0 ? "Ren'Py exited" : "Ren'Py failed — see launch log");
+    if (completion) completion(code, std::move(output));
 }
 
 void MainFrame::OnWarpRenpy(wxCommandEvent&) {
@@ -807,6 +837,22 @@ void MainFrame::OnRuntimePresets(wxCommandEvent&) {
     runtime_state_json_ = dialog.selected_json();
     SetStatusText(runtime_preset_name_.empty() ? "Runtime state cleared"
                                                : "Runtime preset selected: " + wxString::FromUTF8(runtime_preset_name_));
+}
+
+void MainFrame::OnRunRenpyLint(wxCommandEvent&) {
+    if (!notebook_->SaveAll()) return;
+    renpy_lint_->SetRunning();
+    manager_.GetPane("renpy-lint").Show(true);
+    manager_.Update();
+    if (!LaunchRenpy({"lint", "--error-code"}, nullptr,
+        [this](int code, std::string output) {
+            auto issues = parse_renpy_lint(output);
+            renpy_lint_->SetResults(std::move(issues), code, std::move(output));
+            SetStatusText(code == 0 ? "Official Ren'Py lint completed"
+                                    : "Official Ren'Py lint found problems");
+        })) {
+        renpy_lint_->SetResults({}, -1, {});
+    }
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {
