@@ -44,6 +44,7 @@ add_executable(say-count
     src/ui/renpy_lint_panel.cpp
     src/ui/asset_panel.cpp
     src/ui/coverage_panel.cpp
+    src/ui/route_panel.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
 )

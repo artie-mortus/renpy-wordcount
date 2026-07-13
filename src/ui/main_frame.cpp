@@ -37,6 +37,7 @@
 #include "ui/renpy_lint_panel.h"
 #include "ui/asset_panel.h"
 #include "ui/coverage_panel.h"
+#include "ui/route_panel.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -86,6 +87,7 @@ enum MenuId {
     kExportDialogue,
     kShowAssets,
     kShowCoverage,
+    kShowRoutes,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -134,6 +136,7 @@ MainFrame::MainFrame()
         this, wxFileName(settings_.path()).GetPath() + wxFILE_SEP_PATH + "targets.ini");
     outline_ = new OutlinePanel(this);
     diagnostics_ = new DiagnosticsPanel(this);
+    route_panel_ = new RoutePanel(this);
     notebook_ = new EditorNotebook(this, editor_settings_, [this](const wxString& source, const ScriptAnalysis& analysis) {
         analysis_ = analysis;
         // wxString::Format aborts on %zu; compose the text without varargs.
@@ -148,7 +151,9 @@ MainFrame::MainFrame()
         }
         speaker_stats_->SetAnalysis(analysis);
         outline_->SetDocument(source, analysis);
+        if (notebook_) RefreshRoutes();
     });
+    RefreshRoutes();
     BuildFindBar();
     BuildFindResults();
     BuildFocusPill();
@@ -183,6 +188,15 @@ MainFrame::MainFrame()
         if (coverage_path_.empty()) return;
         wxFile file; file.Create(coverage_path_, true); file.Close();
         coverage_tail_.Reset(); playthrough_coverage_.clear(); RefreshCoveragePanel();
+    });
+    route_panel_->SetJumpHandler([this](const std::string& file, std::size_t line) {
+        const auto scripts = notebook_->ProjectScripts();
+        for (std::size_t index = 0; index < scripts.size(); ++index) {
+            if (scripts[index].name != file) continue;
+            notebook_->SelectFileIndex(index);
+            notebook_->JumpToLine(line);
+            return;
+        }
     });
     renpy_lint_->SetJumpHandler([this](const RenpyLintIssue& issue) {
         if (!project_) return;
@@ -231,6 +245,9 @@ MainFrame::MainFrame()
                          .BestSize(330, 520).MinSize(260, 220).CloseButton(true).Hide());
     manager_.AddPane(coverage_panel_, wxAuiPaneInfo().Left().Name("coverage").Caption("Label Coverage")
                          .BestSize(360, 520).MinSize(280, 220).CloseButton(true).Hide());
+    manager_.AddPane(route_panel_, wxAuiPaneInfo().Right().Name("routes").Caption("Route Details")
+                         .BestSize(380, 520).MinSize(280, 220).CloseButton(true).MaximizeButton(true)
+                         .Hide());
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
@@ -276,6 +293,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnExportDialogue, this, kExportDialogue);
     Bind(wxEVT_MENU, &MainFrame::OnShowAssets, this, kShowAssets);
     Bind(wxEVT_MENU, &MainFrame::OnShowCoverage, this, kShowCoverage);
+    Bind(wxEVT_MENU, &MainFrame::OnShowRoutes, this, kShowRoutes);
     Bind(wxEVT_TIMER, &MainFrame::OnCoverageTimer, this, coverage_timer_.GetId());
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
@@ -335,6 +353,7 @@ void MainFrame::BuildMenus() {
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
     view->AppendCheckItem(kFocusMode, "&Focus Mode\tCtrl+Shift+F", "Hide nonessential panels");
+    view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");
     view->AppendSeparator();
     view->Append(kFontIncrease, "Increase Font Size\tCtrl+=");
     view->Append(kFontDecrease, "Decrease Font Size\tCtrl+-");
@@ -406,6 +425,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     project_ = std::move(discovered);
     asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
     SetupCoverageProject();
+    RefreshRoutes();
     external_conflicts_.clear();
     std::vector<std::string> recent;
     recent.reserve(recent_projects_.size());
@@ -451,6 +471,7 @@ void MainFrame::RefreshProjectDiscovery() {
     asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
     coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
     RefreshCoveragePanel();
+    RefreshRoutes();
 }
 
 void MainFrame::HandleExternalScriptChange(const wxString& path) {
@@ -1018,6 +1039,19 @@ void MainFrame::OnShowCoverage(wxCommandEvent&) {
     }
     RefreshCoveragePanel();
     manager_.GetPane("coverage").Show(true);
+    manager_.Update();
+}
+
+void MainFrame::RefreshRoutes() {
+    if (!notebook_ || !route_panel_) return;
+    const auto scripts = notebook_->ProjectScripts();
+    const auto project_analysis = analyze_project(scripts, {count_menu_choices_});
+    route_panel_->SetReport(compute_routes(project_analysis, scripts));
+}
+
+void MainFrame::OnShowRoutes(wxCommandEvent&) {
+    RefreshRoutes();
+    manager_.GetPane("routes").Show(true);
     manager_.Update();
 }
 

@@ -41,6 +41,7 @@ class DiagnosticsPanel;
 class RenpyLintPanel;
 class AssetPanel;
 class CoveragePanel;
+class RoutePanel;
 struct FindStatus;
 
 class MainFrame final : public wxFrame {
@@ -118,6 +119,8 @@ private:
     void RunLocalizationTool(bool dialogue);
     void OnShowAssets(wxCommandEvent& event);
     void OnShowCoverage(wxCommandEvent& event);
+    void OnShowRoutes(wxCommandEvent& event);
+    void RefreshRoutes();
     void OnCoverageTimer(wxTimerEvent& event);
     void SetupCoverageProject();
     void RefreshCoveragePanel();
@@ -169,6 +172,7 @@ private:
     RenpyLintPanel* renpy_lint_ = nullptr;
     AssetPanel* asset_panel_ = nullptr;
     CoveragePanel* coverage_panel_ = nullptr;
+    RoutePanel* route_panel_ = nullptr;
     std::unique_ptr<wxProcess> renpy_process_;
     long renpy_pid_ = 0;
     wxString renpy_log_path_;
