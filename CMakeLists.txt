@@ -1,10 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(SayCountNative VERSION 0.1.0 LANGUAGES CXX)
+project(SayCountNative VERSION 1.0.0 LANGUAGES CXX)
+
+include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base stc aui adv html xml media)
 include(${wxWidgets_USE_FILE})
@@ -37,6 +44,7 @@ add_library(say_count_core STATIC
     src/core/version.cpp
 )
 target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VERSION}")
 
 add_executable(say-count
     src/app/main.cpp
@@ -58,6 +66,11 @@ add_executable(say-count
     src/ui/speaker_stats_panel.cpp
 )
 target_link_libraries(say-count PRIVATE say_count_core ${wxWidgets_LIBRARIES})
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
+    target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
+    target_link_options(say-count PRIVATE $<$<CONFIG:Release>:-s>)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

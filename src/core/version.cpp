@@ -7,7 +7,11 @@
 namespace say_count {
 
 std::string_view core_version() noexcept {
-    return "0.1.0";
+#ifdef SAY_COUNT_VERSION
+    return SAY_COUNT_VERSION;
+#else
+    return "development";
+#endif
 }
 
 namespace {
