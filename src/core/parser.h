@@ -19,6 +19,7 @@ struct CountedLine {
     std::string alias;
     bool unknown_speaker = false;
     bool is_extend = false;
+    std::string file;
 };
 
 struct ParserWarning {

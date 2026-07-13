@@ -4,7 +4,10 @@
 
 using say_count::NamedScript;
 using say_count::RouteEdgeKind;
+using say_count::RouteBranchKind;
+using say_count::analyze_project;
 using say_count::build_route_graph;
+using say_count::compute_routes;
 
 TEST_CASE("route graph extracts branching transitions and source locations") {
     const auto graph = build_route_graph({NamedScript{
@@ -113,4 +116,119 @@ TEST_CASE("route graph prefers start over the first label across files") {
 
     CHECK(graph.start == "start");
     CHECK(graph.node_order == std::vector<std::string>{"opening", "start"});
+}
+
+TEST_CASE("route walker matches controlled shortest longest and reachability metrics") {
+    const std::vector<NamedScript> scripts{{
+        "routes.rpy",
+        "label start:\n"
+        "    if quick:\n"
+        "        jump short\n"
+        "    jump long\n"
+        "label short:\n"
+        "    \"Two words.\"\n"
+        "    return\n"
+        "label long:\n"
+        "    \"One two three four five.\"\n"
+        "    return\n"
+        "label unused:\n"
+        "    \"Never reached.\"\n"
+        "    return",
+    }};
+    const auto report = compute_routes(analyze_project(scripts), scripts);
+
+    REQUIRE(report);
+    CHECK(report->extremes.min_words == 2);
+    CHECK(report->extremes.max_words == 5);
+    CHECK(report->shortest_reading_minutes == 1);
+    CHECK(report->longest_reading_minutes == 1);
+    CHECK(report->endings == 2);
+    CHECK(report->branches == 1);
+    CHECK(report->unreachable == std::vector<std::string>{"unused"});
+    REQUIRE(report->paths.size() == 2);
+    CHECK(report->paths[0].labels == std::vector<std::string>{"start", "short"});
+    CHECK(report->paths[1].labels == std::vector<std::string>{"start", "long"});
+}
+
+TEST_CASE("route walker detects a loop and terminates its path") {
+    const std::vector<NamedScript> scripts{{
+        "loop.rpy", "label start:\n    \"Again.\"\n    jump start",
+    }};
+    const auto report = compute_routes(analyze_project(scripts), scripts);
+
+    REQUIRE(report);
+    CHECK(report->loops);
+    CHECK(report->extremes.min_words == 1);
+    CHECK(report->extremes.max_words == 1);
+    REQUIRE(report->paths.size() == 1);
+    CHECK(report->paths.front().loop_target == "start");
+}
+
+TEST_CASE("route walker falls back to the first label and follows calls") {
+    const std::vector<NamedScript> scripts{{
+        "call.rpy",
+        "label opening:\n"
+        "    call scene\n"
+        "    return\n"
+        "label scene:\n"
+        "    \"Hi.\"\n"
+        "    return",
+    }};
+    const auto report = compute_routes(analyze_project(scripts), scripts);
+
+    REQUIRE(report);
+    CHECK(report->graph.start == "opening");
+    CHECK(report->unreachable.empty());
+    CHECK(report->extremes.min_words == 1);
+    CHECK(report->endings == 1);
+}
+
+TEST_CASE("route walker reports no routes without labels") {
+    const std::vector<NamedScript> scripts{{"plain.rpy", "\"Just dialogue.\""}};
+    CHECK_FALSE(compute_routes(analyze_project(scripts), scripts));
+}
+
+TEST_CASE("route walker totals dialogue inside choices and conditions") {
+    const std::vector<NamedScript> scripts{{
+        "inline.rpy",
+        "label start:\n"
+        "    menu:\n"
+        "        \"Left\":\n"
+        "            \"Two words.\"\n"
+        "        \"Right\":\n"
+        "            \"Three whole words.\"\n"
+        "    if persistent.flag:\n"
+        "        \"Four branch words here.\"\n"
+        "    return",
+    }};
+    const auto report = compute_routes(analyze_project(scripts), scripts);
+
+    REQUIRE(report);
+    REQUIRE(report->branch_totals.count("start") == 1);
+    const auto& totals = report->branch_totals.at("start");
+    REQUIRE(totals.size() == 3);
+    CHECK(totals[0].kind == RouteBranchKind::choice);
+    CHECK(totals[0].text == "Left");
+    CHECK(totals[0].words == 2);
+    CHECK(totals[1].words == 3);
+    CHECK(totals[2].kind == RouteBranchKind::condition);
+    CHECK(totals[2].text == "if persistent.flag");
+    CHECK(totals[2].words == 4);
+    CHECK(report->menu_branches == 2);
+    CHECK(report->condition_branches == 1);
+    CHECK(report->branches == 1);
+}
+
+TEST_CASE("route reading time uses JavaScript rounding") {
+    std::string dialogue;
+    for (int index = 0; index < 300; ++index) dialogue += (index ? " word" : "word");
+    const std::vector<NamedScript> scripts{{
+        "long.rpy", "label start:\n    \"" + dialogue + "\"\n    return",
+    }};
+    const auto report = compute_routes(analyze_project(scripts), scripts);
+
+    REQUIRE(report);
+    CHECK(report->extremes.min_words == 300);
+    CHECK(report->shortest_reading_minutes == 2);
+    CHECK(report->longest_reading_minutes == 2);
 }

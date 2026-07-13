@@ -331,7 +331,8 @@ ScriptAnalysis analyze_with_characters(std::string_view script,
         else if (const auto found = names.find(alias); found != names.end()) speaker = found->second;
         if (!is_extend && !menu_choice) last_speaker = speaker;
         result.counted.push_back({number, speaker, clean_renpy_text(text), words, current_scene,
-                                  menu_choice, std::move(raw), alias, unknown, is_extend});
+                                  menu_choice, std::move(raw), alias, unknown, is_extend,
+                                  options.file_name});
         result.total_words += words;
         auto add = [words](std::vector<AggregateStats>& values, const std::string& name) {
             auto found = std::find_if(values.begin(), values.end(), [&](const auto& item) { return item.name == name; });
