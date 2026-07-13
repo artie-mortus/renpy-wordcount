@@ -1,17 +1,14 @@
 # Status
 
-- Completed: Steps 0.1 through 7.5 (Phase 7 and core parity complete).
-- The generated runtime helper records visited labels to project-specific JSONL under user data for every run, warp, or Director session.
-- A live coverage panel combines declared global/qualified-local labels with automatic playthrough visits and persistent manual marks.
-- Incremental tailing handles appends, partial records, truncation, escapes, and malformed lines; internal Ren'Py callbacks are filtered out.
-- Manual coverage persists atomically per canonical project root, while playthrough coverage can be cleared independently.
-- The wx-independent route graph records labels in declaration order with source locations, qualified local targets, typed jump/call/fall-through edges, terminal flow, and menu/conditional branch counts.
-- Static graph construction ignores expression targets while retaining their terminal behavior and prefers `start`, falling back to the first declared label.
-- Route traversal matches the JavaScript metrics for shortest/longest route words, reading time, endings, branch points, unreachable labels, and loops; inline choice/condition word totals retain source-file identity.
-- A dockable Route Details panel shows live summaries, expandable finite paths, branch totals, route notes, and double-click navigation to labels and branch lines.
-- The native flow map ports the reference BFS layers, four-wide unreachable rows, node/edge styling, and 80-node cap; it supports scrolling, 50–200% zoom, fit-to-view, hover details, and click-to-jump.
-- Verified (2026-07-12): 116/116 tests passed; live UI inspection confirmed legible rendering and clicking `start.ending` navigated to its declared line.
-- Bug sweep (2026-07-12, 60d8aab): fixed surrogate-pair decoding and stale-offset reset in coverage tail, non-ASCII manual marks, stale Mark/Unmark toggle, wxProcess double free, UTF-8 chunk splits in the Ren'Py log, and the Step 1.3-era re-entrant quit/discard-modal `ConfirmCloseAll` crash (OnClose re-entry guard).
-- Bug sweep (2026-07-12, 3a98d2c): snapshot-sort strict-weak-ordering UB, stale editor state after DeletePage, bundle-import surrogate pairs and out-of-range casts, JSON.stringify-compatible doubles, wxConvUTF8 for all ToStdString sites, atomic temp+rename script saves, no focus-steal on project refresh, and routes recompute skipped while the pane is hidden.
-- Known issues: route/diagnostic jumps match scripts by basename, so duplicate `.rpy` names across subfolders jump to the first match (same as the JS app).
-- Next step: Phase 8, Step 8.1 — prose analysis engine (deferred long-tail work).
+- Completed: Steps 0.1 through 9.5; Phases 8 and 9 and the release gate are complete.
+- Production Desk includes prose analysis, voice tracking/exports, translation gaps, continuity notes, and accessibility findings.
+- Fix Indents provides a confirmed preview and snapshot before applying tab/four-space normalization.
+- Release 1.0.0 builds optimized and stripped; the bundled-wx option produces a 16 MiB binary with wxWidgets linked statically.
+- Linux installation includes the executable, desktop entry, SVG icon, Ren'Py MIME registration, command-line `.rpy` opening, and uninstall target.
+- AppImage staging is locally verified; the packaging script and tagged/manual GitHub workflow use linuxdeploy and appimagetool.
+- Final verification (2026-07-12): native 131/131 tests and reference JavaScript 65/65 tests passed.
+- Release UI smoke test opened a real `.rpy` positional argument and remained stable for the three-second observation window.
+- All 55 reference features are classified as Done, Changed, Deferred, or Not applicable in PARITY-CHECKLIST.md; none remain Pending.
+- Known parity choices: native disk saves replace browser autosave/download APIs; native panes replace the browser divider; app chrome follows the desktop theme.
+- Known issue: route/diagnostic jumps match scripts by basename, so duplicate `.rpy` names across subfolders jump to the first match (same as the JS app).
+- Resource note: bundled wxWidgets should be built with a bounded job count (`cmake --build build-portable -j2`) on memory-constrained systems.

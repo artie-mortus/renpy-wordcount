@@ -29,7 +29,7 @@ Count (system GTK and multimedia libraries remain dynamic), use:
 
 ```sh
 cmake -B build-portable -DSAY_COUNT_BUNDLED_WX=ON -DBUILD_TESTING=OFF
-cmake --build build-portable -j
+cmake --build build-portable -j2
 ```
 
 The normal build continues to use system wxWidgets. For offline bundled builds,
@@ -50,6 +50,14 @@ command line. To stage and build an AppImage, install `linuxdeploy` and
 `appimagetool`, then run `tools/build-appimage.sh`. Use `--appdir-only` to
 inspect the staged AppDir without those packaging tools. Tagged builds can also
 produce the artifact through the included GitHub Actions workflow.
+
+## Parity notes
+
+The final audit is recorded in `PARITY-CHECKLIST.md`. Browser-only storage and
+download APIs are intentionally replaced by atomic native disk saves, project
+folders, and snapshots. Native dockable panes replace the browser splitter,
+and application chrome follows the desktop theme while editor themes remain
+selectable. The audit classifies every reference feature; none remain pending.
 
 ## Reference implementation
 

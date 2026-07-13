@@ -75,28 +75,28 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 7.4 — Basic flow map rendering · full · ≤850,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `ed8b4ed`
 - [x] Step 7.5 — Flow map layout and interaction · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `1afca3d`
 
-## Phase 8 — Long-tail production tools (deferred)
+## Phase 8 — Long-tail production tools
 
-- [ ] Step 8.1 — Prose analysis engine · full · ≤800,000 tok
-- [ ] Step 8.2 — Prose analysis UI · mini · ≤650,000 tok
-- [ ] Step 8.3 — Voice-production tracker model · mini · ≤850,000 tok
-- [ ] Step 8.4 — Voice-production exports · mini · ≤700,000 tok
-- [ ] Step 8.5 — Translation dashboard · mini · ≤900,000 tok
-- [ ] Step 8.6 — Continuity notes · mini · ≤650,000 tok
-- [ ] Step 8.7 — Accessibility audit · mini · ≤750,000 tok
-- [ ] Step 8.8 — Fix indents · full · ≤800,000 tok
+- [x] Step 8.1 — Prose analysis engine · full · ≤800,000 tok — done 2026-07-12, commit `f947c59`
+- [x] Step 8.2 — Prose analysis UI · mini · ≤650,000 tok — done 2026-07-12, commit `2d26db6`
+- [x] Step 8.3 — Voice-production tracker model · mini · ≤850,000 tok — done 2026-07-12, commit `b78aa6d`
+- [x] Step 8.4 — Voice-production exports · mini · ≤700,000 tok — done 2026-07-12, commit `dcc1232`
+- [x] Step 8.5 — Translation dashboard · mini · ≤900,000 tok — done 2026-07-12, commits `70ac9b5`, `2d26db6`
+- [x] Step 8.6 — Continuity notes · mini · ≤650,000 tok — done 2026-07-12, commits `e00be88`, `2d26db6`
+- [x] Step 8.7 — Accessibility audit · mini · ≤750,000 tok — done 2026-07-12, commits `520c1b5`, `2d26db6`
+- [x] Step 8.8 — Fix indents · full · ≤800,000 tok — done 2026-07-12, commits `37dcf08`, `2d26db6`
 
 ## Phase 9 — Packaging and release
 
-- [ ] Step 9.1 — Release configuration · mini · ≤500,000 tok
-- [ ] Step 9.2 — Static or portable wxWidgets build · mini · ≤800,000 tok
-- [ ] Step 9.3 — Linux desktop integration · mini · ≤500,000 tok
-- [ ] Step 9.4 — AppImage · mini · ≤700,000 tok
-- [ ] Step 9.5 — Final parity audit · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED**
+- [x] Step 9.1 — Release configuration · mini · ≤500,000 tok — done 2026-07-12, commit `41a7acd`
+- [x] Step 9.2 — Static or portable wxWidgets build · mini · ≤800,000 tok — done 2026-07-12, commit `6379685`
+- [x] Step 9.3 — Linux desktop integration · mini · ≤500,000 tok — done 2026-07-12, commit `6379685`
+- [x] Step 9.4 — AppImage · mini · ≤700,000 tok — done 2026-07-12, commit `6379685`
+- [x] Step 9.5 — Final parity audit · full · ≤1,000,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, recorded by the Step 9.5 completion commit
 
 ## Milestone gates
 
 - [x] M1 daily-driver editor usable (end of Phase 1 + 2.7) — reached 2026-07-11
 - [x] M2 parity harness green — correctness anchor (end of Phase 2) — reached 2026-07-11: ten JS/native parity tests, all diffs empty
 - [x] Core parity (end of Phase 7) — reached 2026-07-12
-- [ ] Release (end of Phase 9; Phase 8 deferred, optional)
+- [x] Release (end of Phase 9) — reached 2026-07-12
