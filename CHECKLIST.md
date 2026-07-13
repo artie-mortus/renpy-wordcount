@@ -52,7 +52,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 5.2 — External file watching · mini · ≤650,000 tok — done 2026-07-12, commit `3e12e18`
 - [x] Step 5.3 — Conflict review · full · ≤800,000 tok — done 2026-07-12, commit `feebb74`
 - [x] Step 5.4 — Snapshot storage · mini · ≤700,000 tok — done 2026-07-12, commit `01d1d88`
-- [ ] Step 5.5 — Snapshot restore and comparison · mini · ≤700,000 tok
+- [x] Step 5.5 — Snapshot restore and comparison · mini · ≤700,000 tok — done 2026-07-12, commit `a262e8c`
 - [ ] Step 5.6 — Import and export compatibility · full · ≤900,000 tok — **HIGH REASONING REQUIRED**
 - [ ] Step 5.7 — Safe symbol renaming · full · ≤900,000 tok — **HIGH REASONING REQUIRED**
 
