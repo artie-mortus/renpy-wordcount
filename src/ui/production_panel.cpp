@@ -1,4 +1,5 @@
 #include "ui/production_panel.h"
+#include "ui/style.h"
 
 #include <algorithm>
 #include <chrono>
@@ -38,6 +39,22 @@ std::set<std::string> Words(const wxString& value) {
     return result;
 }
 
+void SectionHeader(wxPanel* panel, wxBoxSizer* layout, const wxString& eyebrow,
+                   const wxString& title, const wxString& description) {
+    auto* label = new wxStaticText(panel, wxID_ANY, eyebrow.Upper());
+    label->SetFont(style::UtilityFont(8, wxFONTWEIGHT_BOLD));
+    label->SetForegroundColour(style::Colors().plum);
+    auto* heading = new wxStaticText(panel, wxID_ANY, title);
+    heading->SetFont(style::BodyFont(15, wxFONTWEIGHT_BOLD));
+    heading->SetForegroundColour(style::Colors().ink);
+    auto* detail = new wxStaticText(panel, wxID_ANY, description);
+    detail->SetFont(style::BodyFont(9));
+    detail->SetForegroundColour(style::Colors().ink_soft);
+    layout->Add(label, 0, wxLEFT | wxRIGHT | wxTOP, 16);
+    layout->Add(heading, 0, wxLEFT | wxRIGHT | wxTOP, 16);
+    layout->Add(detail, 0, wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, 16);
+}
+
 }  // namespace
 
 ProductionPanel::ProductionPanel(wxWindow* parent, std::string data_directory)
@@ -62,6 +79,8 @@ ProductionPanel::ProductionPanel(wxWindow* parent, std::string data_directory)
 wxPanel* ProductionPanel::BuildProse() {
     auto* panel = new wxPanel(notebook_);
     auto* layout = new wxBoxSizer(wxVERTICAL);
+    SectionHeader(panel, layout, "Prose", "Language rhythm",
+                  "Spot repetition and compare sentence shape across voices.");
     prose_summary_ = new wxStaticText(panel, wxID_ANY, "No dialogue yet.");
     auto* filters = new wxBoxSizer(wxHORIZONTAL);
     prose_speaker_ = new wxChoice(panel, wxID_ANY);
@@ -73,9 +92,9 @@ wxPanel* ProductionPanel::BuildProse() {
                                  wxLC_REPORT | wxLC_SINGLE_SEL);
     prose_list_->AppendColumn("Term", wxLIST_FORMAT_LEFT, 240);
     prose_list_->AppendColumn("Count", wxLIST_FORMAT_RIGHT, 65);
-    layout->Add(prose_summary_, 0, wxEXPAND | wxALL, 8);
-    layout->Add(filters, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
-    layout->Add(prose_list_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 8);
+    layout->Add(prose_summary_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+    layout->Add(filters, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+    layout->Add(prose_list_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
     panel->SetSizer(layout);
     prose_speaker_->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) { RefreshProse(); });
     prose_exclusions_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RefreshProse(); });
@@ -89,6 +108,8 @@ wxPanel* ProductionPanel::BuildProse() {
 wxPanel* ProductionPanel::BuildVoice() {
     auto* panel = new wxPanel(notebook_);
     auto* layout = new wxBoxSizer(wxVERTICAL);
+    SectionHeader(panel, layout, "Voice", "Recording board",
+                  "Move every cue from unrecorded to approved without losing context.");
     voice_summary_ = new wxStaticText(panel, wxID_ANY, "No dialogue found.");
     voice_list_ = new wxListCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                  wxLC_REPORT | wxLC_SINGLE_SEL);
@@ -105,6 +126,7 @@ wxPanel* ProductionPanel::BuildVoice() {
     edit->Add(voice_status_, 0, wxRIGHT, 5); edit->Add(voice_file_, 1, wxRIGHT, 5);
     edit->Add(voice_notes_, 1, wxRIGHT, 5);
     auto* save = Button(panel, edit, "Save line");
+    style::StylePrimaryButton(save);
     auto* exports = new wxBoxSizer(wxHORIZONTAL);
     voice_export_speaker_ = new wxChoice(panel, wxID_ANY);
     voice_source_context_ = new wxCheckBox(panel, wxID_ANY, "Include source context");
@@ -139,9 +161,11 @@ wxPanel* ProductionPanel::BuildVoice() {
 
 wxPanel* ProductionPanel::BuildTranslations() {
     auto* panel = new wxPanel(notebook_); auto* layout = new wxBoxSizer(wxVERTICAL);
+    SectionHeader(panel, layout, "Translations", "Localization gaps",
+                  "Review untranslated lines in their source and speaker context.");
     auto* controls = new wxBoxSizer(wxHORIZONTAL);
     translation_language_ = new wxTextCtrl(panel, wxID_ANY, "spanish");
-    auto* refresh = Button(panel, controls, "Scan missing"); controls->Prepend(translation_language_, 1, wxRIGHT, 5);
+    auto* refresh = Button(panel, controls, "Scan missing"); style::StylePrimaryButton(refresh); controls->Prepend(translation_language_, 1, wxRIGHT, 8);
     translation_summary_ = new wxStaticText(panel, wxID_ANY, "Choose a language and scan.");
     translation_list_ = new wxListCtrl(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                         wxLC_REPORT | wxLC_SINGLE_SEL);
@@ -163,6 +187,8 @@ wxPanel* ProductionPanel::BuildTranslations() {
 
 wxPanel* ProductionPanel::BuildContinuity() {
     auto* panel = new wxPanel(notebook_); auto* layout = new wxBoxSizer(wxVERTICAL);
+    SectionHeader(panel, layout, "Continuity", "Story bible",
+                  "Keep character, place, timeline, and inventory facts beside the script.");
     auto* add = new wxBoxSizer(wxHORIZONTAL);
     continuity_kind_ = new wxChoice(panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
         {"character","location","timeline","relationship","inventory","fact"}); continuity_kind_->SetSelection(0);
@@ -171,6 +197,7 @@ wxPanel* ProductionPanel::BuildContinuity() {
     continuity_attach_ = new wxCheckBox(panel, wxID_ANY, "Attach line"); continuity_attach_->SetValue(true);
     add->Add(continuity_kind_,0,wxRIGHT,5); add->Add(continuity_subject_,1,wxRIGHT,5); add->Add(continuity_note_,2,wxRIGHT,5); add->Add(continuity_attach_,0,wxALIGN_CENTER_VERTICAL|wxRIGHT,5);
     auto* add_button = Button(panel, add, "Add");
+    style::StylePrimaryButton(add_button);
     auto* filter = new wxBoxSizer(wxHORIZONTAL); continuity_search_ = new wxTextCtrl(panel,wxID_ANY); continuity_search_->SetHint("Search notes");
     continuity_filter_kind_ = new wxChoice(panel,wxID_ANY,wxDefaultPosition,wxDefaultSize,{"All","character","location","timeline","relationship","inventory","fact"}); continuity_filter_kind_->SetSelection(0);
     filter->Add(continuity_search_,1,wxRIGHT,5); filter->Add(continuity_filter_kind_,0);
@@ -188,9 +215,9 @@ wxPanel* ProductionPanel::BuildContinuity() {
 }
 
 wxPanel* ProductionPanel::BuildAccessibility() {
-    auto* panel=new wxPanel(notebook_);auto* layout=new wxBoxSizer(wxVERTICAL);accessibility_list_=new wxListCtrl(panel,wxID_ANY,wxDefaultPosition,wxDefaultSize,wxLC_REPORT|wxLC_SINGLE_SEL);
+    auto* panel=new wxPanel(notebook_);auto* layout=new wxBoxSizer(wxVERTICAL);SectionHeader(panel,layout,"Accessibility","Inclusive release check","Find missing descriptions, untranslated controls, and color-only voices.");accessibility_list_=new wxListCtrl(panel,wxID_ANY,wxDefaultPosition,wxDefaultSize,wxLC_REPORT|wxLC_SINGLE_SEL);
     accessibility_list_->AppendColumn("Severity",wxLIST_FORMAT_LEFT,75);accessibility_list_->AppendColumn("Type",wxLIST_FORMAT_LEFT,110);accessibility_list_->AppendColumn("Source",wxLIST_FORMAT_LEFT,150);accessibility_list_->AppendColumn("Finding",wxLIST_FORMAT_LEFT,340);
-    auto* actions=new wxBoxSizer(wxHORIZONTAL);auto* refresh=Button(panel,actions,"Refresh audit");auto* acknowledge=Button(panel,actions,"Acknowledge");auto* open=Button(panel,actions,"Open");
+    auto* actions=new wxBoxSizer(wxHORIZONTAL);auto* refresh=Button(panel,actions,"Refresh audit");style::StylePrimaryButton(refresh);auto* acknowledge=Button(panel,actions,"Acknowledge");auto* open=Button(panel,actions,"Open");
     layout->Add(accessibility_list_,1,wxEXPAND|wxALL,8);layout->Add(actions,0,wxLEFT|wxRIGHT|wxBOTTOM,8);panel->SetSizer(layout);
     refresh->Bind(wxEVT_BUTTON,[this](wxCommandEvent&){RefreshAccessibility();});
     acknowledge->Bind(wxEVT_BUTTON,[this](wxCommandEvent&){const long i=Selected(accessibility_list_);if(i<0)return;const auto& issue=accessibility_issues_[i];if(issue.acknowledged)acknowledged_.erase(issue.id);else acknowledged_.insert(issue.id);accessibility_store_.Save(acknowledged_);RefreshAccessibility();});

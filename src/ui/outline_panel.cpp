@@ -7,8 +7,8 @@ namespace say_count::ui {
 OutlinePanel::OutlinePanel(wxWindow* parent) : wxPanel(parent) {
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
-    list_->AppendColumn("Outline", wxLIST_FORMAT_LEFT, 230);
-    list_->AppendColumn("Words", wxLIST_FORMAT_RIGHT, 65);
+    list_->AppendColumn("Scene / flow", wxLIST_FORMAT_LEFT, 195);
+    list_->AppendColumn("Words", wxLIST_FORMAT_RIGHT, 55);
     sizer->Add(list_, 1, wxEXPAND); SetSizer(sizer);
     list_->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent& event) {
         const auto row = static_cast<std::size_t>(event.GetIndex());

@@ -54,6 +54,7 @@ public:
 
 private:
     void BuildMenus();
+    void BuildCommandBar();
     void BuildFindBar();
     void BuildFindResults();
     void BuildFocusPill();
@@ -89,6 +90,8 @@ private:
     void OnToggleComment(wxCommandEvent& event);
     void OnShowShortcuts(wxCommandEvent& event);
     void OnToggleFocus(wxCommandEvent& event);
+    void OnTogglePane(wxCommandEvent& event);
+    void OnPaneClose(wxAuiManagerEvent& event);
     void OnSize(wxSizeEvent& event);
     void OnConnectProject(wxCommandEvent& event);
     void OnRecentProject(wxCommandEvent& event);
@@ -141,6 +144,9 @@ private:
     OutlinePanel* outline_ = nullptr;
     DiagnosticsPanel* diagnostics_ = nullptr;
     wxPanel* find_bar_ = nullptr;
+    wxPanel* command_bar_ = nullptr;
+    wxStaticText* workspace_name_ = nullptr;
+    wxStaticText* cue_summary_ = nullptr;
     wxTextCtrl* find_input_ = nullptr;
     wxTextCtrl* replace_input_ = nullptr;
     wxCheckBox* find_case_ = nullptr;

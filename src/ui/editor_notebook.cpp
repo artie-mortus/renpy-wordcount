@@ -3,6 +3,7 @@
 #include "core/tokenizer.h"
 #include "core/autocomplete.h"
 #include "core/editor_commands.h"
+#include "ui/style.h"
 
 #include <algorithm>
 
@@ -12,6 +13,7 @@
 #include <wx/msgdlg.h>
 #include <wx/stc/stc.h>
 #include <wx/settings.h>
+#include <wx/aui/tabart.h>
 
 namespace say_count::ui {
 namespace {
@@ -40,6 +42,11 @@ EditorNotebook::EditorNotebook(wxWindow* parent, const app::EditorSettings& sett
     : wxAuiNotebook(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                     wxAUI_NB_DEFAULT_STYLE | wxAUI_NB_CLOSE_ON_ALL_TABS),
       settings_(settings), analysis_handler_(std::move(analysis_handler)), analysis_timer_(this) {
+    auto* tabs = new wxAuiDefaultTabArt();
+    tabs->SetColour(style::Colors().canvas);
+    tabs->SetActiveColour(style::Colors().paper);
+    SetArtProvider(tabs);
+    SetTabCtrlHeight(36);
     Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSE, &EditorNotebook::OnPageClose, this);
     Bind(wxEVT_AUINOTEBOOK_PAGE_CLOSED, &EditorNotebook::OnPageClosed, this);
     Bind(wxEVT_AUINOTEBOOK_PAGE_CHANGED, &EditorNotebook::OnPageChanged, this);
@@ -110,6 +117,18 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_ex
         editor->SetFocus();
         AnalyzeActive();
         opened = true;
+    }
+    if (opened && GetPageCount() > 1) {
+        for (size_t index = GetPageCount(); index-- > 0;) {
+            auto* editor = EditorAt(index);
+            if (editor && FilePath(editor).empty() && !editor->GetModify() && editor->GetText().empty()) {
+                speakers_.erase(editor);
+                completions_.erase(editor);
+                DeletePage(index);
+            }
+        }
+        RefreshCompletionIndex();
+        AnalyzeActive();
     }
     return opened;
 }
@@ -218,40 +237,49 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->AutoCompSetIgnoreCase(true);
     editor->AutoCompSetMaxHeight(8);
     editor->SetMarginType(0, wxSTC_MARGIN_NUMBER);
-    editor->SetMarginWidth(0, editor->TextWidth(wxSTC_STYLE_LINENUMBER, "00000") + 8);
+    editor->SetMarginWidth(0, editor->TextWidth(wxSTC_STYLE_LINENUMBER, "00000") + 16);
     editor->SetMarginType(1, wxSTC_MARGIN_SYMBOL);
     editor->SetMarginMask(1, (1 << kDiagnosticErrorMarker) |
                              (1 << kDiagnosticWarningMarker) |
                              (1 << kDiagnosticNoticeMarker));
-    editor->SetMarginWidth(1, 14);
+    editor->SetMarginWidth(1, 18);
     editor->SetCaretLineVisible(true);
+    editor->SetCaretLineVisibleAlways(true);
+    editor->SetCaretWidth(2);
+    editor->SetExtraAscent(3);
+    editor->SetExtraDescent(3);
+    editor->SetMarginLeft(12);
+    editor->SetMarginRight(20);
+    editor->SetIndentationGuides(wxSTC_IV_LOOKBOTH);
     editor->SetWrapMode(settings_.word_wrap ? wxSTC_WRAP_WORD : wxSTC_WRAP_NONE);
     const bool dark = settings_.theme == app::EditorTheme::Dark ||
                       (settings_.theme == app::EditorTheme::System && wxSystemSettings::GetAppearance().IsDark());
-    const wxColour foreground(dark ? "#f2e9d6" : "#241a2e");
-    const wxColour background(dark ? "#1a142c" : "#fffaea");
-    const wxColour margin(dark ? "#211a33" : "#f5e9c9");
+    const wxColour foreground(dark ? "#E8ECF1" : "#243247");
+    const wxColour background(dark ? "#111B2B" : "#FCFBF8");
+    const wxColour margin(dark ? "#17243A" : "#EEF1F3");
     editor->StyleSetFont(wxSTC_STYLE_DEFAULT,
-                         wxFont(settings_.font_size, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+                         wxFont(wxFontInfo(settings_.font_size).Family(wxFONTFAMILY_TELETYPE)
+                                .FaceName("DejaVu Sans Mono")));
     editor->StyleSetForeground(wxSTC_STYLE_DEFAULT, foreground);
     editor->StyleSetBackground(wxSTC_STYLE_DEFAULT, background);
     editor->StyleClearAll();
-    editor->StyleSetForeground(kComment, dark ? wxColour("#8f9a85") : wxColour("#68765f"));
+    editor->StyleSetForeground(kComment, dark ? wxColour("#7F91A8") : wxColour("#788494"));
     editor->StyleSetItalic(kComment, true);
-    editor->StyleSetForeground(kKeyword, dark ? wxColour("#e7a86e") : wxColour("#9b3f38"));
+    editor->StyleSetForeground(kKeyword, dark ? wxColour("#E69A83") : wxColour("#AB4F42"));
     editor->StyleSetBold(kKeyword, true);
-    editor->StyleSetForeground(kLabel, dark ? wxColour("#f2ca72") : wxColour("#7b4f00"));
+    editor->StyleSetForeground(kLabel, dark ? wxColour("#E3BE68") : wxColour("#8A6518"));
     editor->StyleSetBold(kLabel, true);
-    editor->StyleSetForeground(kSpeaker, dark ? wxColour("#77d6c3") : wxColour("#087b70"));
+    editor->StyleSetForeground(kSpeaker, dark ? wxColour("#6FC6B4") : wxColour("#28736A"));
     editor->StyleSetBold(kSpeaker, true);
-    editor->StyleSetForeground(kString, dark ? wxColour("#b8d98b") : wxColour("#43752c"));
-    editor->StyleSetForeground(kPython, dark ? wxColour("#d8a7e8") : wxColour("#7c3b92"));
-    editor->StyleSetForeground(kStatement, dark ? wxColour("#91bdec") : wxColour("#2f62a0"));
-    editor->StyleSetForeground(wxSTC_STYLE_LINENUMBER, dark ? wxColour("#9a91a7") : wxColour("#756a77"));
+    editor->StyleSetForeground(kString, dark ? wxColour("#C29AB8") : wxColour("#76546E"));
+    editor->StyleSetForeground(kPython, dark ? wxColour("#B7A6E8") : wxColour("#6E58A5"));
+    editor->StyleSetForeground(kStatement, dark ? wxColour("#86B4E0") : wxColour("#356A9C"));
+    editor->StyleSetFont(wxSTC_STYLE_LINENUMBER, style::UtilityFont(std::max(8, settings_.font_size - 3)));
+    editor->StyleSetForeground(wxSTC_STYLE_LINENUMBER, dark ? wxColour("#8190A4") : wxColour("#7A8796"));
     editor->StyleSetBackground(wxSTC_STYLE_LINENUMBER, margin);
     editor->SetCaretForeground(foreground);
-    editor->SetCaretLineBackground(dark ? wxColour("#281f3d") : wxColour("#f5e9c9"));
-    editor->SetSelBackground(true, dark ? wxColour("#6b542d") : wxColour("#ead39c"));
+    editor->SetCaretLineBackground(dark ? wxColour("#1C2C43") : wxColour("#F3F0E7"));
+    editor->SetSelBackground(true, dark ? wxColour("#415979") : wxColour("#DCE8F3"));
     editor->IndicatorSetStyle(kFindIndicator, wxSTC_INDIC_ROUNDBOX);
     editor->IndicatorSetForeground(kFindIndicator, dark ? wxColour("#f2ca72") : wxColour("#d49a13"));
     editor->IndicatorSetAlpha(kFindIndicator, 80);

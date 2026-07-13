@@ -1,6 +1,7 @@
 # Status
 
 - Completed: Steps 0.1 through 9.5; Phases 8 and 9 and the release gate are complete.
+- The application shell now uses a modern script-desk design with a live cue bar, quieter default layout, paper/ink editor palette, and purpose-led production workflows.
 - Production Desk includes prose analysis, voice tracking/exports, translation gaps, continuity notes, and accessibility findings.
 - Fix Indents provides a confirmed preview and snapshot before applying tab/four-space normalization.
 - Release 1.0.0 builds optimized and stripped; the bundled-wx option produces a 16 MiB binary with wxWidgets linked statically.

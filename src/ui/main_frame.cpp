@@ -5,6 +5,7 @@
 #include <string>
 
 #include <wx/aboutdlg.h>
+#include <wx/aui/dockart.h>
 #include <wx/display.h>
 #include <wx/dnd.h>
 #include <wx/filedlg.h>
@@ -39,14 +40,15 @@
 #include "ui/coverage_panel.h"
 #include "ui/route_panel.h"
 #include "ui/production_panel.h"
+#include "ui/style.h"
 #include "core/version.h"
 #include "core/indent.h"
 
 namespace say_count::ui {
 namespace {
 
-constexpr int kDefaultWidth = 1100;
-constexpr int kDefaultHeight = 750;
+constexpr int kDefaultWidth = 1380;
+constexpr int kDefaultHeight = 860;
 enum MenuId {
     kToggleWrap = wxID_HIGHEST + 1,
     kFontIncrease,
@@ -92,6 +94,9 @@ enum MenuId {
     kShowRoutes,
     kShowProduction,
     kFixIndents,
+    kShowOutline,
+    kShowSpeakerStats,
+    kShowDiagnostics,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -122,7 +127,7 @@ bool IsGeometryVisible(const wxRect& rectangle) {
 MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, "Say Count", wxDefaultPosition, wxSize(kDefaultWidth, kDefaultHeight)),
       manager_(this), snapshot_timer_(this), renpy_output_timer_(this), coverage_timer_(this) {
-    SetMinSize(wxSize(400, 300));
+    SetMinSize(wxSize(820, 560));
     editor_settings_ = settings_.LoadEditor();
     DetectRenpy();
     recent_projects_ = settings_.LoadRecentProjects();
@@ -150,6 +155,18 @@ MainFrame::MainFrame()
                                  std::to_string(analysis.dialogue_lines) + " dialogue lines \xc2\xb7 " +
                                  std::to_string(analysis.reading_minutes) + " min reading time";
         SetStatusText(wxString::FromUTF8(text));
+        if (cue_summary_) cue_summary_->SetLabel(wxString::FromUTF8(
+            std::to_string(analysis.total_words) + " WORDS   /   " +
+            std::to_string(analysis.dialogue_lines) + " CUES   /   " +
+            std::to_string(analysis.reading_minutes) + " MIN"));
+        if (workspace_name_ && notebook_) {
+            if (project_) {
+                workspace_name_->SetLabel(wxFileName(wxString::FromUTF8(project_->root)).GetFullName());
+            } else {
+                const wxString path = notebook_->CurrentFilePath();
+                workspace_name_->SetLabel(path.empty() ? "Loose script" : wxFileName(path).GetFullName());
+            }
+        }
         if (focus_count_) {
             focus_count_->SetLabel(wxString::FromUTF8(
                 std::to_string(analysis.total_words) + " dialogue words"));
@@ -247,16 +264,43 @@ MainFrame::MainFrame()
     notebook_->SetFindStatusHandler([this](const FindStatus& status) { UpdateFindStatus(status); });
     speaker_stats_->SetLineJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
-    manager_.AddPane(notebook_, wxAuiPaneInfo().CenterPane().Name("editor"));
+    style::ApplyWorkspaceTheme(this);
+    BuildCommandBar();
+    if (auto* status = GetStatusBar()) {
+        status->SetBackgroundColour(style::Colors().ink);
+        status->SetForegroundColour(style::Colors().white);
+        status->SetFont(style::UtilityFont(8));
+        status->SetMinHeight(26);
+    }
+    auto* dock_art = manager_.GetArtProvider();
+    dock_art->SetMetric(wxAUI_DOCKART_SASH_SIZE, 2);
+    dock_art->SetMetric(wxAUI_DOCKART_CAPTION_SIZE, 30);
+    dock_art->SetMetric(wxAUI_DOCKART_PANE_BORDER_SIZE, 0);
+    dock_art->SetMetric(wxAUI_DOCKART_GRADIENT_TYPE, wxAUI_GRADIENT_NONE);
+    dock_art->SetColour(wxAUI_DOCKART_BACKGROUND_COLOUR, style::Colors().canvas);
+    dock_art->SetColour(wxAUI_DOCKART_SASH_COLOUR, style::Colors().line);
+    dock_art->SetColour(wxAUI_DOCKART_BORDER_COLOUR, style::Colors().line);
+    dock_art->SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_COLOUR, style::Colors().ink);
+    dock_art->SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_GRADIENT_COLOUR, style::Colors().ink);
+    dock_art->SetColour(wxAUI_DOCKART_INACTIVE_CAPTION_TEXT_COLOUR, style::Colors().white);
+    dock_art->SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_COLOUR, style::Colors().ink);
+    dock_art->SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_GRADIENT_COLOUR, style::Colors().ink);
+    dock_art->SetColour(wxAUI_DOCKART_ACTIVE_CAPTION_TEXT_COLOUR, style::Colors().white);
+    dock_art->SetFont(wxAUI_DOCKART_CAPTION_FONT, style::BodyFont(9, wxFONTWEIGHT_BOLD));
+    manager_.AddPane(command_bar_, wxAuiPaneInfo().Top().Layer(0).Row(0).Name("command-bar")
+                         .CaptionVisible(false).PaneBorder(false).DockFixed(true).Resizable(false)
+                         .BestSize(-1, 64).MinSize(-1, 64).CloseButton(false));
+    manager_.AddPane(notebook_, wxAuiPaneInfo().CenterPane().Name("editor").PaneBorder(false));
     manager_.AddPane(find_bar_, wxAuiPaneInfo().Top().Name("find-replace").CaptionVisible(false)
-                         .PaneBorder(false).DockFixed(true).Resizable(false).BestSize(-1, 44).Hide());
+                         .Layer(0).Row(1).PaneBorder(false).DockFixed(true).Resizable(false)
+                         .BestSize(-1, 48).Hide());
     manager_.AddPane(find_results_, wxAuiPaneInfo().Bottom().Name("find-results").Caption("Find Results")
                          .BestSize(-1, 190).MinSize(300, 110).CloseButton(false).Hide());
     manager_.AddPane(diagnostics_, wxAuiPaneInfo().Bottom().Name("diagnostics").Caption("Diagnostics")
-                         .BestSize(-1, 190).MinSize(320, 110).CloseButton(true).MaximizeButton(true));
+                         .BestSize(-1, 190).MinSize(320, 110).CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(speaker_stats_, wxAuiPaneInfo().Right().Name("speaker-statistics")
-                         .Caption("Speaker Statistics").BestSize(320, 500).MinSize(240, 180)
-                         .CloseButton(true).MaximizeButton(true));
+                         .Caption("Speaker Statistics").BestSize(340, 500).MinSize(260, 180)
+                         .CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(outline_, wxAuiPaneInfo().Left().Name("outline").Caption("Outline")
                          .BestSize(280, 500).MinSize(200, 160).CloseButton(true).MaximizeButton(true));
     manager_.AddPane(renpy_log_, wxAuiPaneInfo().Bottom().Name("renpy-log").Caption("Ren'Py Log")
@@ -299,6 +343,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnToggleComment, this, kToggleComment);
     Bind(wxEVT_MENU, &MainFrame::OnShowShortcuts, this, kShortcutSheet);
     Bind(wxEVT_MENU, &MainFrame::OnToggleFocus, this, kFocusMode);
+    Bind(wxEVT_MENU, &MainFrame::OnTogglePane, this, kShowOutline, kShowDiagnostics);
+    Bind(wxEVT_AUI_PANE_CLOSE, &MainFrame::OnPaneClose, this);
     Bind(wxEVT_SIZE, &MainFrame::OnSize, this);
     Bind(wxEVT_MENU, &MainFrame::OnConnectProject, this, kConnectProject);
     Bind(wxEVT_MENU, &MainFrame::OnRecentProject, this, kRecentProjectFirst, kRecentProjectLast);
@@ -348,6 +394,71 @@ bool MainFrame::OpenInitialFiles(const std::vector<wxString>& paths) {
     return !paths.empty() && notebook_->OpenFiles(paths);
 }
 
+void MainFrame::BuildCommandBar() {
+    const auto& colors = style::Colors();
+    command_bar_ = new wxPanel(this);
+    command_bar_->SetBackgroundColour(colors.ink);
+    command_bar_->SetMinSize(wxSize(-1, 64));
+    auto* layout = new wxBoxSizer(wxHORIZONTAL);
+
+    auto* cue = new wxPanel(command_bar_, wxID_ANY, wxDefaultPosition, wxSize(4, 36));
+    cue->SetBackgroundColour(colors.cue);
+    layout->Add(cue, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 16);
+
+    auto* identity = new wxBoxSizer(wxVERTICAL);
+    auto* title = new wxStaticText(command_bar_, wxID_ANY, "Say Count");
+    title->SetFont(style::BodyFont(13, wxFONTWEIGHT_BOLD));
+    title->SetForegroundColour(colors.white);
+    auto* edition = new wxStaticText(command_bar_, wxID_ANY, "REN'PY STORY DESK");
+    edition->SetFont(style::UtilityFont(8, wxFONTWEIGHT_BOLD));
+    edition->SetForegroundColour(colors.mint);
+    identity->Add(title);
+    identity->Add(edition, 0, wxTOP, 2);
+    layout->Add(identity, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 22);
+
+    auto* divider = new wxPanel(command_bar_, wxID_ANY, wxDefaultPosition, wxSize(1, 34));
+    divider->SetBackgroundColour(wxColour("#405068"));
+    layout->Add(divider, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 20);
+
+    auto* context = new wxBoxSizer(wxVERTICAL);
+    workspace_name_ = new wxStaticText(command_bar_, wxID_ANY, "Loose script");
+    workspace_name_->SetFont(style::BodyFont(10, wxFONTWEIGHT_BOLD));
+    workspace_name_->SetForegroundColour(colors.white);
+    cue_summary_ = new wxStaticText(command_bar_, wxID_ANY, wxString::FromUTF8(
+        std::to_string(analysis_.total_words) + " WORDS   /   " +
+        std::to_string(analysis_.dialogue_lines) + " CUES   /   " +
+        std::to_string(analysis_.reading_minutes) + " MIN"));
+    cue_summary_->SetFont(style::UtilityFont(8));
+    cue_summary_->SetForegroundColour(wxColour("#AAB5C3"));
+    context->Add(workspace_name_);
+    context->Add(cue_summary_, 0, wxTOP, 3);
+    layout->Add(context, 0, wxALIGN_CENTER_VERTICAL);
+    layout->AddStretchSpacer();
+
+    auto make_action = [&](const wxString& label) {
+        auto* button = new wxButton(command_bar_, wxID_ANY, label, wxDefaultPosition,
+                                    wxDefaultSize, wxBU_EXACTFIT);
+        button->SetFont(style::BodyFont(9, wxFONTWEIGHT_BOLD));
+        button->SetForegroundColour(colors.white);
+        button->SetBackgroundColour(wxColour("#2A3A52"));
+        button->SetMinSize(wxSize(-1, 34));
+        layout->Add(button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        return button;
+    };
+    auto* find = make_action("Find");
+    auto* save = make_action("Save");
+    auto* production = make_action("Production");
+    auto* run = make_action("Run project");
+    style::StylePrimaryButton(run);
+    layout->AddSpacer(8);
+
+    find->Bind(wxEVT_BUTTON, &MainFrame::OnOpenFind, this);
+    save->Bind(wxEVT_BUTTON, &MainFrame::OnSave, this);
+    production->Bind(wxEVT_BUTTON, &MainFrame::OnShowProduction, this);
+    run->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
+    command_bar_->SetSizer(layout);
+}
+
 void MainFrame::BuildMenus() {
     auto* file = new wxMenu();
     file->Append(wxID_NEW, "&New\tCtrl+N", "Create a new tab");
@@ -388,6 +499,11 @@ void MainFrame::BuildMenus() {
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
     view->AppendCheckItem(kFocusMode, "&Focus Mode\tCtrl+Shift+F", "Hide nonessential panels");
+    view->AppendSeparator();
+    view->AppendCheckItem(kShowOutline, "Outline panel");
+    view->Check(kShowOutline, true);
+    view->AppendCheckItem(kShowSpeakerStats, "Speaker statistics panel");
+    view->AppendCheckItem(kShowDiagnostics, "Diagnostics panel");
     view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");
     view->Append(kShowProduction, "&Production Desk...", "Show prose and production tools");
     view->AppendSeparator();
@@ -474,6 +590,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     RebuildRecentProjectsMenu();
     const wxFileName root(wxString::FromUTF8(project_->root));
     SetTitle("Say Count — " + root.GetFullName());
+    if (workspace_name_) workspace_name_->SetLabel(root.GetFullName());
     SetStatusText(wxString::FromUTF8("Connected " + project_->root + " — " +
         std::to_string(project_->scripts.size()) + " script" +
         (project_->scripts.size() == 1 ? "" : "s")));
@@ -1469,6 +1586,25 @@ void MainFrame::OnToggleFocus(wxCommandEvent& event) {
         manager_.Update();
         notebook_->SetFocus();
     }
+}
+
+void MainFrame::OnTogglePane(wxCommandEvent& event) {
+    const char* pane = event.GetId() == kShowOutline ? "outline" :
+                       event.GetId() == kShowSpeakerStats ? "speaker-statistics" : "diagnostics";
+    manager_.GetPane(pane).Show(event.IsChecked());
+    manager_.Update();
+}
+
+void MainFrame::OnPaneClose(wxAuiManagerEvent& event) {
+    if (event.GetPane()) {
+        const wxString& name = event.GetPane()->name;
+        int id = wxID_NONE;
+        if (name == "outline") id = kShowOutline;
+        else if (name == "speaker-statistics") id = kShowSpeakerStats;
+        else if (name == "diagnostics") id = kShowDiagnostics;
+        if (id != wxID_NONE && GetMenuBar()) GetMenuBar()->Check(id, false);
+    }
+    event.Skip();
 }
 
 void MainFrame::OnSize(wxSizeEvent& event) {
