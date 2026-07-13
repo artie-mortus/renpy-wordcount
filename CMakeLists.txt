@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base stc aui adv html xml)
+find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base stc aui adv html xml media)
 include(${wxWidgets_USE_FILE})
 
 add_library(say_count_core STATIC
@@ -22,6 +22,7 @@ add_library(say_count_core STATIC
     src/core/renpy.cpp
     src/core/renpy_runtime.cpp
     src/core/renpy_lint.cpp
+    src/core/assets.cpp
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
@@ -39,6 +40,7 @@ add_executable(say-count
     src/ui/rename_dialog.cpp
     src/ui/runtime_preset_dialog.cpp
     src/ui/renpy_lint_panel.cpp
+    src/ui/asset_panel.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
 )
@@ -73,6 +75,7 @@ if(BUILD_TESTING)
         tests/renpy_test.cpp
         tests/renpy_runtime_test.cpp
         tests/renpy_lint_test.cpp
+        tests/assets_test.cpp
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp

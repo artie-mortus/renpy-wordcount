@@ -35,6 +35,7 @@
 #include "ui/rename_dialog.h"
 #include "ui/runtime_preset_dialog.h"
 #include "ui/renpy_lint_panel.h"
+#include "ui/asset_panel.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -82,6 +83,7 @@ enum MenuId {
     kRunRenpyLint,
     kGenerateTranslations,
     kExportDialogue,
+    kShowAssets,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -157,6 +159,11 @@ MainFrame::MainFrame()
     renpy_tool_output_ = new wxTextCtrl(this, wxID_ANY, "No Ren'Py tool has run yet.",
                                         wxDefaultPosition, wxDefaultSize,
                                         wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
+    asset_panel_ = new AssetPanel(this);
+    asset_panel_->SetInsertHandler([this](const std::string& statement) {
+        notebook_->InsertAtCaret(statement);
+        SetStatusText("Inserted Ren'Py asset statement");
+    });
     renpy_lint_->SetJumpHandler([this](const RenpyLintIssue& issue) {
         if (!project_) return;
         std::filesystem::path path(issue.file);
@@ -200,6 +207,8 @@ MainFrame::MainFrame()
     manager_.AddPane(renpy_tool_output_, wxAuiPaneInfo().Bottom().Name("renpy-tool-output")
                          .Caption("Ren'Py Tool Output").BestSize(-1, 210).MinSize(360, 120)
                          .CloseButton(true).Hide());
+    manager_.AddPane(asset_panel_, wxAuiPaneInfo().Left().Name("asset-browser").Caption("Project Assets")
+                         .BestSize(330, 520).MinSize(260, 220).CloseButton(true).Hide());
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
@@ -243,6 +252,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnRunRenpyLint, this, kRunRenpyLint);
     Bind(wxEVT_MENU, &MainFrame::OnGenerateTranslations, this, kGenerateTranslations);
     Bind(wxEVT_MENU, &MainFrame::OnExportDialogue, this, kExportDialogue);
+    Bind(wxEVT_MENU, &MainFrame::OnShowAssets, this, kShowAssets);
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
@@ -320,6 +330,7 @@ void MainFrame::BuildMenus() {
     renpy_menu_->Append(kRunRenpyLint, "Run Official Lint");
     renpy_menu_->Append(kGenerateTranslations, "Generate Translations…");
     renpy_menu_->Append(kExportDialogue, "Export Dialogue…");
+    renpy_menu_->Append(kShowAssets, "Browse Project Assets…");
     renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
     renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
     renpy_menu_->AppendSeparator();
@@ -365,6 +376,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     for (const auto& script : discovered->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
     if (!notebook_->OpenProjectFiles(paths)) return false;
     project_ = std::move(discovered);
+    asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
     external_conflicts_.clear();
     std::vector<std::string> recent;
     recent.reserve(recent_projects_.size());
@@ -407,6 +419,7 @@ void MainFrame::RefreshProjectDiscovery() {
     for (const auto& script : refreshed->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
     notebook_->OpenProjectFiles(paths);
     project_ = std::move(refreshed);
+    asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
 }
 
 void MainFrame::HandleExternalScriptChange(const wxString& path) {
@@ -903,6 +916,16 @@ void MainFrame::RunLocalizationTool(bool dialogue) {
         })) {
         renpy_tool_output_->AppendText("Could not start the command.\n");
     }
+}
+
+void MainFrame::OnShowAssets(wxCommandEvent&) {
+    if (!project_) {
+        wxMessageBox("Connect a Ren'Py project folder first.", "No project", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
+    manager_.GetPane("asset-browser").Show(true);
+    manager_.Update();
 }
 
 void MainFrame::OnFileSystemEvent(wxFileSystemWatcherEvent& event) {

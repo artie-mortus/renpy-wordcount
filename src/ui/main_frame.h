@@ -14,6 +14,7 @@
 #include "core/renpy.h"
 #include "core/renpy_runtime.h"
 #include "core/renpy_lint.h"
+#include "core/assets.h"
 #include "core/snapshots.h"
 
 #include <optional>
@@ -37,6 +38,7 @@ class SpeakerStatsPanel;
 class OutlinePanel;
 class DiagnosticsPanel;
 class RenpyLintPanel;
+class AssetPanel;
 struct FindStatus;
 
 class MainFrame final : public wxFrame {
@@ -112,6 +114,7 @@ private:
     void OnGenerateTranslations(wxCommandEvent& event);
     void OnExportDialogue(wxCommandEvent& event);
     void RunLocalizationTool(bool dialogue);
+    void OnShowAssets(wxCommandEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -156,6 +159,7 @@ private:
     wxTextCtrl* renpy_log_ = nullptr;
     wxTextCtrl* renpy_tool_output_ = nullptr;
     RenpyLintPanel* renpy_lint_ = nullptr;
+    AssetPanel* asset_panel_ = nullptr;
     std::unique_ptr<wxProcess> renpy_process_;
     long renpy_pid_ = 0;
     wxString renpy_log_path_;

@@ -1,4 +1,5 @@
 #include <wx/app.h>
+#include <wx/image.h>
 
 #include "core/parser.h"
 #include "ui/main_frame.h"
@@ -16,6 +17,7 @@ public:
 
         SetAppName("say-count");
         SetAppDisplayName("Say Count");
+        wxInitAllImageHandlers();
 
         auto* frame = new say_count::ui::MainFrame();
         frame->Show();

@@ -74,6 +74,7 @@ public:
     std::size_t CurrentLine() const;
     bool SaveAll();
     bool OpenAndJump(const wxString& path, std::size_t line);
+    void InsertAtCaret(std::string_view text);
     void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);

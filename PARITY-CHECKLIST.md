@@ -9,7 +9,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 3 | Production desk with normal run, current-line warp, Interactive Director, stop/restart controls, live status, and a persistent launch log | Done — process controls/logging (Step 6.2), warp and Interactive Director (Step 6.3) |
 | 4 | reusable JSON state presets applied before startup (generates `say_count_runtime.rpy` in the connected game folder) | Done (Step 6.4) |
 | 5 | official Ren'Py lint output alongside Say Count's instant script checks | Done (Step 6.5) |
-| 6 | project asset browser with image/audio previews and one-click `show` / `play music` insertion | Pending |
+| 6 | project asset browser with image/audio previews and one-click `show` / `play music` insertion | Done (Step 6.7) — also supports `scene` and `play sound` insertion |
 | 7 | localization tools for missing-string counts, translation generation, and dialogue export | Partial — translation generation and dialogue export done (Step 6.6); missing-string dashboard remains pending |
 | 8 | translation dashboard groups missing strings by source file, shows available label/speaker context, and opens matching loaded lines | Pending |
 | 9 | voice-production tracker with recorded/retake/approved states, optional voice filenames, tracking CSV, and printable per-role VA scripts for characters and narration | Pending |

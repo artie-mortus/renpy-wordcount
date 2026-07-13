@@ -682,6 +682,16 @@ bool EditorNotebook::OpenAndJump(const wxString& path, std::size_t line) {
     return false;
 }
 
+void EditorNotebook::InsertAtCaret(std::string_view text) {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
+    if (!editor) return;
+    editor->BeginUndoAction();
+    editor->ReplaceSelection(wxString::FromUTF8(text.data(), text.size()));
+    editor->EndUndoAction();
+    editor->SetFocus();
+}
+
 bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {
     if (scripts.empty()) return false;
     std::unordered_set<wxStyledTextCtrl*> retained;
