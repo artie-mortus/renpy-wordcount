@@ -1,4 +1,6 @@
 #include <wx/app.h>
+#include <wx/cmdline.h>
+#include <wx/filename.h>
 #include <wx/image.h>
 
 #include "core/parser.h"
@@ -7,9 +9,16 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <vector>
 
 class SayCountApp final : public wxApp {
 public:
+    void OnInitCmdLine(wxCmdLineParser& parser) override {
+        wxApp::OnInitCmdLine(parser);
+        parser.AddParam("script", wxCMD_LINE_VAL_STRING,
+                        wxCMD_LINE_PARAM_OPTIONAL | wxCMD_LINE_PARAM_MULTIPLE);
+    }
+
     bool OnInit() override {
         if (!wxApp::OnInit()) {
             return false;
@@ -20,6 +29,14 @@ public:
         wxInitAllImageHandlers();
 
         auto* frame = new say_count::ui::MainFrame();
+        std::vector<wxString> initial_files;
+        for (int index = 1; index < argc; ++index) {
+            const wxFileName path(argv[index]);
+            if (path.FileExists() && path.GetExt().CmpNoCase("rpy") == 0) {
+                initial_files.push_back(path.GetFullPath());
+            }
+        }
+        frame->OpenInitialFiles(initial_files);
         frame->Show();
         return true;
     }

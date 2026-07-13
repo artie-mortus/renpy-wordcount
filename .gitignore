@@ -1,4 +1,6 @@
 build/
+build-*/
+dist/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
@@ -19,4 +21,3 @@ _deps/
 *.swp
 *~
 .cache/
-

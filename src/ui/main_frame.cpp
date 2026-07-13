@@ -344,6 +344,10 @@ MainFrame::~MainFrame() {
     manager_.UnInit();
 }
 
+bool MainFrame::OpenInitialFiles(const std::vector<wxString>& paths) {
+    return !paths.empty() && notebook_->OpenFiles(paths);
+}
+
 void MainFrame::BuildMenus() {
     auto* file = new wxMenu();
     file->Append(wxID_NEW, "&New\tCtrl+N", "Create a new tab");

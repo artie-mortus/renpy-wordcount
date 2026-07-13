@@ -1,0 +1,30 @@
+name: AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libwxgtk3.2-dev libwxgtk-media3.2-dev libfuse2
+      - name: Download AppImage tools
+        run: |
+          curl -L -o linuxdeploy.AppImage https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -L -o appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x linuxdeploy.AppImage appimagetool.AppImage
+      - name: Build AppImage
+        env:
+          LINUXDEPLOY: ${{ github.workspace }}/linuxdeploy.AppImage
+          APPIMAGETOOL: ${{ github.workspace }}/appimagetool.AppImage
+        run: tools/build-appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Say-Count-AppImage
+          path: dist/*.AppImage

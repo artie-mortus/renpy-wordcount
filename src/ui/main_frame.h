@@ -23,6 +23,7 @@
 #include <memory>
 #include <unordered_set>
 #include <unordered_map>
+#include <vector>
 
 class wxPanel;
 class wxTextCtrl;
@@ -49,6 +50,7 @@ class MainFrame final : public wxFrame {
 public:
     MainFrame();
     ~MainFrame() override;
+    bool OpenInitialFiles(const std::vector<wxString>& paths);
 
 private:
     void BuildMenus();

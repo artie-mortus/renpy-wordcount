@@ -13,8 +13,34 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base stc aui adv html xml media)
-include(${wxWidgets_USE_FILE})
+option(SAY_COUNT_BUNDLED_WX "Build and statically link wxWidgets from source" OFF)
+if(SAY_COUNT_BUNDLED_WX)
+    include(FetchContent)
+    set(wxBUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(wxBUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(wxBUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(wxUSE_MEDIACTRL ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        wxWidgets
+        GIT_REPOSITORY https://github.com/wxWidgets/wxWidgets.git
+        GIT_TAG v3.2.11
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_GetProperties(wxWidgets)
+    if(NOT wxwidgets_POPULATED)
+        if(POLICY CMP0169)
+            cmake_policy(SET CMP0169 OLD)
+        endif()
+        FetchContent_Populate(wxWidgets)
+        add_subdirectory(${wxwidgets_SOURCE_DIR} ${wxwidgets_BINARY_DIR} EXCLUDE_FROM_ALL)
+    endif()
+    set(SAY_COUNT_WX_LIBRARIES
+        wx::core wx::base wx::stc wx::aui wx::adv wx::html wx::xml wx::media)
+else()
+    find_package(wxWidgets 3.2 REQUIRED COMPONENTS core base stc aui adv html xml media)
+    include(${wxWidgets_USE_FILE})
+    set(SAY_COUNT_WX_LIBRARIES ${wxWidgets_LIBRARIES})
+endif()
 
 add_library(say_count_core STATIC
     src/core/parser.cpp
@@ -65,11 +91,25 @@ add_executable(say-count
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
 )
-target_link_libraries(say-count PRIVATE say_count_core ${wxWidgets_LIBRARIES})
+target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES})
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
     target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
     target_link_options(say-count PRIVATE $<$<CONFIG:Release>:-s>)
+endif()
+
+install(TARGETS say-count RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES resources/say-count.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES resources/say-count.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+install(FILES resources/text-x-renpy.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
+
+configure_file(cmake/uninstall.cmake.in uninstall.cmake @ONLY)
+if(NOT TARGET uninstall)
+    add_custom_target(uninstall
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/uninstall.cmake)
 endif()
 
 include(CTest)
