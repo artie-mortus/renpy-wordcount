@@ -27,6 +27,7 @@ add_library(say_count_core STATIC
     src/core/routes.cpp
     src/core/flow_layout.cpp
     src/core/prose.cpp
+    src/core/voice.cpp
     src/core/snapshots.cpp
     src/core/tokenizer.cpp
     src/core/version.cpp
@@ -87,6 +88,7 @@ if(BUILD_TESTING)
         tests/routes_test.cpp
         tests/flow_layout_test.cpp
         tests/prose_test.cpp
+        tests/voice_test.cpp
         tests/snapshots_test.cpp
         tests/export_test.cpp
         tests/version_comparison_test.cpp
