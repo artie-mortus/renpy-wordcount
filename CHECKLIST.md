@@ -62,7 +62,7 @@ Session-resume tracker. **Read this file plus STATUS.md first in every session.*
 - [x] Step 6.2 — Launch and stop Ren'Py · mini · ≤800,000 tok — done 2026-07-12, commit `3b1436d`
 - [x] Step 6.3 — Warp and Interactive Director · full · ≤750,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `4749b0d`
 - [x] Step 6.4 — Runtime state presets · full · ≤850,000 tok — **HIGH REASONING REQUIRED** — done 2026-07-12, commit `febc107`
-- [ ] Step 6.5 — Lint integration · mini · ≤650,000 tok
+- [x] Step 6.5 — Lint integration · mini · ≤650,000 tok — done 2026-07-12, commit `26cb3fa`
 - [ ] Step 6.6 — Translation and dialogue commands · mini · ≤650,000 tok
 - [ ] Step 6.7 — Asset browser · mini · ≤850,000 tok
 - [ ] Step 6.8 — Coverage collection · full · ≤900,000 tok
