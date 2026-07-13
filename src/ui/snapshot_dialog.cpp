@@ -48,7 +48,7 @@ SnapshotDialog::SnapshotDialog(wxWindow* parent, SnapshotStore& store,
                               wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
     layout->Add(preview_, 1, wxEXPAND | wxALL, 10);
     auto* actions = new wxStdDialogButtonSizer();
-    auto* restore = new wxButton(this, wxID_OK, "Restore Selected…");
+    auto* restore = new wxButton(this, wxID_OK, "Restore Selected...");
     actions->AddButton(restore);
     actions->AddButton(new wxButton(this, wxID_CANCEL, "Close"));
     actions->Realize();

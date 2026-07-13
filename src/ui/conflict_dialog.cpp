@@ -59,7 +59,7 @@ ConflictDialog::ConflictDialog(wxWindow* parent, const ExternalConflict& conflic
     auto* actions = new wxBoxSizer(wxHORIZONTAL);
     auto* keep = new wxButton(this, wxID_ANY, "Keep Local");
     auto* use_disk = new wxButton(this, wxID_ANY, "Use Disk");
-    auto* save = new wxButton(this, wxID_ANY, "Save Local Elsewhere, Then Use Disk…");
+    auto* save = new wxButton(this, wxID_ANY, "Save Local Elsewhere, Then Use Disk...");
     auto* later = new wxButton(this, wxID_CANCEL, "Review Later");
     actions->AddStretchSpacer();
     actions->Add(keep, 0, wxRIGHT, 8);

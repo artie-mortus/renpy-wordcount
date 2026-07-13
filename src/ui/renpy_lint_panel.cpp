@@ -24,7 +24,7 @@ RenpyLintPanel::RenpyLintPanel(wxWindow* parent) : wxPanel(parent) {
 }
 
 void RenpyLintPanel::SetRunning() {
-    issues_.clear(); list_->DeleteAllItems(); summary_->SetLabel("Running official Ren'Py lint…");
+    issues_.clear(); list_->DeleteAllItems(); summary_->SetLabel("Running official Ren'Py lint...");
 }
 
 void RenpyLintPanel::SetResults(std::vector<RenpyLintIssue> issues, int exit_code, std::string output) {

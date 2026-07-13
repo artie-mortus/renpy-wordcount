@@ -14,7 +14,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 8 | translation dashboard groups missing strings by source file, shows available label/speaker context, and opens matching loaded lines | Pending |
 | 9 | voice-production tracker with recorded/retake/approved states, optional voice filenames, tracking CSV, and printable per-role VA scripts for characters and narration | Pending |
 | 10 | accessibility audit for untranslated controls, missing image-button descriptions, and visually encoded character voices | Pending |
-| 11 | automatic playthrough coverage captured from launched games, plus manual label coverage | Pending |
+| 11 | automatic playthrough coverage captured from launched games, plus manual label coverage | Done (Step 6.8) |
 | 12 | persistent continuity notes for characters, locations, timeline, relationships, inventory, and story facts | Pending |
 | 13 | multi-file projects: import several `.rpy` files, totals across all | Partial — multi-file open and recursive project-folder model done (Steps 1.3/5.1); combined main statistics pending |
 | 14 | counts dialogue/narration words, not labels, definitions, jumps, variables, comments, or scene commands | Pending |

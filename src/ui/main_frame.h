@@ -15,6 +15,7 @@
 #include "core/renpy_runtime.h"
 #include "core/renpy_lint.h"
 #include "core/assets.h"
+#include "core/coverage.h"
 #include "core/snapshots.h"
 
 #include <optional>
@@ -39,6 +40,7 @@ class OutlinePanel;
 class DiagnosticsPanel;
 class RenpyLintPanel;
 class AssetPanel;
+class CoveragePanel;
 struct FindStatus;
 
 class MainFrame final : public wxFrame {
@@ -115,6 +117,10 @@ private:
     void OnExportDialogue(wxCommandEvent& event);
     void RunLocalizationTool(bool dialogue);
     void OnShowAssets(wxCommandEvent& event);
+    void OnShowCoverage(wxCommandEvent& event);
+    void OnCoverageTimer(wxTimerEvent& event);
+    void SetupCoverageProject();
+    void RefreshCoveragePanel();
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;
     void UpdateFindStatus(const FindStatus& status);
@@ -141,6 +147,7 @@ private:
     wxAuiManager manager_;
     wxTimer snapshot_timer_;
     wxTimer renpy_output_timer_;
+    wxTimer coverage_timer_;
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
     ScriptAnalysis analysis_;
@@ -160,6 +167,7 @@ private:
     wxTextCtrl* renpy_tool_output_ = nullptr;
     RenpyLintPanel* renpy_lint_ = nullptr;
     AssetPanel* asset_panel_ = nullptr;
+    CoveragePanel* coverage_panel_ = nullptr;
     std::unique_ptr<wxProcess> renpy_process_;
     long renpy_pid_ = 0;
     wxString renpy_log_path_;
@@ -168,6 +176,12 @@ private:
     std::string runtime_state_json_ = "{}";
     std::string renpy_operation_output_;
     std::function<void(int, std::string)> renpy_completion_;
+    std::unique_ptr<ManualCoverageStore> manual_coverage_store_;
+    std::map<std::string, std::set<std::string>> manual_coverage_projects_;
+    std::vector<std::string> coverage_labels_;
+    std::set<std::string> playthrough_coverage_;
+    CoverageTail coverage_tail_;
+    wxString coverage_path_;
 };
 
 }  // namespace say_count::ui

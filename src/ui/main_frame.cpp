@@ -36,6 +36,7 @@
 #include "ui/runtime_preset_dialog.h"
 #include "ui/renpy_lint_panel.h"
 #include "ui/asset_panel.h"
+#include "ui/coverage_panel.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -84,6 +85,7 @@ enum MenuId {
     kGenerateTranslations,
     kExportDialogue,
     kShowAssets,
+    kShowCoverage,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -113,7 +115,7 @@ bool IsGeometryVisible(const wxRect& rectangle) {
 
 MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, "Say Count", wxDefaultPosition, wxSize(kDefaultWidth, kDefaultHeight)),
-      manager_(this), snapshot_timer_(this), renpy_output_timer_(this) {
+      manager_(this), snapshot_timer_(this), renpy_output_timer_(this), coverage_timer_(this) {
     SetMinSize(wxSize(400, 300));
     editor_settings_ = settings_.LoadEditor();
     DetectRenpy();
@@ -123,6 +125,9 @@ MainFrame::MainFrame()
     renpy_log_path_ = settings_.data_directory() + wxFILE_SEP_PATH + "renpy-launch.log";
     runtime_presets_ = std::make_unique<RuntimePresetStore>(
         (settings_.data_directory() + wxFILE_SEP_PATH + "runtime-presets.dat").ToStdString());
+    manual_coverage_store_ = std::make_unique<ManualCoverageStore>(
+        (settings_.data_directory() + wxFILE_SEP_PATH + "manual-coverage.dat").ToStdString());
+    manual_coverage_projects_ = manual_coverage_store_->Load();
     BuildMenus();
     CreateStatusBar();
     speaker_stats_ = new SpeakerStatsPanel(
@@ -163,6 +168,21 @@ MainFrame::MainFrame()
     asset_panel_->SetInsertHandler([this](const std::string& statement) {
         notebook_->InsertAtCaret(statement);
         SetStatusText("Inserted Ren'Py asset statement");
+    });
+    coverage_panel_ = new CoveragePanel(this);
+    coverage_panel_->SetManualHandler([this](const std::string& label, bool covered) {
+        if (!project_) return;
+        auto& labels = manual_coverage_projects_[project_->root];
+        if (covered) labels.insert(label); else labels.erase(label);
+        std::string error;
+        if (!manual_coverage_store_->Save(manual_coverage_projects_, &error))
+            wxMessageBox(wxString::FromUTF8(error), "Coverage save failed", wxOK | wxICON_ERROR, this);
+        RefreshCoveragePanel();
+    });
+    coverage_panel_->SetClearHandler([this] {
+        if (coverage_path_.empty()) return;
+        wxFile file; file.Create(coverage_path_, true); file.Close();
+        coverage_tail_.Reset(); playthrough_coverage_.clear(); RefreshCoveragePanel();
     });
     renpy_lint_->SetJumpHandler([this](const RenpyLintIssue& issue) {
         if (!project_) return;
@@ -209,6 +229,8 @@ MainFrame::MainFrame()
                          .CloseButton(true).Hide());
     manager_.AddPane(asset_panel_, wxAuiPaneInfo().Left().Name("asset-browser").Caption("Project Assets")
                          .BestSize(330, 520).MinSize(260, 220).CloseButton(true).Hide());
+    manager_.AddPane(coverage_panel_, wxAuiPaneInfo().Left().Name("coverage").Caption("Label Coverage")
+                         .BestSize(360, 520).MinSize(280, 220).CloseButton(true).Hide());
     manager_.Update();
     SetDropTarget(new ScriptDropTarget(notebook_));
     RestoreWindow();
@@ -253,13 +275,17 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnGenerateTranslations, this, kGenerateTranslations);
     Bind(wxEVT_MENU, &MainFrame::OnExportDialogue, this, kExportDialogue);
     Bind(wxEVT_MENU, &MainFrame::OnShowAssets, this, kShowAssets);
+    Bind(wxEVT_MENU, &MainFrame::OnShowCoverage, this, kShowCoverage);
+    Bind(wxEVT_TIMER, &MainFrame::OnCoverageTimer, this, coverage_timer_.GetId());
     Bind(wxEVT_TIMER, &MainFrame::OnRenpyOutputTimer, this, renpy_output_timer_.GetId());
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
     snapshot_timer_.Start(10 * 60 * 1000);
+    coverage_timer_.Start(750);
 }
 
 MainFrame::~MainFrame() {
+    coverage_timer_.Stop();
     renpy_output_timer_.Stop();
     if (renpy_process_) {
         renpy_process_->Detach();
@@ -272,38 +298,38 @@ MainFrame::~MainFrame() {
 void MainFrame::BuildMenus() {
     auto* file = new wxMenu();
     file->Append(wxID_NEW, "&New\tCtrl+N", "Create a new tab");
-    file->Append(wxID_OPEN, "&Open…\tCtrl+O", "Open one or more Ren'Py scripts");
+    file->Append(wxID_OPEN, "&Open...\tCtrl+O", "Open one or more Ren'Py scripts");
     file->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current script");
-    file->Append(wxID_SAVEAS, "Save &As…\tCtrl+Shift+S", "Save the current script under a new name");
+    file->Append(wxID_SAVEAS, "Save &As...\tCtrl+Shift+S", "Save the current script under a new name");
     file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
     file->AppendSeparator();
-    file->Append(kConnectProject, "Connect Project &Folder…", "Open every Ren'Py script in a project");
+    file->Append(kConnectProject, "Connect Project &Folder...", "Open every Ren'Py script in a project");
     recent_projects_menu_ = new wxMenu();
     file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
-    file->Append(kReviewConflicts, "Review External &Conflicts…");
+    file->Append(kReviewConflicts, "Review External &Conflicts...");
     file->Append(kSnapshotNow, "&Snapshot Now", "Store a backup of every open script");
-    file->Append(kManageSnapshots, "Manage Snapshots…", "Preview, compare, and restore snapshots");
-    file->Append(kImportProject, "Import Say Count Project…", "Import a browser-app project bundle");
+    file->Append(kManageSnapshots, "Manage Snapshots...", "Preview, compare, and restore snapshots");
+    file->Append(kImportProject, "Import Say Count Project...", "Import a browser-app project bundle");
     RebuildRecentProjectsMenu();
     file->AppendSeparator();
     auto* export_menu = new wxMenu();
-    export_menu->Append(kExportCsv, "Speaker statistics (CSV)…");
-    export_menu->Append(kExportJson, "Full statistics (JSON)…");
-    export_menu->Append(kExportHtml, "Standalone report (HTML)…");
+    export_menu->Append(kExportCsv, "Speaker statistics (CSV)...");
+    export_menu->Append(kExportJson, "Full statistics (JSON)...");
+    export_menu->Append(kExportHtml, "Standalone report (HTML)...");
     export_menu->AppendSeparator();
-    export_menu->Append(kExportProject, "Complete Say Count project…");
+    export_menu->Append(kExportProject, "Complete Say Count project...");
     file->AppendSubMenu(export_menu, "Export &Statistics");
     file->AppendSeparator();
     file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
 
     auto* edit = new wxMenu();
-    edit->Append(wxID_FIND, "&Find and Replace…\tCtrl+F");
+    edit->Append(wxID_FIND, "&Find and Replace...\tCtrl+F");
     edit->Append(kFindNext, "Find &Next\tF3");
     edit->Append(kFindPrevious, "Find &Previous\tShift+F3");
     edit->AppendSeparator();
-    edit->Append(kGoToLine, "&Go to Line…\tCtrl+G");
+    edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
-    edit->Append(kRenameSymbol, "Rename Ren'Py Symbol…", "Preview and safely rename an alias or label project-wide");
+    edit->Append(kRenameSymbol, "Rename Ren'Py Symbol...", "Preview and safely rename an alias or label project-wide");
     auto* view = new wxMenu();
     view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
     view->Check(kToggleWrap, editor_settings_.word_wrap);
@@ -326,15 +352,16 @@ void MainFrame::BuildMenus() {
     renpy_menu_->Append(kRunRenpy, "Run Project\tF6");
     renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
     renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
-    renpy_menu_->Append(kRuntimePresets, "Runtime State Presets…");
+    renpy_menu_->Append(kRuntimePresets, "Runtime State Presets...");
     renpy_menu_->Append(kRunRenpyLint, "Run Official Lint");
-    renpy_menu_->Append(kGenerateTranslations, "Generate Translations…");
-    renpy_menu_->Append(kExportDialogue, "Export Dialogue…");
-    renpy_menu_->Append(kShowAssets, "Browse Project Assets…");
+    renpy_menu_->Append(kGenerateTranslations, "Generate Translations...");
+    renpy_menu_->Append(kExportDialogue, "Export Dialogue...");
+    renpy_menu_->Append(kShowAssets, "Browse Project Assets...");
+    renpy_menu_->Append(kShowCoverage, "Label Coverage...");
     renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
     renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
     renpy_menu_->AppendSeparator();
-    renpy_menu_->Append(kConfigureRenpy, "Configure SDK Executable…");
+    renpy_menu_->Append(kConfigureRenpy, "Configure SDK Executable...");
     auto* sdk_status = renpy_menu_->Append(kRenpyStatus, renpy_sdk_
         ? "SDK: " + wxString::FromUTF8(renpy_sdk_->version.empty() ? "detected" : renpy_sdk_->version)
         : "SDK: not found");
@@ -377,6 +404,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     if (!notebook_->OpenProjectFiles(paths)) return false;
     project_ = std::move(discovered);
     asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
+    SetupCoverageProject();
     external_conflicts_.clear();
     std::vector<std::string> recent;
     recent.reserve(recent_projects_.size());
@@ -420,6 +448,8 @@ void MainFrame::RefreshProjectDiscovery() {
     notebook_->OpenProjectFiles(paths);
     project_ = std::move(refreshed);
     asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
+    coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
+    RefreshCoveragePanel();
 }
 
 void MainFrame::HandleExternalScriptChange(const wxString& path) {
@@ -851,7 +881,8 @@ bool MainFrame::LaunchRenpyWithRuntime(const std::vector<wxString>& arguments) {
     wxGetEnvMap(&environment.env);
     environment.cwd = wxString::FromUTF8(project_->root);
     environment.env["SAY_COUNT_STATE"] = wxString::FromUTF8(runtime_state_json_);
-    environment.env["SAY_COUNT_COVERAGE"] = settings_.data_directory() + wxFILE_SEP_PATH + "renpy-coverage.jsonl";
+    if (coverage_path_.empty()) SetupCoverageProject();
+    environment.env["SAY_COUNT_COVERAGE"] = coverage_path_;
     return LaunchRenpy(arguments, &environment);
 }
 
@@ -898,7 +929,7 @@ void MainFrame::RunLocalizationTool(bool dialogue) {
     }
     if (!notebook_->SaveAll()) return;
     const wxString action = dialogue ? "Exporting dialogue" : "Generating translations";
-    renpy_tool_output_->SetValue(action + " for " + wxString::FromUTF8(language) + "…\n");
+    renpy_tool_output_->SetValue(action + " for " + wxString::FromUTF8(language) + "...\n");
     manager_.GetPane("renpy-tool-output").Show(true);
     manager_.Update();
     std::vector<wxString> arguments;
@@ -925,6 +956,48 @@ void MainFrame::OnShowAssets(wxCommandEvent&) {
     }
     asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
     manager_.GetPane("asset-browser").Show(true);
+    manager_.Update();
+}
+
+void MainFrame::SetupCoverageProject() {
+    if (!project_) return;
+    coverage_path_ = settings_.data_directory() + wxFILE_SEP_PATH +
+        wxString::FromUTF8(coverage_file_name(project_->root));
+    coverage_tail_.Reset();
+    playthrough_coverage_.clear();
+    coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
+    for (const auto& label : coverage_tail_.Read(coverage_path_.ToStdString()))
+        playthrough_coverage_.insert(label);
+    RefreshCoveragePanel();
+}
+
+void MainFrame::RefreshCoveragePanel() {
+    if (!project_ || !coverage_panel_) return;
+    std::set<std::string> visible_manual;
+    std::set<std::string> visible_playthrough;
+    for (const auto& label : coverage_labels_) {
+        if (manual_coverage_projects_[project_->root].count(label)) visible_manual.insert(label);
+        if (playthrough_coverage_.count(label)) visible_playthrough.insert(label);
+    }
+    coverage_panel_->SetCoverage(coverage_labels_, std::move(visible_manual),
+                                 std::move(visible_playthrough));
+}
+
+void MainFrame::OnCoverageTimer(wxTimerEvent&) {
+    if (!project_ || coverage_path_.empty()) return;
+    const auto labels = coverage_tail_.Read(coverage_path_.ToStdString());
+    if (labels.empty()) return;
+    playthrough_coverage_.insert(labels.begin(), labels.end());
+    RefreshCoveragePanel();
+}
+
+void MainFrame::OnShowCoverage(wxCommandEvent&) {
+    if (!project_) {
+        wxMessageBox("Connect a Ren'Py project folder first.", "No project", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    RefreshCoveragePanel();
+    manager_.GetPane("coverage").Show(true);
     manager_.Update();
 }
 

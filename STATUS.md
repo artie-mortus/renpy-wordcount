@@ -1,10 +1,10 @@
 # Status
 
-- Completed: Steps 0.1 through 6.7.
-- Browse Project Assets indexes up to 5,000 supported images/audio files under game while skipping hidden, cache, saves, and translation folders.
-- The docked browser filters by path/type and previews images through wxImage or audio through wxMediaCtrl.
-- One-click actions insert undoable `show`, `scene`, `play music`, or `play sound` statements at the caret.
-- Asset discovery refreshes on project connection/tree changes and never modifies media files.
-- Verified (2026-07-12): build succeeded and 94/94 tests passed, including discovery exclusions, every insertion form, SDK integration, and parser parity.
+- Completed: Steps 0.1 through 6.8 (Phase 6 complete).
+- The generated runtime helper records visited labels to project-specific JSONL under user data for every run, warp, or Director session.
+- A live coverage panel combines declared global/qualified-local labels with automatic playthrough visits and persistent manual marks.
+- Incremental tailing handles appends, partial records, truncation, escapes, and malformed lines; internal Ren'Py callbacks are filtered out.
+- Manual coverage persists atomically per canonical project root, while playthrough coverage can be cleared independently.
+- Verified (2026-07-12): 97/97 tests passed; a real Ren'Py 8.5.3 controlled launch recorded the declared `start` label before exiting.
 - Known issues: pre-existing Step 1.3-era re-entrant quit/discard-modal `ConfirmCloseAll` crash remains; not reproducible in normal flows.
-- Next step: Phase 6, Step 6.8 — coverage collection.
+- Next step: Phase 7, Step 7.1 — route graph data model.
