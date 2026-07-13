@@ -1,5 +1,7 @@
 #include "ui/coverage_panel.h"
 
+#include <algorithm>
+
 #include <wx/button.h>
 #include <wx/dataview.h>
 #include <wx/sizer.h>
@@ -50,14 +52,20 @@ void CoveragePanel::Rebuild() {
     }
     summary_->SetLabel(wxString::Format("%zu of %zu labels covered (%zu manual, %zu playthrough)",
                                         covered, labels_.size(), manual_.size(), playthrough_.size()));
-    if (!previous.empty()) for (unsigned row = 0; row < list_->GetItemCount(); ++row)
-        if (list_->GetTextValue(row, 0).ToStdString() == previous) { list_->SelectRow(row); break; }
-    toggle_->Enable(!SelectedLabel().empty());
+    if (!previous.empty()) {
+        const auto found = std::find(labels_.begin(), labels_.end(), previous);
+        if (found != labels_.end()) list_->SelectRow(static_cast<unsigned>(found - labels_.begin()));
+    }
+    const auto selected = SelectedLabel();
+    toggle_->Enable(!selected.empty());
+    toggle_->SetLabel(manual_.count(selected) ? "Unmark Manual" : "Mark Manual");
 }
 
 std::string CoveragePanel::SelectedLabel() const {
     const int row = list_->ItemToRow(list_->GetSelection());
-    return row < 0 ? std::string{} : list_->GetTextValue(static_cast<unsigned>(row), 0).ToStdString();
+    // Rows are appended one per labels_ entry, so the row index is the label index.
+    return row < 0 || static_cast<std::size_t>(row) >= labels_.size()
+        ? std::string{} : labels_[static_cast<std::size_t>(row)];
 }
 
 }  // namespace say_count::ui

@@ -290,7 +290,8 @@ MainFrame::~MainFrame() {
     if (renpy_process_) {
         renpy_process_->Detach();
         if (renpy_pid_) wxProcess::Kill(renpy_pid_, wxSIGTERM, wxKILL_CHILDREN);
-        renpy_process_.reset();
+        // A detached wxProcess deletes itself on termination; deleting it here would double-free.
+        renpy_process_.release();
     }
     manager_.UnInit();
 }
@@ -760,6 +761,7 @@ bool MainFrame::LaunchRenpy(const std::vector<wxString>& arguments,
         return false;
     }
     renpy_operation_output_.clear();
+    renpy_display_pending_.clear();
     renpy_completion_ = std::move(completion);
     renpy_output_timer_.Start(100);
     SetStatusText("Ren'Py running");
@@ -780,22 +782,39 @@ void MainFrame::AppendRenpyLog(const wxString& text) {
         file.Write(text, wxConvUTF8);
 }
 
-void MainFrame::DrainRenpyOutput() {
-    if (!renpy_process_) return;
-    auto drain = [this](wxInputStream* stream) {
-        if (!stream) return;
-        char buffer[4096];
-        while (stream->CanRead()) {
-            stream->Read(buffer, sizeof(buffer));
-            const std::size_t count = stream->LastRead();
-            if (!count) break;
-            const wxString text = wxString::FromUTF8(buffer, count);
-            renpy_operation_output_.append(buffer, count);
-            AppendRenpyLog(text);
+void MainFrame::DrainRenpyOutput(bool flush) {
+    if (renpy_process_) {
+        auto drain = [this](wxInputStream* stream) {
+            if (!stream) return;
+            char buffer[4096];
+            while (stream->CanRead()) {
+                stream->Read(buffer, sizeof(buffer));
+                const std::size_t count = stream->LastRead();
+                if (!count) break;
+                renpy_operation_output_.append(buffer, count);
+                renpy_display_pending_.append(buffer, count);
+            }
+        };
+        if (renpy_process_->IsInputAvailable()) drain(renpy_process_->GetInputStream());
+        if (renpy_process_->IsErrorAvailable()) drain(renpy_process_->GetErrorStream());
+    }
+    if (renpy_display_pending_.empty()) return;
+    // A read can end mid code point; hold the incomplete trailing sequence for the next drain.
+    std::size_t take = renpy_display_pending_.size();
+    if (!flush) {
+        for (std::size_t back = 1; back <= 3 && back <= renpy_display_pending_.size(); ++back) {
+            const auto c = static_cast<unsigned char>(renpy_display_pending_[renpy_display_pending_.size() - back]);
+            if ((c & 0xc0) == 0x80) continue;
+            const std::size_t need = c >= 0xf0 ? 4 : c >= 0xe0 ? 3 : c >= 0xc0 ? 2 : 1;
+            if (need > back) take = renpy_display_pending_.size() - back;
+            break;
         }
-    };
-    if (renpy_process_->IsInputAvailable()) drain(renpy_process_->GetInputStream());
-    if (renpy_process_->IsErrorAvailable()) drain(renpy_process_->GetErrorStream());
+    }
+    if (take == 0) return;
+    wxString text = wxString::FromUTF8(renpy_display_pending_.data(), take);
+    if (text.empty()) text = wxString::From8BitData(renpy_display_pending_.data(), take);
+    renpy_display_pending_.erase(0, take);
+    if (!text.empty()) AppendRenpyLog(text);
 }
 
 void MainFrame::OnRunRenpy(wxCommandEvent&) { LaunchRenpyWithRuntime({}); }
@@ -816,7 +835,7 @@ void MainFrame::OnRenpyOutputTimer(wxTimerEvent&) { DrainRenpyOutput(); }
 
 void MainFrame::OnRenpyEnded(wxProcessEvent& event) {
     if (!renpy_process_ || event.GetPid() != renpy_pid_) return;
-    DrainRenpyOutput();
+    DrainRenpyOutput(true);
     renpy_output_timer_.Stop();
     const int code = event.GetExitCode();
     AppendRenpyLog(wxString::Format("Process exited with code %d.\n", code));
@@ -975,8 +994,9 @@ void MainFrame::RefreshCoveragePanel() {
     if (!project_ || !coverage_panel_) return;
     std::set<std::string> visible_manual;
     std::set<std::string> visible_playthrough;
+    const auto manual = manual_coverage_projects_.find(project_->root);
     for (const auto& label : coverage_labels_) {
-        if (manual_coverage_projects_[project_->root].count(label)) visible_manual.insert(label);
+        if (manual != manual_coverage_projects_.end() && manual->second.count(label)) visible_manual.insert(label);
         if (playthrough_coverage_.count(label)) visible_playthrough.insert(label);
     }
     coverage_panel_->SetCoverage(coverage_labels_, std::move(visible_manual),
@@ -1443,9 +1463,18 @@ void MainFrame::OnAbout(wxCommandEvent&) {
 }
 
 void MainFrame::OnClose(wxCloseEvent& event) {
-    if (event.CanVeto() && !notebook_->ConfirmCloseAll()) {
-        event.Veto();
-        return;
+    // A second close request while the discard dialog is open must not re-enter
+    // ConfirmCloseAll or destroy the frame under the running modal.
+    if (close_confirm_open_) {
+        if (event.CanVeto()) { event.Veto(); return; }
+    } else if (event.CanVeto()) {
+        close_confirm_open_ = true;
+        const bool proceed = notebook_->ConfirmCloseAll();
+        close_confirm_open_ = false;
+        if (!proceed) {
+            event.Veto();
+            return;
+        }
     }
     const bool maximized = IsMaximized();
     if (!maximized && !IsIconized()) {

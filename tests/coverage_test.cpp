@@ -22,6 +22,18 @@ TEST_CASE("coverage tail reads appended complete JSONL records and handles trunc
     REQUIRE(tail.Read(path.string()) == std::vector<std::string>{"reset"}); fs::remove(path);
 }
 
+TEST_CASE("coverage tail decodes surrogate pairs and restarts after external deletion") {
+    namespace fs = std::filesystem; const auto unique = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const fs::path path = fs::temp_directory_path() / ("say-count-coverage-sp-" + unique + ".jsonl");
+    { std::ofstream out(path); out << "{\"label\": \"go\\ud83d\\ude00\"}\n"; }
+    say_count::CoverageTail tail;
+    REQUIRE(tail.Read(path.string()) == std::vector<std::string>{"go\xf0\x9f\x98\x80"});
+    fs::remove(path);
+    REQUIRE(tail.Read(path.string()).empty());
+    { std::ofstream out(path); out << "{\"label\": \"fresh\"}\n{\"label\": \"second\"}\n"; }
+    REQUIRE(tail.Read(path.string()) == std::vector<std::string>{"fresh", "second"}); fs::remove(path);
+}
+
 TEST_CASE("manual coverage persists per project and coverage names are stable") {
     namespace fs = std::filesystem; const auto unique = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const fs::path root = fs::temp_directory_path() / ("say-count-manual-" + unique);

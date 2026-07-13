@@ -13,6 +13,16 @@ namespace {
 namespace fs = std::filesystem;
 constexpr std::string_view kMagic = "SAY-COUNT-MANUAL-COVERAGE-1";
 
+bool Hex4(std::string_view value, std::size_t at, unsigned& code) {
+    code = 0;
+    for (int n = 0; n < 4; ++n) {
+        const char d = value[at + n]; code <<= 4;
+        if (d >= '0' && d <= '9') code += d - '0'; else if (d >= 'a' && d <= 'f') code += d - 'a' + 10;
+        else if (d >= 'A' && d <= 'F') code += d - 'A' + 10; else return false;
+    }
+    return true;
+}
+
 std::string Decode(std::string_view value) {
     std::string out;
     for (std::size_t i = 0; i < value.size(); ++i) {
@@ -21,16 +31,19 @@ std::string Decode(std::string_view value) {
         if (c == 'n') out.push_back('\n'); else if (c == 'r') out.push_back('\r'); else if (c == 't') out.push_back('\t');
         else if (c == 'b') out.push_back('\b'); else if (c == 'f') out.push_back('\f');
         else if (c == 'u' && i + 4 < value.size()) {
-            unsigned code = 0; bool valid = true;
-            for (int n = 0; n < 4; ++n) {
-                const char d = value[++i]; code <<= 4;
-                if (d >= '0' && d <= '9') code += d - '0'; else if (d >= 'a' && d <= 'f') code += d - 'a' + 10;
-                else if (d >= 'A' && d <= 'F') code += d - 'A' + 10; else valid = false;
-            }
+            unsigned code = 0; const bool valid = Hex4(value, i + 1, code); i += 4;
             if (!valid) continue;
+            // json.dumps emits non-BMP characters as surrogate pairs; recombine them.
+            if (code >= 0xd800 && code <= 0xdbff && i + 6 < value.size() && value[i + 1] == '\\' && value[i + 2] == 'u') {
+                unsigned low = 0;
+                if (Hex4(value, i + 3, low) && low >= 0xdc00 && low <= 0xdfff) {
+                    code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00); i += 6;
+                }
+            }
             if (code <= 0x7f) out.push_back(static_cast<char>(code));
             else if (code <= 0x7ff) { out.push_back(static_cast<char>(0xc0 | (code >> 6))); out.push_back(static_cast<char>(0x80 | (code & 0x3f))); }
-            else { out.push_back(static_cast<char>(0xe0 | (code >> 12))); out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3f))); out.push_back(static_cast<char>(0x80 | (code & 0x3f))); }
+            else if (code <= 0xffff) { out.push_back(static_cast<char>(0xe0 | (code >> 12))); out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3f))); out.push_back(static_cast<char>(0x80 | (code & 0x3f))); }
+            else { out.push_back(static_cast<char>(0xf0 | (code >> 18))); out.push_back(static_cast<char>(0x80 | ((code >> 12) & 0x3f))); out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3f))); out.push_back(static_cast<char>(0x80 | (code & 0x3f))); }
         } else out.push_back(c);
     }
     return out;
@@ -77,7 +90,7 @@ std::string coverage_file_name(std::string_view project_root) {
 
 std::vector<std::string> CoverageTail::Read(const std::string& path, std::string* error) {
     if (error) error->clear(); std::vector<std::string> labels; std::error_code ec;
-    if (!fs::exists(path, ec)) return labels;
+    if (!fs::exists(path, ec)) { Reset(); return labels; }
     const auto size = fs::file_size(path, ec); if (ec) { if (error) *error = "Could not inspect coverage output."; return {}; }
     if (size < offset_) Reset();
     std::ifstream input(path, std::ios::binary); if (!input) { if (error) *error = "Could not read coverage output."; return {}; }

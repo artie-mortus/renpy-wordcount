@@ -102,7 +102,7 @@ private:
                      const wxExecuteEnv* environment = nullptr,
                      std::function<void(int, std::string)> completion = {});
     void AppendRenpyLog(const wxString& text);
-    void DrainRenpyOutput();
+    void DrainRenpyOutput(bool flush = false);
     void OnRunRenpy(wxCommandEvent& event);
     void OnStopRenpy(wxCommandEvent& event);
     void OnShowRenpyLog(wxCommandEvent& event);
@@ -158,6 +158,7 @@ private:
     std::unique_ptr<wxFileSystemWatcher> project_watcher_;
     std::unordered_map<std::string, ExternalConflict> external_conflicts_;
     bool conflict_review_open_ = false;
+    bool close_confirm_open_ = false;
     std::unique_ptr<SnapshotStore> snapshot_store_;
     std::optional<ProjectBundle> imported_bundle_;
     bool count_menu_choices_ = false;
@@ -175,6 +176,7 @@ private:
     std::string runtime_preset_name_;
     std::string runtime_state_json_ = "{}";
     std::string renpy_operation_output_;
+    std::string renpy_display_pending_;
     std::function<void(int, std::string)> renpy_completion_;
     std::unique_ptr<ManualCoverageStore> manual_coverage_store_;
     std::map<std::string, std::set<std::string>> manual_coverage_projects_;
