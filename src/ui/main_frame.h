@@ -80,6 +80,7 @@ private:
     void OnFileSystemEvent(wxFileSystemWatcherEvent& event);
     void OnReviewConflicts(wxCommandEvent& event);
     void OnSnapshotNow(wxCommandEvent& event);
+    void OnManageSnapshots(wxCommandEvent& event);
     void OnSnapshotTimer(wxTimerEvent& event);
     void OnFindResultActivated(wxDataViewEvent& event);
     FindOptions CurrentFindOptions() const;

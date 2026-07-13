@@ -66,6 +66,7 @@ public:
     std::size_t ReplaceAllAcrossFiles(const std::vector<std::size_t>& selected_files,
                                       std::string_view replacement);
     std::vector<NamedScript> ProjectScripts() const;
+    bool RestoreProjectScripts(const std::vector<NamedScript>& scripts);
     void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);

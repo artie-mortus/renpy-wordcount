@@ -2,6 +2,7 @@
 
 #include "core/snapshots.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 
@@ -48,4 +49,24 @@ TEST_CASE("snapshot store prunes to newest configured limit") {
     REQUIRE(snapshots[1].id > snapshots[2].id);
     REQUIRE(snapshots[0].label == "Snapshot 4");
     fs::remove_all(directory);
+}
+
+TEST_CASE("snapshot comparison reports changed added removed and unchanged files") {
+    say_count::Snapshot snapshot;
+    snapshot.files = {{"added.rpy", "one two"}, {"changed.rpy", "new words"},
+                      {"same.rpy", "same"}};
+    const auto comparison = say_count::compare_snapshot(
+        {{"changed.rpy", "old"}, {"removed.rpy", "gone"}, {"same.rpy", "same"}}, snapshot);
+    REQUIRE(comparison.current_words == 3);
+    REQUIRE(comparison.snapshot_words == 5);
+    REQUIRE(comparison.changed_files == 3);
+    REQUIRE(comparison.files.size() == 4);
+    const auto status = [&](std::string_view name) {
+        return std::find_if(comparison.files.begin(), comparison.files.end(),
+                            [&](const auto& file) { return file.name == name; })->status;
+    };
+    REQUIRE(status("added.rpy") == say_count::SnapshotFileStatus::Added);
+    REQUIRE(status("changed.rpy") == say_count::SnapshotFileStatus::Changed);
+    REQUIRE(status("removed.rpy") == say_count::SnapshotFileStatus::Removed);
+    REQUIRE(status("same.rpy") == say_count::SnapshotFileStatus::Unchanged);
 }

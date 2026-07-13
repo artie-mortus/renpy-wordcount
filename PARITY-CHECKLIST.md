@@ -43,7 +43,7 @@ Source: `/home/artemis/Projects/words-til-vn/README.md`. Update throughout devel
 | 37 | current-line highlight, adjustable editor font size (persisted) | Pending |
 | 38 | collapsible side panels (fold state remembered), focus mode with floating word-count pill, draggable editor/stats divider | Partial — exact-layout focus mode and live word-count pill done (Step 4.9); fold persistence/divider pending |
 | 39 | tabs: dirty dot when a file differs from what's on disk, inline rename on double-click | Pending |
-| 40 | snapshots: automatic backup every 10 minutes plus manual "Snapshot now"; restore or diff any point (last 50 kept) | Partial — automatic/manual storage and newest-50 retention done (Step 5.4); restore and diff pending (Step 5.5) |
+| 40 | snapshots: automatic backup every 10 minutes plus manual "Snapshot now"; restore or diff any point (last 50 kept) | Done — storage/retention (Step 5.4), comparison and confirmed restore (Step 5.5) |
 | 41 | outline panel: labels with word counts, menu choices, and jumps/calls — click to navigate; jumps to missing labels shown in red | Done (Step 4.1) |
 | 42 | routes panel: walks jumps/calls/fall-through from `start` for shortest/longest route word counts and reading time, ending and branch-point counts, and unreachable labels (click to jump) | Pending |
 | 43 | branch-aware route details: shows dialogue words inside each inline menu choice and conditional block | Pending |

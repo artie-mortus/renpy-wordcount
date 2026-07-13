@@ -631,6 +631,49 @@ std::vector<NamedScript> EditorNotebook::ProjectScripts() const {
     return scripts;
 }
 
+bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {
+    if (scripts.empty()) return false;
+    std::unordered_set<wxStyledTextCtrl*> retained;
+    for (const auto& script : scripts) {
+        wxStyledTextCtrl* editor = nullptr;
+        for (size_t index = 0; index < GetPageCount(); ++index) {
+            auto* candidate = EditorAt(index);
+            if (candidate && retained.count(candidate) == 0 &&
+                candidate->GetName().ToStdString() == script.name) {
+                editor = candidate;
+                break;
+            }
+        }
+        if (!editor) {
+            editor = new wxStyledTextCtrl(this, wxID_ANY);
+            ConfigureEditor(editor);
+            editor->SetName(wxString::FromUTF8(script.name));
+            editor->SetSavePoint();
+            editor->Bind(wxEVT_STC_SAVEPOINTLEFT, &EditorNotebook::OnSavePointChanged, this);
+            editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
+            AddPage(editor, editor->GetName(), false);
+        }
+        editor->SetText(NormalizeTabs(wxString::FromUTF8(script.content)));
+        RefreshSpeakers(editor);
+        editor->Colourise(0, -1);
+        UpdateTabLabel(editor);
+        retained.insert(editor);
+    }
+    for (size_t index = GetPageCount(); index-- > 0;) {
+        auto* editor = EditorAt(index);
+        if (!editor || retained.count(editor) != 0) continue;
+        speakers_.erase(editor);
+        completions_.erase(editor);
+        RemovePage(index);
+        editor->Destroy();
+    }
+    SetSelection(0);
+    RefreshCompletionIndex();
+    RefreshDiagnostics();
+    AnalyzeActive();
+    return true;
+}
+
 void EditorNotebook::SelectProjectMatch(const ProjectFindMatch& match) {
     if (match.file_index >= GetPageCount()) return;
     SetSelection(match.file_index);

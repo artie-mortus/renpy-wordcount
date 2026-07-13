@@ -80,6 +80,46 @@ std::optional<Snapshot> read_snapshot(const fs::path& path, std::string* error) 
 
 }  // namespace
 
+SnapshotComparison compare_snapshot(const std::vector<NamedScript>& current,
+                                    const Snapshot& snapshot) {
+    SnapshotComparison result;
+    std::vector<bool> matched(snapshot.files.size(), false);
+    for (const auto& file : current) {
+        const auto found = std::find_if(snapshot.files.begin(), snapshot.files.end(),
+                                        [&](const auto& candidate) { return candidate.name == file.name; });
+        SnapshotFileComparison row;
+        row.name = file.name;
+        row.current_words = count_words(file.content);
+        result.current_words += row.current_words;
+        if (found == snapshot.files.end()) {
+            row.status = SnapshotFileStatus::Removed;
+        } else {
+            const auto index = static_cast<std::size_t>(found - snapshot.files.begin());
+            matched[index] = true;
+            row.snapshot_words = count_words(found->content);
+            row.status = file.content == found->content ? SnapshotFileStatus::Unchanged
+                                                       : SnapshotFileStatus::Changed;
+        }
+        if (row.status != SnapshotFileStatus::Unchanged) ++result.changed_files;
+        result.files.push_back(std::move(row));
+    }
+    for (std::size_t index = 0; index < snapshot.files.size(); ++index) {
+        if (matched[index]) continue;
+        SnapshotFileComparison row;
+        row.name = snapshot.files[index].name;
+        row.status = SnapshotFileStatus::Added;
+        row.snapshot_words = count_words(snapshot.files[index].content);
+        ++result.changed_files;
+        result.files.push_back(std::move(row));
+    }
+    for (const auto& file : snapshot.files) result.snapshot_words += count_words(file.content);
+    std::sort(result.files.begin(), result.files.end(), [](const auto& left, const auto& right) {
+        if (left.status != right.status) return left.status != SnapshotFileStatus::Unchanged;
+        return left.name < right.name;
+    });
+    return result;
+}
+
 SnapshotStore::SnapshotStore(std::string directory, std::size_t limit)
     : directory_(std::move(directory)), limit_(limit) {}
 

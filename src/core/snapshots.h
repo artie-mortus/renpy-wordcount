@@ -32,6 +32,25 @@ struct SnapshotCreateResult {
     std::string error;
 };
 
+enum class SnapshotFileStatus { Unchanged, Changed, Added, Removed };
+
+struct SnapshotFileComparison {
+    std::string name;
+    SnapshotFileStatus status = SnapshotFileStatus::Unchanged;
+    std::size_t current_words = 0;
+    std::size_t snapshot_words = 0;
+};
+
+struct SnapshotComparison {
+    std::vector<SnapshotFileComparison> files;
+    std::size_t current_words = 0;
+    std::size_t snapshot_words = 0;
+    std::size_t changed_files = 0;
+};
+
+SnapshotComparison compare_snapshot(const std::vector<NamedScript>& current,
+                                    const Snapshot& snapshot);
+
 class SnapshotStore final {
 public:
     explicit SnapshotStore(std::string directory, std::size_t limit = 50);

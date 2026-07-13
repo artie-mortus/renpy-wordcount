@@ -28,6 +28,7 @@
 #include "ui/outline_panel.h"
 #include "ui/diagnostics_panel.h"
 #include "ui/conflict_dialog.h"
+#include "ui/snapshot_dialog.h"
 #include "core/version.h"
 
 namespace say_count::ui {
@@ -60,6 +61,7 @@ enum MenuId {
     kRecentProjectLast = kRecentProjectFirst + 7,
     kReviewConflicts = kRecentProjectLast + 1,
     kSnapshotNow,
+    kManageSnapshots,
 };
 
 class ScriptDropTarget final : public wxFileDropTarget {
@@ -169,6 +171,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_FSWATCHER, &MainFrame::OnFileSystemEvent, this);
     Bind(wxEVT_MENU, &MainFrame::OnReviewConflicts, this, kReviewConflicts);
     Bind(wxEVT_MENU, &MainFrame::OnSnapshotNow, this, kSnapshotNow);
+    Bind(wxEVT_MENU, &MainFrame::OnManageSnapshots, this, kManageSnapshots);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
     snapshot_timer_.Start(10 * 60 * 1000);
 }
@@ -190,6 +193,7 @@ void MainFrame::BuildMenus() {
     file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
     file->Append(kReviewConflicts, "Review External &Conflicts…");
     file->Append(kSnapshotNow, "&Snapshot Now", "Store a backup of every open script");
+    file->Append(kManageSnapshots, "Manage Snapshots…", "Preview, compare, and restore snapshots");
     RebuildRecentProjectsMenu();
     file->AppendSeparator();
     auto* export_menu = new wxMenu();
@@ -413,6 +417,31 @@ bool MainFrame::TakeSnapshot(bool automatic, std::string label) {
 
 void MainFrame::OnSnapshotNow(wxCommandEvent&) {
     TakeSnapshot(false);
+}
+
+void MainFrame::OnManageSnapshots(wxCommandEvent&) {
+    if (!snapshot_store_) return;
+    SnapshotDialog dialog(this, *snapshot_store_, notebook_->ProjectScripts());
+    if (dialog.ShowModal() != wxID_OK || !dialog.selected_id()) return;
+    std::string error;
+    const auto snapshot = snapshot_store_->Load(*dialog.selected_id(), &error);
+    if (!snapshot) {
+        wxMessageBox("Could not load the selected snapshot: " + wxString::FromUTF8(error),
+                     "Restore failed", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    if (wxMessageBox(
+            "Replace the complete editor tab set with this snapshot?\n\n"
+            "The current editor state will be snapshotted first. Restored files remain unsaved.",
+            "Confirm snapshot restore", wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES)
+        return;
+    if (!TakeSnapshot(false, "Before snapshot restore")) return;
+    if (!notebook_->RestoreProjectScripts(snapshot->files)) {
+        wxMessageBox("The snapshot did not contain any restorable scripts.", "Restore failed",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    SetStatusText("Snapshot restored — changes are unsaved");
 }
 
 void MainFrame::OnSnapshotTimer(wxTimerEvent&) {
