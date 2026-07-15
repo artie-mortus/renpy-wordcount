@@ -60,6 +60,7 @@ add_library(say_count_core STATIC
     src/core/routes.cpp
     src/core/flow_layout.cpp
     src/core/prose.cpp
+    src/core/manuscript.cpp
     src/core/voice.cpp
     src/core/translation.cpp
     src/core/continuity.cpp
@@ -70,6 +71,7 @@ add_library(say_count_core STATIC
     src/core/version.cpp
     src/core/workspace.cpp
     src/core/navigator.cpp
+    src/core/cloud_save.cpp
 )
 target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VERSION}")
@@ -77,6 +79,7 @@ target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VE
 add_executable(say-count
     src/app/main.cpp
     src/app/settings.cpp
+    src/app/google_drive.cpp
     src/ui/editor_notebook.cpp
     src/ui/style.cpp
     src/ui/palette_dialog.cpp
@@ -85,6 +88,7 @@ add_executable(say-count
     src/ui/snapshot_dialog.cpp
     src/ui/main_frame.cpp
     src/ui/rename_dialog.cpp
+    src/ui/manuscript_dialog.cpp
     src/ui/runtime_preset_dialog.cpp
     src/ui/renpy_lint_panel.cpp
     src/ui/asset_panel.cpp
@@ -94,8 +98,13 @@ add_executable(say-count
     src/ui/production_panel.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
+    src/ui/cloud_save_dialog.cpp
 )
-target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES})
+find_package(CURL REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
+target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES}
+    CURL::libcurl OpenSSL::Crypto Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
     target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
@@ -150,6 +159,7 @@ if(BUILD_TESTING)
         tests/routes_test.cpp
         tests/flow_layout_test.cpp
         tests/prose_test.cpp
+        tests/manuscript_test.cpp
         tests/voice_test.cpp
         tests/translation_test.cpp
         tests/continuity_test.cpp
@@ -160,6 +170,7 @@ if(BUILD_TESTING)
         tests/version_comparison_test.cpp
         tests/workspace_test.cpp
         tests/navigator_test.cpp
+        tests/cloud_save_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 

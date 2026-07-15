@@ -93,7 +93,9 @@ private:
     void OnCharHook(wxKeyEvent& event);
     void OnGoToLine(wxCommandEvent& event);
     void OnToggleComment(wxCommandEvent& event);
+    void OnWriteManuscript(wxCommandEvent& event);
     void OnShowShortcuts(wxCommandEvent& event);
+    void OnShowManuscriptGuide(wxCommandEvent& event);
     void OnToggleFocus(wxCommandEvent& event);
     void OnTogglePane(wxCommandEvent& event);
     void OnPaneClose(wxAuiManagerEvent& event);
@@ -107,6 +109,9 @@ private:
     void OnSnapshotTimer(wxTimerEvent& event);
     void OnImportProject(wxCommandEvent& event);
     void OnExportProject(wxCommandEvent& event);
+    void OnCloudSaves(wxCommandEvent& event);
+    ProjectBundle BuildProjectBundle() const;
+    bool ApplyProjectBundle(ProjectBundle bundle, const wxString& success_message);
     void OnRenameSymbol(wxCommandEvent& event);
     void OnConfigureRenpy(wxCommandEvent& event);
     void DetectRenpy();

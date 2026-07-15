@@ -9,7 +9,7 @@ search application commands.
 
 ## Build
 
-Install CMake, a C++17 compiler, wxWidgets 3.2 or newer with the `core`, `base`, `stc`, `aui`, `adv`, `html`, and `xml` components, and network access for CMake to fetch Catch2 the first time. Then run:
+Install CMake, a C++17 compiler, wxWidgets 3.2 or newer with the `core`, `base`, `stc`, `aui`, `adv`, `html`, `xml`, and `media` components, libcurl, OpenSSL, a Secret Service keyring implementation such as GNOME Keyring, and network access for CMake to fetch Catch2 the first time. Then run:
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
@@ -39,6 +39,32 @@ cmake --build build-portable -j2
 
 The normal build continues to use system wxWidgets. For offline bundled builds,
 provide `FETCHCONTENT_SOURCE_DIR_WXWIDGETS=/path/to/wxWidgets` at configure time.
+
+## Google Drive cloud saves
+
+Open **File → Google Drive Cloud Saves** or use the **Cloud** command-bar
+button. Say Count saves one complete project bundle per project name in Google
+Drive's private `appDataFolder`. These backups don't appear among normal Drive
+documents and only this OAuth application can read them. Restoring validates the
+bundle, snapshots the outgoing local editor state, and leaves restored tabs
+unsaved so disk files are never overwritten silently.
+
+Google Drive access needs a Desktop app OAuth client:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create or select
+   a project and enable the Google Drive API.
+2. Configure the OAuth consent screen. While the app is in testing, add each
+   Google account that will use cloud saves as a test user.
+3. Create an OAuth client with application type **Desktop app**, download its
+   JSON file, then choose **Import OAuth client...** in the cloud-save dialog.
+4. Choose **Connect Google Drive** and complete consent in the browser.
+
+The imported client file is stored with owner-only permissions under the Say
+Count data directory. The refresh token is stored in the operating system
+keyring, never in `settings.json`. For development or managed deployments, set
+`SAY_COUNT_GOOGLE_CLIENT_ID` and optional `SAY_COUNT_GOOGLE_CLIENT_SECRET`
+instead of importing a file. The native OAuth flow uses PKCE, a random-state
+check, and a temporary `127.0.0.1` callback.
 
 ## Install and package
 

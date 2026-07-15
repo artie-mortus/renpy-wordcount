@@ -36,6 +36,7 @@
 #include "ui/conflict_dialog.h"
 #include "ui/snapshot_dialog.h"
 #include "ui/rename_dialog.h"
+#include "ui/manuscript_dialog.h"
 #include "ui/runtime_preset_dialog.h"
 #include "ui/renpy_lint_panel.h"
 #include "ui/asset_panel.h"
@@ -44,7 +45,9 @@
 #include "ui/production_panel.h"
 #include "ui/style.h"
 #include "ui/palette_dialog.h"
+#include "ui/cloud_save_dialog.h"
 #include "core/version.h"
+#include "core/cloud_save.h"
 #include "core/indent.h"
 #include "core/navigator.h"
 #include "core/workspace.h"
@@ -72,7 +75,9 @@ enum MenuId {
     kFindClose,
     kGoToLine,
     kToggleComment,
+    kWriteManuscript,
     kShortcutSheet,
+    kManuscriptGuide,
     kFocusMode,
     kConnectProject,
     kRecentProjectFirst,
@@ -82,6 +87,7 @@ enum MenuId {
     kManageSnapshots,
     kImportProject,
     kExportProject,
+    kCloudSaves,
     kRenameSymbol,
     kConfigureRenpy,
     kRenpyStatus,
@@ -416,7 +422,9 @@ MainFrame::MainFrame()
     Bind(wxEVT_CHAR_HOOK, &MainFrame::OnCharHook, this);
     Bind(wxEVT_MENU, &MainFrame::OnGoToLine, this, kGoToLine);
     Bind(wxEVT_MENU, &MainFrame::OnToggleComment, this, kToggleComment);
+    Bind(wxEVT_MENU, &MainFrame::OnWriteManuscript, this, kWriteManuscript);
     Bind(wxEVT_MENU, &MainFrame::OnShowShortcuts, this, kShortcutSheet);
+    Bind(wxEVT_MENU, &MainFrame::OnShowManuscriptGuide, this, kManuscriptGuide);
     Bind(wxEVT_MENU, &MainFrame::OnToggleFocus, this, kFocusMode);
     Bind(wxEVT_MENU, &MainFrame::OnTogglePane, this, kShowOutline, kShowDiagnostics);
     Bind(wxEVT_AUI_PANE_CLOSE, &MainFrame::OnPaneClose, this);
@@ -429,6 +437,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnManageSnapshots, this, kManageSnapshots);
     Bind(wxEVT_MENU, &MainFrame::OnImportProject, this, kImportProject);
     Bind(wxEVT_MENU, &MainFrame::OnExportProject, this, kExportProject);
+    Bind(wxEVT_MENU, &MainFrame::OnCloudSaves, this, kCloudSaves);
     Bind(wxEVT_MENU, &MainFrame::OnRenameSymbol, this, kRenameSymbol);
     Bind(wxEVT_MENU, &MainFrame::OnConfigureRenpy, this, kConfigureRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnRunRenpy, this, kRunRenpy);
@@ -520,13 +529,17 @@ void MainFrame::BuildCommandBar() {
     };
     auto* open = make_action("Open script");
     auto* save = make_action("Save");
+    auto* manuscript = make_action("Write prose");
     auto* production = make_action("Production");
+    auto* cloud = make_action("Cloud");
     auto* run = make_action("Run project", true);
     layout->AddSpacer(8);
 
     open->Bind(wxEVT_BUTTON, &MainFrame::OnOpen, this);
     save->Bind(wxEVT_BUTTON, &MainFrame::OnSave, this);
+    manuscript->Bind(wxEVT_BUTTON, &MainFrame::OnWriteManuscript, this);
     production->Bind(wxEVT_BUTTON, &MainFrame::OnShowProduction, this);
+    cloud->Bind(wxEVT_BUTTON, &MainFrame::OnCloudSaves, this);
     run->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
     command_bar_->SetSizer(layout);
 }
@@ -546,6 +559,7 @@ void MainFrame::BuildMenus() {
     file->Append(kReviewConflicts, "Review External &Conflicts...");
     file->Append(kSnapshotNow, "&Snapshot Now", "Store a backup of every open script");
     file->Append(kManageSnapshots, "Manage Snapshots...", "Preview, compare, and restore snapshots");
+    file->Append(kCloudSaves, "Google Drive Cloud Saves...", "Back up or restore the open project");
     file->Append(kImportProject, "Import Say Count Project...", "Import a browser-app project bundle");
     RebuildRecentProjectsMenu();
     file->AppendSeparator();
@@ -568,6 +582,8 @@ void MainFrame::BuildMenus() {
     edit->AppendSeparator();
     edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
+    edit->Append(kWriteManuscript, "Write Dialogue as &Prose...",
+                 "Convert book-style dialogue and narration to Ren'Py script");
     edit->Append(kFixIndents, "Fix &Indents...", "Preview and repair indentation in the active file");
     edit->Append(kRenameSymbol, "Rename Ren'Py Symbol...", "Preview and safely rename an alias or label project-wide");
     auto* view = new wxMenu();
@@ -592,8 +608,11 @@ void MainFrame::BuildMenus() {
     view->AppendSubMenu(theme, "Theme");
 
     auto* help = new wxMenu();
-    help->Append(wxID_ABOUT, "&About", "About Say Count");
+    help->Append(kManuscriptGuide, "Prose Writing &Guide...",
+                 "Learn the supported manuscript formats and conversion rules");
     help->Append(kShortcutSheet, "Keyboard &Shortcuts\tCtrl+K");
+    help->AppendSeparator();
+    help->Append(wxID_ABOUT, "&About", "About Say Count");
     renpy_menu_ = new wxMenu();
     renpy_menu_->Append(kRunRenpy, "Run Project\tF6");
     renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
@@ -860,8 +879,29 @@ void MainFrame::OnImportProject(wxCommandEvent&) {
         return;
     }
     if (!TakeSnapshot(false, "Before project import")) return;
-    ProjectBundle bundle = std::move(*parsed.bundle);
-    if (!notebook_->RestoreProjectScripts(bundle.files)) return;
+    const std::size_t imported_count = parsed.bundle->files.size();
+    ApplyProjectBundle(std::move(*parsed.bundle),
+        wxString::Format("Imported project with %zu files", imported_count));
+}
+
+ProjectBundle MainFrame::BuildProjectBundle() const {
+    ProjectBundle bundle = imported_bundle_.value_or(ProjectBundle{});
+    bundle.files = notebook_->ProjectScripts();
+    bundle.active_file = notebook_->CurrentFileIndex();
+    bundle.exported_at = wxDateTime::UNow().FormatISOCombined('T').ToStdString(wxConvUTF8) + "Z";
+    const auto [speakers, scenes] = speaker_stats_->ExportTargets();
+    bundle.speaker_targets = speakers;
+    bundle.scene_targets = scenes;
+    const auto project_target = speaker_stats_->ExportProjectTarget();
+    bundle.settings.target = project_target.words > 0 ? std::to_string(project_target.words) : "";
+    bundle.settings.line_target = project_target.lines > 0 ? std::to_string(project_target.lines) : "";
+    bundle.settings.count_menu_choices = count_menu_choices_;
+    bundle.settings.theme = editor_settings_.theme == app::EditorTheme::Dark ? "dark" : "light";
+    return bundle;
+}
+
+bool MainFrame::ApplyProjectBundle(ProjectBundle bundle, const wxString& success_message) {
+    if (!notebook_->RestoreProjectScripts(bundle.files)) return false;
     notebook_->SelectFileIndex(bundle.active_file);
     count_menu_choices_ = bundle.settings.count_menu_choices;
     notebook_->SetCountMenuChoices(count_menu_choices_);
@@ -876,7 +916,8 @@ void MainFrame::OnImportProject(wxCommandEvent&) {
                                   positive(bundle.settings.line_target),
                                   bundle.speaker_targets, bundle.scene_targets);
     imported_bundle_ = std::move(bundle);
-    SetStatusText(wxString::Format("Imported project with %zu files", notebook_->ProjectScripts().size()));
+    SetStatusText(success_message);
+    return true;
 }
 
 void MainFrame::OnExportProject(wxCommandEvent&) {
@@ -885,18 +926,7 @@ void MainFrame::OnExportProject(wxCommandEvent&) {
                         "Say Count projects (*.saycount.json)|*.saycount.json|JSON files (*.json)|*.json",
                         wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dialog.ShowModal() != wxID_OK) return;
-    ProjectBundle bundle = imported_bundle_.value_or(ProjectBundle{});
-    bundle.files = notebook_->ProjectScripts();
-    bundle.active_file = notebook_->CurrentFileIndex();
-    bundle.exported_at = wxDateTime::UNow().FormatISOCombined('T').ToStdString(wxConvUTF8) + "Z";
-    const auto [speakers, scenes] = speaker_stats_->ExportTargets();
-    bundle.speaker_targets = speakers;
-    bundle.scene_targets = scenes;
-    const auto project_target = speaker_stats_->ExportProjectTarget();
-    bundle.settings.target = project_target.words > 0 ? std::to_string(project_target.words) : "";
-    bundle.settings.line_target = project_target.lines > 0 ? std::to_string(project_target.lines) : "";
-    bundle.settings.count_menu_choices = count_menu_choices_;
-    bundle.settings.theme = editor_settings_.theme == app::EditorTheme::Dark ? "dark" : "light";
+    ProjectBundle bundle = BuildProjectBundle();
     wxFile file;
     const std::string json = project_bundle_json(bundle);
     if (!file.Create(dialog.GetPath(), true) || !file.Write(wxString::FromUTF8(json), wxConvUTF8) ||
@@ -906,6 +936,30 @@ void MainFrame::OnExportProject(wxCommandEvent&) {
     }
     imported_bundle_ = bundle;
     SetStatusText("Project exported");
+}
+
+void MainFrame::OnCloudSaves(wxCommandEvent&) {
+    wxString project_name;
+    if (project_) project_name = wxFileName(wxString::FromUTF8(project_->root)).GetFullName();
+    if (project_name.empty()) project_name = wxFileName(notebook_->CurrentFileName()).GetName();
+    if (project_name.empty()) project_name = "Loose scripts";
+    const ProjectBundle current = BuildProjectBundle();
+    CloudSaveDialog dialog(this, settings_.data_directory().ToStdString(wxConvUTF8),
+        cloud_save_file_name(project_name.ToStdString(wxConvUTF8)), project_bundle_json(current));
+    if (dialog.ShowModal() != wxID_OK || !dialog.restored_bundle()) return;
+    auto parsed = parse_project_bundle(*dialog.restored_bundle());
+    if (!parsed.bundle) {
+        wxMessageBox("The cloud save is not a valid Say Count project: " + wxString::FromUTF8(parsed.error),
+                     "Cloud restore failed", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    const wxString name = wxString::FromUTF8(dialog.restored_name());
+    if (wxMessageBox("Restore “" + name + "” from Google Drive?\n\n"
+                     "The current editor state will be snapshotted first. Restored files remain unsaved.",
+                     "Confirm cloud restore", wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES)
+        return;
+    if (!TakeSnapshot(false, "Before Google Drive restore")) return;
+    ApplyProjectBundle(std::move(*parsed.bundle), "Restored “" + name + "” from Google Drive — changes are unsaved");
 }
 
 void MainFrame::OnRenameSymbol(wxCommandEvent&) {
@@ -1642,6 +1696,10 @@ void MainFrame::OnShowShortcuts(wxCommandEvent&) {
     wxMessageBox(shortcuts, "Keyboard Shortcuts", wxOK | wxICON_INFORMATION, this);
 }
 
+void MainFrame::OnShowManuscriptGuide(wxCommandEvent&) {
+    ShowManuscriptGuide(this);
+}
+
 void MainFrame::OnToggleFocus(wxCommandEvent& event) {
     const bool enable = event.IsChecked();
     if (enable == focus_mode_) return;
@@ -1786,10 +1844,12 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Save As", "Ctrl+Shift+S · File", wxID_SAVEAS}, {"Close tab", "Ctrl+W · File", wxID_CLOSE},
         {"Connect project folder", "Project", kConnectProject}, {"Snapshot now", "Project", kSnapshotNow},
         {"Manage snapshots", "Project", kManageSnapshots}, {"Review external conflicts", "Project", kReviewConflicts},
+        {"Google Drive cloud saves", "Project", kCloudSaves},
         {"Import Say Count project", "File", kImportProject}, {"Export complete project", "File", kExportProject},
         {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
         {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},
         {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
+        {"Write dialogue as prose", "Edit", kWriteManuscript},
         {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
         {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
         {"Toggle outline", "View", kShowOutline}, {"Toggle speaker statistics", "View", kShowSpeakerStats},
@@ -1804,6 +1864,7 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Export dialogue", "Ren'Py", kExportDialogue}, {"Browse project assets", "Ren'Py", kShowAssets},
         {"Label coverage", "Ren'Py", kShowCoverage}, {"Stop running project", "Shift+F6 · Ren'Py", kStopRenpy},
         {"Show launch log", "Ren'Py", kShowRenpyLog}, {"Configure Ren'Py SDK", "Ren'Py", kConfigureRenpy},
+        {"Prose writing guide", "Help", kManuscriptGuide},
         {"Keyboard shortcuts", "Ctrl+K · Help", kShortcutSheet}, {"About Say Count", "Help", wxID_ABOUT}
     };
     PaletteDialog dialog(this, "Command Palette", "Type an action", commands);
@@ -1817,6 +1878,13 @@ void MainFrame::OnQuit(wxCommandEvent&) {
 
 void MainFrame::OnNewTab(wxCommandEvent&) {
     notebook_->NewTab();
+}
+
+void MainFrame::OnWriteManuscript(wxCommandEvent&) {
+    ManuscriptDialog dialog(this);
+    if (dialog.ShowModal() != wxID_OK) return;
+    notebook_->InsertAtCaret(dialog.conversion().script);
+    SetStatusText("Converted prose inserted as Ren'Py script");
 }
 
 void MainFrame::OnOpen(wxCommandEvent&) {
