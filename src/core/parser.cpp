@@ -328,6 +328,16 @@ std::vector<std::string> word_tokens(std::string_view text) {
     return result;
 }
 
+std::optional<std::string> character_alias_on_line(std::string_view line) {
+    static const std::regex definition(
+        R"(^\s*(?:(?:define|default)\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:renpy\.)?Character\s*\()",
+        std::regex::ECMAScript);
+    const auto token = tokenize_line(line, 0);
+    std::smatch match;
+    if (!std::regex_search(token.code, match, definition)) return std::nullopt;
+    return std::string(match[1].first, match[1].second);
+}
+
 ScriptAnalysis analyze_with_characters(std::string_view script,
                                        const std::map<std::string, std::string>& names,
                                        const std::map<std::string, std::string>& colors,

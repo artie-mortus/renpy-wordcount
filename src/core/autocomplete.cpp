@@ -34,9 +34,16 @@ void append_symbol_items(CompletionResult& result, const std::vector<std::string
 }
 
 CompletionIndex build_completion_index(const std::vector<NamedScript>& scripts) {
+    std::vector<CompletionIndex> indexes;
+    indexes.reserve(scripts.size());
+    for (const auto& script : scripts) indexes.push_back(build_completion_index(script));
+    return merge_completion_indexes(indexes);
+}
+
+CompletionIndex build_completion_index(const NamedScript& script) {
     CompletionIndex index;
     std::set<std::string> labels, images, audio, screens, variables;
-    index.character_names = analyze_project(scripts).character_names;
+    index.character_names = analyze_script(script.content).character_names;
 
     static const std::regex image_pattern(
         R"(^image\s+([A-Za-z_][A-Za-z0-9_.]*(?:\s+[A-Za-z_][A-Za-z0-9_.]*)*)\s*=)");
@@ -50,24 +57,22 @@ CompletionIndex build_completion_index(const std::vector<NamedScript>& scripts) 
     static const std::regex audio_path_pattern(
         R"audio(^(?:play|queue)\s+(?:music|sound|audio|voice)\s+"([^"\\]+)")audio");
 
-    for (const auto& script : scripts) {
-        for (const auto& item : build_outline(script.content)) {
-            if (item.kind == OutlineKind::Label) labels.insert(item.qualified_name);
-        }
-        std::istringstream lines(script.content);
-        std::string line;
-        while (std::getline(lines, line)) {
-            const std::string& code = tokenize_line(line, 0).code;
-            std::smatch match;
-            if (std::regex_search(code, match, image_pattern)) images.insert(match[1].str());
-            if (std::regex_search(code, match, screen_pattern)) screens.insert(match[1].str());
-            if (std::regex_search(code, match, default_pattern)) variables.insert(match[1].str());
-            if (!std::regex_search(code, character_pattern) &&
-                std::regex_search(code, match, define_pattern)) variables.insert(match[1].str());
-            if (std::regex_search(code, match, assignment_pattern)) variables.insert(match[1].str());
-            if (std::regex_search(code, match, audio_definition_pattern)) audio.insert(match[1].str());
-            if (std::regex_search(code, match, audio_path_pattern)) audio.insert(match[1].str());
-        }
+    for (const auto& item : build_outline(script.content)) {
+        if (item.kind == OutlineKind::Label) labels.insert(item.qualified_name);
+    }
+    std::istringstream lines(script.content);
+    std::string line;
+    while (std::getline(lines, line)) {
+        const std::string& code = tokenize_line(line, 0).code;
+        std::smatch match;
+        if (std::regex_search(code, match, image_pattern)) images.insert(match[1].str());
+        if (std::regex_search(code, match, screen_pattern)) screens.insert(match[1].str());
+        if (std::regex_search(code, match, default_pattern)) variables.insert(match[1].str());
+        if (!std::regex_search(code, character_pattern) &&
+            std::regex_search(code, match, define_pattern)) variables.insert(match[1].str());
+        if (std::regex_search(code, match, assignment_pattern)) variables.insert(match[1].str());
+        if (std::regex_search(code, match, audio_definition_pattern)) audio.insert(match[1].str());
+        if (std::regex_search(code, match, audio_path_pattern)) audio.insert(match[1].str());
     }
     index.labels = sorted_vector(labels);
     index.images = sorted_vector(images);
@@ -75,6 +80,28 @@ CompletionIndex build_completion_index(const std::vector<NamedScript>& scripts) 
     index.screens = sorted_vector(screens);
     index.variables = sorted_vector(variables);
     return index;
+}
+
+CompletionIndex merge_completion_indexes(const std::vector<CompletionIndex>& indexes) {
+    CompletionIndex merged;
+    std::set<std::string> labels, images, audio, screens, variables;
+    const auto append = [](std::set<std::string>& output, const std::vector<std::string>& input) {
+        output.insert(input.begin(), input.end());
+    };
+    for (const auto& index : indexes) {
+        for (const auto& [alias, name] : index.character_names) merged.character_names[alias] = name;
+        append(labels, index.labels);
+        append(images, index.images);
+        append(audio, index.audio);
+        append(screens, index.screens);
+        append(variables, index.variables);
+    }
+    merged.labels = sorted_vector(labels);
+    merged.images = sorted_vector(images);
+    merged.audio = sorted_vector(audio);
+    merged.screens = sorted_vector(screens);
+    merged.variables = sorted_vector(variables);
+    return merged;
 }
 
 CompletionResult project_completions(std::string_view source, std::size_t caret,

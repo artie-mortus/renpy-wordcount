@@ -25,7 +25,7 @@ if [[ -z "$linuxdeploy_bin" || -z "$appimagetool_bin" ]]; then
 fi
 
 "$linuxdeploy_bin" --appdir "$appdir" \
-    --desktop-file "$root/resources/say-count.desktop" \
-    --icon-file "$root/resources/say-count.svg"
+    --desktop-file "$build_dir/say-count.desktop" \
+    --icon-file "$root/resources/say-count.png"
 ARCH=x86_64 "$appimagetool_bin" "$appdir" "$output"
 printf 'Created %s\n' "$output"

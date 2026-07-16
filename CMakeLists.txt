@@ -117,8 +117,8 @@ install(TARGETS say-count RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 configure_file(resources/say-count.desktop.in ${CMAKE_CURRENT_BINARY_DIR}/say-count.desktop @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/say-count.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-install(FILES resources/say-count.svg
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+install(FILES resources/say-count.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/1024x1024/apps)
 install(FILES resources/text-x-renpy.xml
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
 
@@ -176,6 +176,13 @@ if(BUILD_TESTING)
         tests/cloud_save_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
+
+    add_executable(say-count-performance tests/performance_benchmark.cpp)
+    target_link_libraries(say-count-performance PRIVATE say_count_core)
+    add_custom_target(performance-check
+        COMMAND say-count-performance --check
+        DEPENDS say-count-performance
+        COMMENT "Running performance regression thresholds")
 
     include(Catch)
     catch_discover_tests(say-count-tests)

@@ -94,3 +94,20 @@ TEST_CASE("rebuilding the completion index reflects project edits") {
     index = say_count::build_completion_index(scripts);
     REQUIRE(index.images == std::vector<std::string>{"new pose"});
 }
+
+TEST_CASE("per-document completion indexes merge and remove stale symbols") {
+    auto first = say_count::build_completion_index(say_count::NamedScript{
+        "first.rpy", "define e = Character(\"Early Eileen\")\nlabel first:\nimage shared = \"a.png\"\n"});
+    auto second = say_count::build_completion_index(say_count::NamedScript{
+        "second.rpy", "define e = Character(\"Later Eileen\")\nlabel second:\ndefault score = 0\n"});
+    auto merged = say_count::merge_completion_indexes({first, second});
+    CHECK(merged.character_names.at("e") == "Later Eileen");
+    CHECK(merged.labels == std::vector<std::string>{"first", "second"});
+    CHECK(merged.images == std::vector<std::string>{"shared"});
+    CHECK(merged.variables == std::vector<std::string>{"score"});
+
+    first = say_count::build_completion_index(say_count::NamedScript{"first.rpy", "label replacement:\n"});
+    merged = say_count::merge_completion_indexes({first, second});
+    CHECK(merged.labels == std::vector<std::string>{"replacement", "second"});
+    CHECK(merged.images.empty());
+}

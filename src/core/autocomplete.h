@@ -31,6 +31,8 @@ struct CompletionIndex {
 };
 
 CompletionIndex build_completion_index(const std::vector<NamedScript>& scripts);
+CompletionIndex build_completion_index(const NamedScript& script);
+CompletionIndex merge_completion_indexes(const std::vector<CompletionIndex>& indexes);
 CompletionResult project_completions(std::string_view source, std::size_t caret,
                                      const CompletionIndex& index);
 CompletionResult basic_completions(std::string_view source, std::size_t caret);
