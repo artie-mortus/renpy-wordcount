@@ -3,6 +3,7 @@
 #include "core/tokenizer.h"
 #include "core/autocomplete.h"
 #include "core/editor_commands.h"
+#include "core/manuscript.h"
 #include "ui/style.h"
 
 #include <algorithm>
@@ -845,6 +846,38 @@ void EditorNotebook::InsertAtCaret(std::string_view text) {
     editor->ReplaceSelection(wxString::FromUTF8(text.data(), text.size()));
     editor->EndUndoAction();
     editor->SetFocus();
+}
+
+ManuscriptConversionScope EditorNotebook::ConvertManuscript() {
+    const int page = GetSelection();
+    auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));
+    if (!editor) return ManuscriptConversionScope::None;
+
+    const int selection_start = editor->GetSelectionStart();
+    const int selection_end = editor->GetSelectionEnd();
+    const bool has_selection = selection_start != selection_end;
+    const int start = has_selection ? selection_start : 0;
+    const int end = has_selection ? selection_end : editor->GetTextLength();
+    const wxString source = editor->GetTextRange(start, end);
+    if (source.Strip(wxString::both).empty()) return ManuscriptConversionScope::None;
+
+    ManuscriptOptions options;
+    options.label = has_selection ? "" : "start";
+    options.include_character_definitions = !has_selection;
+    const auto converted = convert_manuscript_to_renpy(source.ToStdString(wxConvUTF8), options);
+    if (converted.script.empty()) return ManuscriptConversionScope::None;
+
+    editor->BeginUndoAction();
+    editor->SetTargetStart(start);
+    editor->SetTargetEnd(end);
+    editor->ReplaceTarget(wxString::FromUTF8(converted.script));
+    editor->EndUndoAction();
+    const int caret = start + static_cast<int>(converted.script.size());
+    editor->SetSelection(caret, caret);
+    editor->EnsureCaretVisible();
+    editor->SetFocus();
+    return has_selection ? ManuscriptConversionScope::Selection
+                         : ManuscriptConversionScope::Document;
 }
 
 bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {

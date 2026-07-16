@@ -33,6 +33,7 @@ struct FindStatus {
 };
 
 enum class ExternalFileResult { NotOpen, Unchanged, Reloaded, Dirty, Missing, Failed };
+enum class ManuscriptConversionScope { None, Document, Selection };
 struct ExternalFileUpdate {
     ExternalFileResult result = ExternalFileResult::NotOpen;
     std::string local_content;
@@ -78,6 +79,7 @@ public:
     bool SaveAll();
     bool OpenAndJump(const wxString& path, std::size_t line);
     void InsertAtCaret(std::string_view text);
+    ManuscriptConversionScope ConvertManuscript();
     void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);

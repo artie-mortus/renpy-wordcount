@@ -2,7 +2,7 @@
 Type=Application
 Name=Say Count
 Comment=Edit Ren'Py scripts and count dialogue words
-Exec=say-count %F
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/say-count %F
 Icon=say-count
 Terminal=false
 Categories=Utility;TextEditor;

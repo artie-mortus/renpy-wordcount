@@ -529,7 +529,7 @@ void MainFrame::BuildCommandBar() {
     };
     auto* open = make_action("Open script");
     auto* save = make_action("Save");
-    auto* manuscript = make_action("Write prose");
+    auto* manuscript = make_action("Convert prose");
     auto* production = make_action("Production");
     auto* cloud = make_action("Cloud");
     auto* run = make_action("Run project", true);
@@ -582,8 +582,8 @@ void MainFrame::BuildMenus() {
     edit->AppendSeparator();
     edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
-    edit->Append(kWriteManuscript, "Write Dialogue as &Prose...",
-                 "Convert book-style dialogue and narration to Ren'Py script");
+    edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
+                 "Convert selected prose, or the entire active editor, to Ren'Py script");
     edit->Append(kFixIndents, "Fix &Indents...", "Preview and repair indentation in the active file");
     edit->Append(kRenameSymbol, "Rename Ren'Py Symbol...", "Preview and safely rename an alias or label project-wide");
     auto* view = new wxMenu();
@@ -1849,7 +1849,7 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
         {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},
         {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
-        {"Write dialogue as prose", "Edit", kWriteManuscript},
+        {"Convert prose to Ren'Py", "Edit", kWriteManuscript},
         {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
         {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
         {"Toggle outline", "View", kShowOutline}, {"Toggle speaker statistics", "View", kShowSpeakerStats},
@@ -1881,10 +1881,16 @@ void MainFrame::OnNewTab(wxCommandEvent&) {
 }
 
 void MainFrame::OnWriteManuscript(wxCommandEvent&) {
-    ManuscriptDialog dialog(this);
-    if (dialog.ShowModal() != wxID_OK) return;
-    notebook_->InsertAtCaret(dialog.conversion().script);
-    SetStatusText("Converted prose inserted as Ren'Py script");
+    const auto scope = notebook_->ConvertManuscript();
+    if (scope == ManuscriptConversionScope::None) {
+        wxMessageBox("Type prose in the active script editor, then choose Convert prose.\n\n"
+                     "To convert only part of a tab, select that text first.",
+                     "Nothing to convert", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+    SetStatusText(scope == ManuscriptConversionScope::Selection
+        ? "Converted selected prose to Ren'Py — Undo restores it"
+        : "Converted active tab to Ren'Py — Undo restores it");
 }
 
 void MainFrame::OnOpen(wxCommandEvent&) {

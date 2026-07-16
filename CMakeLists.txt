@@ -112,7 +112,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 install(TARGETS say-count RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES resources/say-count.desktop
+configure_file(resources/say-count.desktop.in ${CMAKE_CURRENT_BINARY_DIR}/say-count.desktop @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/say-count.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES resources/say-count.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
