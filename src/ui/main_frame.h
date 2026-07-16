@@ -94,6 +94,7 @@ private:
     void OnGoToLine(wxCommandEvent& event);
     void OnToggleComment(wxCommandEvent& event);
     void OnWriteManuscript(wxCommandEvent& event);
+    void OnConfigureOfflineProseAi(wxCommandEvent& event);
     void OnShowShortcuts(wxCommandEvent& event);
     void OnShowManuscriptGuide(wxCommandEvent& event);
     void OnToggleFocus(wxCommandEvent& event);

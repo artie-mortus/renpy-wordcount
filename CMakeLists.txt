@@ -61,6 +61,7 @@ add_library(say_count_core STATIC
     src/core/flow_layout.cpp
     src/core/prose.cpp
     src/core/manuscript.cpp
+    src/core/offline_prose_ai.cpp
     src/core/voice.cpp
     src/core/translation.cpp
     src/core/continuity.cpp
@@ -80,6 +81,7 @@ add_executable(say-count
     src/app/main.cpp
     src/app/settings.cpp
     src/app/google_drive.cpp
+    src/app/offline_prose_runner.cpp
     src/ui/editor_notebook.cpp
     src/ui/style.cpp
     src/ui/palette_dialog.cpp

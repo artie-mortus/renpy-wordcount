@@ -28,6 +28,7 @@
 #include <wx/choicdlg.h>
 #include <wx/dataview.h>
 #include <wx/stream.h>
+#include <wx/progdlg.h>
 
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
@@ -51,6 +52,7 @@
 #include "core/indent.h"
 #include "core/navigator.h"
 #include "core/workspace.h"
+#include "app/offline_prose_runner.h"
 
 namespace say_count::ui {
 namespace {
@@ -76,6 +78,7 @@ enum MenuId {
     kGoToLine,
     kToggleComment,
     kWriteManuscript,
+    kConfigureOfflineProseAi,
     kShortcutSheet,
     kManuscriptGuide,
     kFocusMode,
@@ -423,6 +426,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnGoToLine, this, kGoToLine);
     Bind(wxEVT_MENU, &MainFrame::OnToggleComment, this, kToggleComment);
     Bind(wxEVT_MENU, &MainFrame::OnWriteManuscript, this, kWriteManuscript);
+    Bind(wxEVT_MENU, &MainFrame::OnConfigureOfflineProseAi, this, kConfigureOfflineProseAi);
     Bind(wxEVT_MENU, &MainFrame::OnShowShortcuts, this, kShortcutSheet);
     Bind(wxEVT_MENU, &MainFrame::OnShowManuscriptGuide, this, kManuscriptGuide);
     Bind(wxEVT_MENU, &MainFrame::OnToggleFocus, this, kFocusMode);
@@ -584,6 +588,8 @@ void MainFrame::BuildMenus() {
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
     edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
                  "Convert selected prose, or the entire active editor, to Ren'Py script");
+    edit->Append(kConfigureOfflineProseAi, "Configure &Offline Prose AI...",
+                 "Optionally improve prose interpretation with a network-blocked local model");
     edit->Append(kFixIndents, "Fix &Indents...", "Preview and repair indentation in the active file");
     edit->Append(kRenameSymbol, "Rename Ren'Py Symbol...", "Preview and safely rename an alias or label project-wide");
     auto* view = new wxMenu();
@@ -1881,16 +1887,76 @@ void MainFrame::OnNewTab(wxCommandEvent&) {
 }
 
 void MainFrame::OnWriteManuscript(wxCommandEvent&) {
-    const auto scope = notebook_->ConvertManuscript();
-    if (scope == ManuscriptConversionScope::None) {
+    auto preview = notebook_->PrepareManuscriptConversion();
+    if (!preview) {
         wxMessageBox("Type prose in the active script editor, then choose Convert prose.\n\n"
                      "To convert only part of a tab, select that text first.",
                      "Nothing to convert", wxOK | wxICON_INFORMATION, this);
         return;
     }
-    SetStatusText(scope == ManuscriptConversionScope::Selection
-        ? "Converted selected prose to Ren'Py — Undo restores it"
-        : "Converted active tab to Ren'Py — Undo restores it");
+    if (preview->inclusive_conversion.script == preview->source) {
+        SetStatusText("Already looks like Ren'Py — nothing changed");
+        return;
+    }
+    bool offline_ai_used = false;
+    if (editor_settings_.offline_prose_ai) {
+        wxProgressDialog progress("Offline prose AI",
+            "Interpreting prose locally · network access is blocked", 100, this,
+            wxPD_APP_MODAL | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME | wxPD_SMOOTH);
+        const auto characters = analyze_project(notebook_->ProjectScripts()).character_names;
+        const auto local = app::run_offline_prose_model(
+            preview->source, characters,
+            editor_settings_.offline_ai_runner_path.ToStdString(wxConvUTF8),
+            editor_settings_.offline_ai_model_path.ToStdString(wxConvUTF8),
+            [&progress] {
+                bool keep_going = true;
+                progress.Pulse("Interpreting prose locally · network access is blocked", &keep_going);
+                return keep_going;
+            });
+        if (local.cancelled) {
+            SetStatusText("Offline prose conversion cancelled — nothing changed");
+            return;
+        }
+        if (!local.error.empty()) {
+            wxMessageBox(wxString::FromUTF8(local.error) +
+                         "\n\nThe rule-based converter will be used instead.",
+                         "Offline AI unavailable", wxOK | wxICON_WARNING, this);
+        } else {
+            offline_ai_used = notebook_->PrepareOfflineAiConversion(
+                &*preview, local.rewrite.manuscript);
+        }
+    }
+    ManuscriptReviewDialog dialog(this, preview->lines, preview->safe_conversion,
+                                  preview->inclusive_conversion, preview->source, offline_ai_used);
+    if (dialog.ShowModal() != wxID_OK) return;
+    const bool include_uncertain = dialog.include_uncertain_lines();
+    const auto& conversion = dialog.selected_conversion();
+    if (!notebook_->ApplyManuscriptConversion(*preview, include_uncertain)) {
+        SetStatusText("Prose conversion was not applied");
+        return;
+    }
+    const std::size_t pending = include_uncertain ? 0 : dialog.uncertain_line_count();
+    const std::string summary = "Converted " + std::to_string(dialog.converted_line_count()) +
+        " prose · preserved " + std::to_string(dialog.preserved_line_count()) +
+        " code · reused " + std::to_string(conversion.reused_aliases.size()) +
+        (conversion.reused_aliases.size() == 1 ? " character · created " : " characters · created ") +
+        std::to_string(conversion.characters.size()) +
+        (conversion.characters.size() == 1 ? " character · " : " characters · ") +
+        std::to_string(pending) + (pending == 1 ? " needs review" : " need review") +
+        " · Undo restores it";
+    SetStatusText(wxString::FromUTF8(summary));
+}
+
+void MainFrame::OnConfigureOfflineProseAi(wxCommandEvent&) {
+    if (!ConfigureOfflineProseAi(this, &editor_settings_)) return;
+    if (!settings_.SaveEditor(editor_settings_)) {
+        wxMessageBox("Could not save the offline AI setting.", "Settings failed",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    SetStatusText(editor_settings_.offline_prose_ai
+        ? "Offline prose AI enabled · model runs locally with network blocked"
+        : "Offline prose AI disabled · using the rule-based converter");
 }
 
 void MainFrame::OnOpen(wxCommandEvent&) {

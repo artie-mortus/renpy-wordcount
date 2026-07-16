@@ -848,10 +848,10 @@ void EditorNotebook::InsertAtCaret(std::string_view text) {
     editor->SetFocus();
 }
 
-ManuscriptConversionScope EditorNotebook::ConvertManuscript() {
+std::optional<ManuscriptEditorPreview> EditorNotebook::PrepareManuscriptConversion() const {
     const int page = GetSelection();
     auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));
-    if (!editor) return ManuscriptConversionScope::None;
+    if (!editor) return std::nullopt;
 
     const int selection_start = editor->GetSelectionStart();
     const int selection_end = editor->GetSelectionEnd();
@@ -859,25 +859,56 @@ ManuscriptConversionScope EditorNotebook::ConvertManuscript() {
     const int start = has_selection ? selection_start : 0;
     const int end = has_selection ? selection_end : editor->GetTextLength();
     const wxString source = editor->GetTextRange(start, end);
-    if (source.Strip(wxString::both).empty()) return ManuscriptConversionScope::None;
+    if (source.Strip(wxString::both).empty()) return std::nullopt;
+    const std::string source_utf8 = source.ToStdString(wxConvUTF8);
+    const auto existing_characters = analyze_project(ProjectScripts()).character_names;
+    ManuscriptEditorPreview preview;
+    preview.start = start;
+    preview.end = end;
+    preview.selection = has_selection;
+    preview.source = source_utf8;
+    preview.lines = review_manuscript_lines(source_utf8);
+    preview.safe_conversion = convert_mixed_manuscript_to_renpy(
+        source_utf8, !has_selection, existing_characters, false);
+    preview.inclusive_conversion = convert_mixed_manuscript_to_renpy(
+        source_utf8, !has_selection, existing_characters, true);
+    return preview;
+}
 
-    ManuscriptOptions options;
-    options.label = has_selection ? "" : "start";
-    options.include_character_definitions = !has_selection;
-    const auto converted = convert_manuscript_to_renpy(source.ToStdString(wxConvUTF8), options);
-    if (converted.script.empty()) return ManuscriptConversionScope::None;
+bool EditorNotebook::PrepareOfflineAiConversion(
+    ManuscriptEditorPreview* preview, std::string_view rewritten_manuscript) const {
+    if (!preview || rewritten_manuscript.empty()) return false;
+    const auto existing_characters = analyze_project(ProjectScripts()).character_names;
+    const auto conversion = convert_mixed_manuscript_to_renpy(
+        rewritten_manuscript, !preview->selection, existing_characters, true);
+    if (conversion.script.empty()) return false;
+    // Offline AI resolves review lines itself. Both choices intentionally point
+    // at the same validated result so Apply still performs one undoable edit.
+    preview->safe_conversion = conversion;
+    preview->inclusive_conversion = conversion;
+    return true;
+}
+
+bool EditorNotebook::ApplyManuscriptConversion(
+    const ManuscriptEditorPreview& preview, bool include_uncertain_lines) {
+    const int page = GetSelection();
+    auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));
+    if (!editor || editor->GetTextRange(preview.start, preview.end).ToStdString(wxConvUTF8) != preview.source)
+        return false;
+    const auto& converted = include_uncertain_lines ? preview.inclusive_conversion
+                                                    : preview.safe_conversion;
+    if (converted.script.empty() || converted.script == preview.source) return false;
 
     editor->BeginUndoAction();
-    editor->SetTargetStart(start);
-    editor->SetTargetEnd(end);
+    editor->SetTargetStart(preview.start);
+    editor->SetTargetEnd(preview.end);
     editor->ReplaceTarget(wxString::FromUTF8(converted.script));
     editor->EndUndoAction();
-    const int caret = start + static_cast<int>(converted.script.size());
+    const int caret = preview.start + static_cast<int>(converted.script.size());
     editor->SetSelection(caret, caret);
     editor->EnsureCaretVisible();
     editor->SetFocus();
-    return has_selection ? ManuscriptConversionScope::Selection
-                         : ManuscriptConversionScope::Document;
+    return true;
 }
 
 bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {

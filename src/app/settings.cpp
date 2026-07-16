@@ -136,6 +136,12 @@ EditorSettings Settings::LoadEditor() const {
     }
     if (const auto path = ReadString(*contents, "renpySdkPath"))
         result.renpy_sdk_path = wxString::FromUTF8(*path);
+    if (const auto enabled = ReadBool(*contents, "offlineProseAi"))
+        result.offline_prose_ai = *enabled;
+    if (const auto path = ReadString(*contents, "offlineAiRunnerPath"))
+        result.offline_ai_runner_path = wxString::FromUTF8(*path);
+    if (const auto path = ReadString(*contents, "offlineAiModelPath"))
+        result.offline_ai_model_path = wxString::FromUTF8(*path);
     return result;
 }
 
@@ -181,7 +187,12 @@ bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSe
            << "    \"fontSize\": " << editor.font_size << ",\n"
            << "    \"wordWrap\": " << (editor.word_wrap ? "true" : "false") << ",\n"
            << "    \"theme\": \"" << theme << "\",\n"
-           << "    \"renpySdkPath\": \"" << JsonEscape(editor.renpy_sdk_path.ToStdString(wxConvUTF8)) << "\"\n"
+           << "    \"renpySdkPath\": \"" << JsonEscape(editor.renpy_sdk_path.ToStdString(wxConvUTF8)) << "\",\n"
+           << "    \"offlineProseAi\": " << (editor.offline_prose_ai ? "true" : "false") << ",\n"
+           << "    \"offlineAiRunnerPath\": \""
+           << JsonEscape(editor.offline_ai_runner_path.ToStdString(wxConvUTF8)) << "\",\n"
+           << "    \"offlineAiModelPath\": \""
+           << JsonEscape(editor.offline_ai_model_path.ToStdString(wxConvUTF8)) << "\"\n"
            << "  },\n"
            << "  \"recentProjects\": [";
     for (std::size_t index = 0; index < recent_projects.size(); ++index) {

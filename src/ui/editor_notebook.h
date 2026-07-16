@@ -5,6 +5,7 @@
 #include <wx/timer.h>
 
 #include <functional>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -18,6 +19,7 @@
 #include "core/editor_commands.h"
 #include "core/project.h"
 #include "core/workspace.h"
+#include "core/manuscript.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
@@ -33,7 +35,16 @@ struct FindStatus {
 };
 
 enum class ExternalFileResult { NotOpen, Unchanged, Reloaded, Dirty, Missing, Failed };
-enum class ManuscriptConversionScope { None, Document, Selection };
+enum class ManuscriptConversionScope { None, AlreadyRenpy, Document, Selection };
+struct ManuscriptEditorPreview {
+    int start = 0;
+    int end = 0;
+    bool selection = false;
+    std::string source;
+    std::vector<ManuscriptLineReview> lines;
+    ManuscriptConversion safe_conversion;
+    ManuscriptConversion inclusive_conversion;
+};
 struct ExternalFileUpdate {
     ExternalFileResult result = ExternalFileResult::NotOpen;
     std::string local_content;
@@ -79,7 +90,11 @@ public:
     bool SaveAll();
     bool OpenAndJump(const wxString& path, std::size_t line);
     void InsertAtCaret(std::string_view text);
-    ManuscriptConversionScope ConvertManuscript();
+    std::optional<ManuscriptEditorPreview> PrepareManuscriptConversion() const;
+    bool PrepareOfflineAiConversion(ManuscriptEditorPreview* preview,
+                                    std::string_view rewritten_manuscript) const;
+    bool ApplyManuscriptConversion(const ManuscriptEditorPreview& preview,
+                                   bool include_uncertain_lines);
     void SelectProjectMatch(const ProjectFindMatch& match);
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);

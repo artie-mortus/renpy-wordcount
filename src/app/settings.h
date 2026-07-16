@@ -21,6 +21,9 @@ struct EditorSettings {
     bool word_wrap = false;
     EditorTheme theme = EditorTheme::System;
     wxString renpy_sdk_path;
+    bool offline_prose_ai = false;
+    wxString offline_ai_runner_path;
+    wxString offline_ai_model_path;
 };
 
 class Settings final {
