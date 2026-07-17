@@ -43,6 +43,7 @@ else()
 endif()
 
 add_library(say_count_core STATIC
+    src/core/count_expression.cpp
     src/core/parser.cpp
     src/core/outline.cpp
     src/core/autocomplete.cpp
@@ -141,6 +142,7 @@ if(BUILD_TESTING)
 
     add_executable(say-count-tests
         src/app/git_client.cpp
+        tests/count_expression_test.cpp
         tests/core_smoke_test.cpp
         tests/parser_test.cpp
         tests/analysis_test.cpp

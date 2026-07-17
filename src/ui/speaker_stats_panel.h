@@ -47,7 +47,6 @@ private:
     void RefreshValues();
     void SaveTargets() const;
     void LoadTargets();
-    Targets ReadTargets(wxTextCtrl* words, wxTextCtrl* lines) const;
     void RefreshCountedLines();
     void RefreshVersionComparison();
 

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <utility>
 
 #include <wx/fileconf.h>
@@ -20,14 +21,16 @@
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 
+#include "core/count_expression.h"
 #include "core/version.h"
 
 namespace say_count::ui {
 namespace {
 
-long Positive(wxTextCtrl* input) {
-    long value = 0;
-    return input->GetValue().ToLong(&value) && value > 0 ? value : 0;
+std::optional<long> TargetValue(wxTextCtrl* input) {
+    const wxString text = input->GetValue().Strip(wxString::both);
+    if (text.empty()) return 0;
+    return evaluate_count_expression(text.ToStdString(wxConvUTF8));
 }
 
 // Narrow literals with non-ASCII bytes convert through the locale; keep them UTF-8.
@@ -61,8 +64,13 @@ std::pair<wxGauge*, wxStaticText*> AddProgress(wxWindow* parent, wxBoxSizer* siz
 }
 
 wxTextCtrl* TargetInput(wxWindow* parent, long value) {
-    return new wxTextCtrl(parent, wxID_ANY, value > 0 ? wxString::Format("%ld", value) : wxString{},
-                          wxDefaultPosition, wxSize(72, -1), wxTE_PROCESS_ENTER);
+    auto* input = new wxTextCtrl(parent, wxID_ANY,
+                                 value > 0 ? wxString::Format("%ld", value) : wxString{},
+                                 wxDefaultPosition, wxSize(96, -1), wxTE_PROCESS_ENTER);
+    input->SetHint("Target or calculation");
+    input->SetToolTip("Enter a target or calculation, such as 3000 / 2 or 750 * 2. "
+                      "Fractional results round to the nearest whole number.");
+    return input;
 }
 
 std::vector<std::string> RowStructure(const ScriptAnalysis& analysis) {
@@ -187,11 +195,6 @@ void SpeakerStatsPanel::RefreshVersionComparison() {
     version_result_->SetValue(wxString::FromUTF8(text));
 }
 
-SpeakerStatsPanel::Targets SpeakerStatsPanel::ReadTargets(wxTextCtrl* words,
-                                                           wxTextCtrl* lines) const {
-    return {Positive(words), Positive(lines)};
-}
-
 void SpeakerStatsPanel::RefreshValues() {
     auto stored = [](const std::map<std::string, Targets>& store, const std::string& name) {
         const auto found = store.find(name);
@@ -292,11 +295,23 @@ void SpeakerStatsPanel::Rebuild() {
         wxWeakRef<wxTextCtrl> lines_ref(lines);
         auto save = [this, name, store, words_ref, lines_ref](wxCommandEvent&) {
             if (!words_ref || !lines_ref) return;
-            const auto value = ReadTargets(words_ref, lines_ref);
             Targets previous{project_words_, project_lines_};
             if (store) {
                 const auto found = store->find(name);
                 previous = found == store->end() ? Targets{} : found->second;
+            }
+            const auto words_value = TargetValue(words_ref);
+            const auto lines_value = TargetValue(lines_ref);
+            if (!words_value && !lines_value) return;
+            const Targets value{words_value.value_or(previous.words),
+                                lines_value.value_or(previous.lines)};
+            if (words_value) {
+                words_ref->ChangeValue(*words_value > 0 ? wxString::Format("%ld", *words_value)
+                                                        : wxString{});
+            }
+            if (lines_value) {
+                lines_ref->ChangeValue(*lines_value > 0 ? wxString::Format("%ld", *lines_value)
+                                                        : wxString{});
             }
             if (value.words == previous.words && value.lines == previous.lines) return;
             if (!store) {
