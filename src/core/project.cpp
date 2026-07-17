@@ -64,6 +64,7 @@ std::optional<ProjectFolder> discover_project_folder(const std::string& selected
         if (lower(iterator->path().extension().string()) != ".rpy") continue;
         const auto relative = fs::relative(iterator->path(), scripts_root, ec);
         if (ec) { ec.clear(); continue; }
+        if (lower(relative.generic_string()) == "say_count_runtime.rpy") continue;
         project.scripts.push_back({relative.generic_string(), iterator->path().string()});
     }
     std::sort(project.scripts.begin(), project.scripts.end(), [](const auto& left, const auto& right) {

@@ -140,6 +140,7 @@ private:
     void RefreshRoutes();
     void OnShowProduction(wxCommandEvent& event);
     void RefreshProduction();
+    void OnFixBasicErrors();
     void OnFixIndents(wxCommandEvent& event);
     void OnCoverageTimer(wxTimerEvent& event);
     void SetupCoverageProject();
