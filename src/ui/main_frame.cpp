@@ -15,6 +15,7 @@
 #include <wx/file.h>
 #include <wx/datetime.h>
 #include <wx/dirdlg.h>
+#include <wx/evtloop.h>
 #include <wx/menu.h>
 #include <wx/msgdlg.h>
 #include <wx/button.h>
@@ -698,6 +699,13 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
 
 void MainFrame::StartProjectWatcher() {
     if (!project_) return;
+    // Restoring a workspace happens while MainFrame is still being constructed from
+    // wxApp::OnInit(), before wxEntry starts the GUI event loop. The Unix watcher
+    // requires an active loop when it initializes its inotify descriptor.
+    if (!wxEventLoopBase::GetActive()) {
+        CallAfter([this] { StartProjectWatcher(); });
+        return;
+    }
     if (!project_watcher_) {
         project_watcher_ = std::make_unique<wxFileSystemWatcher>();
         project_watcher_->SetOwner(this);
