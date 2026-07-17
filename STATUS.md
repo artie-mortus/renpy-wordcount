@@ -8,7 +8,9 @@
 - Release 1.0.0 builds optimized and stripped; the bundled-wx option produces a 16 MiB binary with wxWidgets linked statically.
 - Linux installation includes the executable, desktop entry, SVG icon, Ren'Py MIME registration, command-line `.rpy` opening, and uninstall target.
 - AppImage staging is locally verified; the packaging script and tagged/manual GitHub workflow use linuxdeploy and appimagetool.
-- Google Drive cloud saves back up and restore complete project bundles through private app storage, desktop OAuth/PKCE, and OS-keyring token storage.
+- The repository desk replaces Google Drive with host-agnostic Git clone, init,
+  remote, fetch, fast-forward pull, commit, and push operations. Private access
+  uses the system Git client's SSH agent or credential helper.
 - Final verification (2026-07-13): native 140/140 tests and reference JavaScript parity tests passed.
 - Release UI smoke test opened a real `.rpy` positional argument and remained stable for the three-second observation window.
 - All 55 reference features are classified as Done, Changed, Deferred, or Not applicable in PARITY-CHECKLIST.md; none remain Pending.

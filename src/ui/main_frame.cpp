@@ -46,9 +46,8 @@
 #include "ui/production_panel.h"
 #include "ui/style.h"
 #include "ui/palette_dialog.h"
-#include "ui/cloud_save_dialog.h"
+#include "ui/git_dialog.h"
 #include "core/version.h"
-#include "core/cloud_save.h"
 #include "core/indent.h"
 #include "core/navigator.h"
 #include "core/workspace.h"
@@ -90,7 +89,7 @@ enum MenuId {
     kManageSnapshots,
     kImportProject,
     kExportProject,
-    kCloudSaves,
+    kGitRepository,
     kRenameSymbol,
     kConfigureRenpy,
     kRenpyStatus,
@@ -441,7 +440,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnManageSnapshots, this, kManageSnapshots);
     Bind(wxEVT_MENU, &MainFrame::OnImportProject, this, kImportProject);
     Bind(wxEVT_MENU, &MainFrame::OnExportProject, this, kExportProject);
-    Bind(wxEVT_MENU, &MainFrame::OnCloudSaves, this, kCloudSaves);
+    Bind(wxEVT_MENU, &MainFrame::OnGitRepository, this, kGitRepository);
     Bind(wxEVT_MENU, &MainFrame::OnRenameSymbol, this, kRenameSymbol);
     Bind(wxEVT_MENU, &MainFrame::OnConfigureRenpy, this, kConfigureRenpy);
     Bind(wxEVT_MENU, &MainFrame::OnRunRenpy, this, kRunRenpy);
@@ -535,7 +534,7 @@ void MainFrame::BuildCommandBar() {
     auto* save = make_action("Save");
     auto* manuscript = make_action("Convert prose");
     auto* production = make_action("Production");
-    auto* cloud = make_action("Cloud");
+    auto* git = make_action("Git");
     auto* run = make_action("Run project", true);
     layout->AddSpacer(8);
 
@@ -543,7 +542,7 @@ void MainFrame::BuildCommandBar() {
     save->Bind(wxEVT_BUTTON, &MainFrame::OnSave, this);
     manuscript->Bind(wxEVT_BUTTON, &MainFrame::OnWriteManuscript, this);
     production->Bind(wxEVT_BUTTON, &MainFrame::OnShowProduction, this);
-    cloud->Bind(wxEVT_BUTTON, &MainFrame::OnCloudSaves, this);
+    git->Bind(wxEVT_BUTTON, &MainFrame::OnGitRepository, this);
     run->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
     command_bar_->SetSizer(layout);
 }
@@ -563,7 +562,7 @@ void MainFrame::BuildMenus() {
     file->Append(kReviewConflicts, "Review External &Conflicts...");
     file->Append(kSnapshotNow, "&Snapshot Now", "Store a backup of every open script");
     file->Append(kManageSnapshots, "Manage Snapshots...", "Preview, compare, and restore snapshots");
-    file->Append(kCloudSaves, "Google Drive Cloud Saves...", "Back up or restore the open project");
+    file->Append(kGitRepository, "Git &Repository...", "Clone, sync, commit, and push with any Git remote");
     file->Append(kImportProject, "Import Say Count Project...", "Import a browser-app project bundle");
     RebuildRecentProjectsMenu();
     file->AppendSeparator();
@@ -944,28 +943,15 @@ void MainFrame::OnExportProject(wxCommandEvent&) {
     SetStatusText("Project exported");
 }
 
-void MainFrame::OnCloudSaves(wxCommandEvent&) {
-    wxString project_name;
-    if (project_) project_name = wxFileName(wxString::FromUTF8(project_->root)).GetFullName();
-    if (project_name.empty()) project_name = wxFileName(notebook_->CurrentFileName()).GetName();
-    if (project_name.empty()) project_name = "Loose scripts";
-    const ProjectBundle current = BuildProjectBundle();
-    CloudSaveDialog dialog(this, settings_.data_directory().ToStdString(wxConvUTF8),
-        cloud_save_file_name(project_name.ToStdString(wxConvUTF8)), project_bundle_json(current));
-    if (dialog.ShowModal() != wxID_OK || !dialog.restored_bundle()) return;
-    auto parsed = parse_project_bundle(*dialog.restored_bundle());
-    if (!parsed.bundle) {
-        wxMessageBox("The cloud save is not a valid Say Count project: " + wxString::FromUTF8(parsed.error),
-                     "Cloud restore failed", wxOK | wxICON_ERROR, this);
+void MainFrame::OnGitRepository(wxCommandEvent&) {
+    GitDialog dialog(this, project_ ? project_->root : std::string{},
+                     [this] { return notebook_->SaveAll(); });
+    const int result = dialog.ShowModal();
+    if (result == wxID_OK && dialog.cloned_path()) {
+        ConnectProjectFolder(wxString::FromUTF8(*dialog.cloned_path()));
         return;
     }
-    const wxString name = wxString::FromUTF8(dialog.restored_name());
-    if (wxMessageBox("Restore “" + name + "” from Google Drive?\n\n"
-                     "The current editor state will be snapshotted first. Restored files remain unsaved.",
-                     "Confirm cloud restore", wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES)
-        return;
-    if (!TakeSnapshot(false, "Before Google Drive restore")) return;
-    ApplyProjectBundle(std::move(*parsed.bundle), "Restored “" + name + "” from Google Drive — changes are unsaved");
+    if (project_) RefreshProjectDiscovery();
 }
 
 void MainFrame::OnRenameSymbol(wxCommandEvent&) {
@@ -1850,7 +1836,7 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Save As", "Ctrl+Shift+S · File", wxID_SAVEAS}, {"Close tab", "Ctrl+W · File", wxID_CLOSE},
         {"Connect project folder", "Project", kConnectProject}, {"Snapshot now", "Project", kSnapshotNow},
         {"Manage snapshots", "Project", kManageSnapshots}, {"Review external conflicts", "Project", kReviewConflicts},
-        {"Google Drive cloud saves", "Project", kCloudSaves},
+        {"Git repository", "Clone, sync, commit, and push · Project", kGitRepository},
         {"Import Say Count project", "File", kImportProject}, {"Export complete project", "File", kExportProject},
         {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
         {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},

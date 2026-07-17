@@ -72,7 +72,7 @@ add_library(say_count_core STATIC
     src/core/version.cpp
     src/core/workspace.cpp
     src/core/navigator.cpp
-    src/core/cloud_save.cpp
+    src/core/git_repository.cpp
 )
 target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VERSION}")
@@ -80,7 +80,7 @@ target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VE
 add_executable(say-count
     src/app/main.cpp
     src/app/settings.cpp
-    src/app/google_drive.cpp
+    src/app/git_client.cpp
     src/app/offline_prose_runner.cpp
     src/ui/editor_notebook.cpp
     src/ui/style.cpp
@@ -100,13 +100,11 @@ add_executable(say-count
     src/ui/production_panel.cpp
     src/ui/outline_panel.cpp
     src/ui/speaker_stats_panel.cpp
-    src/ui/cloud_save_dialog.cpp
+    src/ui/git_dialog.cpp
 )
-find_package(CURL REQUIRED)
-find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES}
-    CURL::libcurl OpenSSL::Crypto Threads::Threads)
+    Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
     target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
@@ -142,6 +140,7 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(Catch2)
 
     add_executable(say-count-tests
+        src/app/git_client.cpp
         tests/core_smoke_test.cpp
         tests/parser_test.cpp
         tests/analysis_test.cpp
@@ -173,7 +172,8 @@ if(BUILD_TESTING)
         tests/version_comparison_test.cpp
         tests/workspace_test.cpp
         tests/navigator_test.cpp
-        tests/cloud_save_test.cpp
+        tests/git_repository_test.cpp
+        tests/git_client_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 

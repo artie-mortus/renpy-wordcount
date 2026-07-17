@@ -829,7 +829,7 @@ bool EditorNotebook::SaveAll() {
         if (!editor || !editor->GetModify()) continue;
         const wxString path = FilePath(editor);
         if (path.empty()) {
-            wxMessageBox("Save every modified tab to the connected project before launching Ren'Py.",
+            wxMessageBox("Save every modified tab to the connected project before continuing.",
                          "Unsaved script", wxOK | wxICON_ERROR, this);
             return false;
         }

@@ -110,7 +110,7 @@ private:
     void OnSnapshotTimer(wxTimerEvent& event);
     void OnImportProject(wxCommandEvent& event);
     void OnExportProject(wxCommandEvent& event);
-    void OnCloudSaves(wxCommandEvent& event);
+    void OnGitRepository(wxCommandEvent& event);
     ProjectBundle BuildProjectBundle() const;
     bool ApplyProjectBundle(ProjectBundle bundle, const wxString& success_message);
     void OnRenameSymbol(wxCommandEvent& event);
