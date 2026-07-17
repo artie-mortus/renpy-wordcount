@@ -22,5 +22,6 @@ struct IndentPreview {
 };
 
 IndentPreview preview_indent_fix(std::string_view text);
+std::size_t next_line_indentation(std::string_view previous_line);
 
 }  // namespace say_count

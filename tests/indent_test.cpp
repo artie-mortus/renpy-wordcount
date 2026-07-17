@@ -3,6 +3,7 @@
 #include "core/indent.h"
 
 using say_count::preview_indent_fix;
+using say_count::next_line_indentation;
 
 TEST_CASE("indent preview snaps tabs and spaces to nearest four") {
     const auto preview = preview_indent_fix(
@@ -41,4 +42,12 @@ TEST_CASE("clean indentation produces an empty preview") {
     const auto preview = preview_indent_fix(source);
     CHECK(preview.fixed == source);
     CHECK(preview.changes.empty());
+}
+
+TEST_CASE("new lines inherit indentation and indent after RenPy block openers") {
+    CHECK(next_line_indentation("label start:\n") == 4);
+    CHECK(next_line_indentation("    e \"Hello.\"\n") == 4);
+    CHECK(next_line_indentation("    menu: # choose a route\n") == 8);
+    CHECK(next_line_indentation("        \"Stay\":\n") == 12);
+    CHECK(next_line_indentation("    e \"A colon: is still dialogue.\"\n") == 4);
 }

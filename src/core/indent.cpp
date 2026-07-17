@@ -1,4 +1,5 @@
 #include "core/indent.h"
+#include "core/tokenizer.h"
 
 namespace say_count {
 
@@ -25,6 +26,12 @@ IndentPreview preview_indent_fix(std::string_view text) {
         ++line_number;
     }
     return result;
+}
+
+std::size_t next_line_indentation(std::string_view previous_line) {
+    const auto token = tokenize_line(previous_line, 1);
+    const bool opens_block = !token.code.empty() && token.code.back() == ':';
+    return token.indentation + (opens_block ? 4 : 0);
 }
 
 }  // namespace say_count

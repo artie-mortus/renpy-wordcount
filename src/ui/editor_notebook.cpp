@@ -3,6 +3,7 @@
 #include "core/tokenizer.h"
 #include "core/autocomplete.h"
 #include "core/editor_commands.h"
+#include "core/indent.h"
 #include "core/manuscript.h"
 #include "ui/style.h"
 
@@ -494,6 +495,19 @@ void EditorNotebook::OnModified(wxStyledTextEvent& event) {
 void EditorNotebook::OnCharAdded(wxStyledTextEvent& event) {
     auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
     if (!editor) return;
+    if (event.GetKey() == '\n' || event.GetKey() == '\r') {
+        const int line = editor->LineFromPosition(editor->GetCurrentPos());
+        if (line > 0) {
+            const auto previous = editor->GetLine(line - 1).ToStdString(wxConvUTF8);
+            editor->SetLineIndentation(
+                line, static_cast<int>(next_line_indentation(previous)));
+            editor->GotoPos(editor->GetLineIndentPosition(line));
+        }
+        editor->AutoCompCancel();
+        completions_.erase(editor);
+        event.Skip();
+        return;
+    }
     const std::string source = editor->GetText().ToStdString(wxConvUTF8);
     auto result = project_completions(source, static_cast<std::size_t>(editor->GetCurrentPos()),
                                       completion_index_);
