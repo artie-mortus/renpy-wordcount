@@ -14,6 +14,7 @@ TEST_CASE("project discovery separates root game folder and recursive scripts") 
     fs::create_directories(game / "chapters");
     std::ofstream(game / "script.rpy") << "label start:\n    return\n";
     std::ofstream(game / "chapters" / "two.rpy") << "label two:\n    return\n";
+    std::ofstream(game / "say_count_runtime.rpy") << "# Generated runtime helper";
     std::ofstream(game / "ignored.txt") << "not a script";
 
     std::string error;
