@@ -60,8 +60,16 @@ public:
 </td></tr></table>
 <p>Speech attributions and action beats preserve the spoken words and keep the action as narration. Common verbs such as <tt>said, asked, whispered, shouted, replied, hissed, snapped, sighed, warned</tt>, and more are recognized.</p>
 
+<p>Present-tense tags and more conversational phrasing work too: <tt>Eileen says with a grin, "Ready."</tt>, <tt>“Almost,” replies Lucy softly.</tt>, and interrupted quotations such as <tt>“I mean it,” Eileen insists. “Today.”</tt>.</p>
+
+<p>Quotation marks may be straight double, curly double or single, guillemets (<tt>«like this»</tt>), German-style, or CJK corner brackets. You can also use <tt>Eileen — We should go.</tt> (an em dash, en dash, or spaced hyphen).</p>
+
 <p><b>Speaker on a separate line</b> also works when the following line is quoted:</p>
 <table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>Eileen<br>“We should go.”</tt></td></tr></table>
+
+<p><b>Screenplay style</b> accepts an uppercase speaker cue followed by unquoted dialogue. An optional parenthetical mood is understood:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>EILEEN<br>(angrily)<br>We are leaving.</tt></td></tr></table>
+<p>A name followed by a colon on its own line also starts an unquoted dialogue block.</p>
 
 <h3>Sprite expressions and image attributes</h3>
 <p>Put attributes in square brackets after the speaker. They become Ren'Py say-statement image attributes:</p>

@@ -80,17 +80,45 @@ bool EndsWith(std::string_view value, std::string_view suffix) {
     return value.size() >= suffix.size() && value.substr(value.size() - suffix.size()) == suffix;
 }
 
+struct QuotedSpan {
+    std::size_t begin;
+    std::size_t end;
+    std::string_view opening;
+    std::string_view closing;
+};
+
+const std::vector<std::pair<std::string_view, std::string_view>>& QuotePairs() {
+    static const std::vector<std::pair<std::string_view, std::string_view>> pairs{
+        {"\"", "\""}, {"\xe2\x80\x9c", "\xe2\x80\x9d"},
+        {"\xe2\x80\x98", "\xe2\x80\x99"}, {"\xc2\xab", "\xc2\xbb"},
+        {"\xe2\x80\xb9", "\xe2\x80\xba"}, {"\xe2\x80\x9e", "\xe2\x80\x9c"},
+        {"\xe3\x80\x8c", "\xe3\x80\x8d"}, {"\xe3\x80\x8e", "\xe3\x80\x8f"}
+    };
+    return pairs;
+}
+
+std::optional<QuotedSpan> FindQuotedSpan(std::string_view value, std::size_t from = 0) {
+    std::optional<QuotedSpan> result;
+    for (const auto& [opening, closing] : QuotePairs()) {
+        const auto begin = value.find(opening, from);
+        if (begin == std::string_view::npos || (result && begin >= result->begin)) continue;
+        const auto close = value.find(closing, begin + opening.size());
+        if (close == std::string_view::npos) continue;
+        result = QuotedSpan{begin, close + closing.size(), opening, closing};
+    }
+    return result;
+}
+
 bool IsQuoted(std::string_view value) {
-    return value.size() >= 2 &&
-        ((value.front() == '"' && value.back() == '"') ||
-         (StartsWith(value, "\xe2\x80\x9c") && EndsWith(value, "\xe2\x80\x9d")));
+    const auto span = FindQuotedSpan(value);
+    return span && span->begin == 0 && span->end == value.size();
 }
 
 std::string Unquote(std::string value) {
-    if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
-        return value.substr(1, value.size() - 2);
-    if (StartsWith(value, "\xe2\x80\x9c") && EndsWith(value, "\xe2\x80\x9d"))
-        return value.substr(3, value.size() - 6);
+    const auto span = FindQuotedSpan(value);
+    if (span && span->begin == 0 && span->end == value.size())
+        return value.substr(span->opening.size(),
+                            value.size() - span->opening.size() - span->closing.size());
     return value;
 }
 
@@ -168,10 +196,24 @@ std::optional<SpeakerSpec> ParseSpeakerSpec(std::string value) {
 
 const std::vector<std::string>& SpeechVerbs() {
     static const std::vector<std::string> verbs{
-        "said", "asked", "replied", "answered", "whispered", "shouted", "yelled",
-        "murmured", "muttered", "cried", "called", "added", "continued", "breathed",
-        "hissed", "snapped", "groaned", "sighed", "laughed", "exclaimed", "insisted",
-        "admitted", "warned", "promised", "observed", "remarked", "stammered", "demanded"
+        "say", "says", "said", "ask", "asks", "asked", "reply", "replies", "replied",
+        "answer", "answers", "answered", "whisper", "whispers", "whispered",
+        "shout", "shouts", "shouted", "yell", "yells", "yelled", "murmur", "murmurs",
+        "murmured", "mutter", "mutters", "muttered", "cry", "cries", "cried",
+        "call", "calls", "called", "add", "adds", "added", "continue", "continues",
+        "continued", "breathe", "breathes", "breathed", "hiss", "hisses", "hissed",
+        "snap", "snaps", "snapped", "groan", "groans", "groaned", "sigh", "sighs",
+        "sighed", "laugh", "laughs", "laughed", "exclaim", "exclaims", "exclaimed",
+        "insist", "insists", "insisted", "admit", "admits", "admitted", "warn", "warns",
+        "warned", "promise", "promises", "promised", "observe", "observes", "observed",
+        "remark", "remarks", "remarked", "stammer", "stammers", "stammered",
+        "demand", "demands", "demanded", "respond", "responds", "responded",
+        "announce", "announces", "announced", "declare", "declares", "declared",
+        "explain", "explains", "explained", "suggest", "suggests", "suggested",
+        "urge", "urges", "urged", "protest", "protests", "protested",
+        "plead", "pleads", "pleaded", "beg", "begs", "begged", "joke", "jokes", "joked",
+        "agree", "agrees", "agreed", "object", "objects", "objected", "repeat", "repeats",
+        "repeated"
     };
     return verbs;
 }
@@ -189,7 +231,8 @@ bool IsLikelyAdverb(std::string_view value) {
     static const std::set<std::string> common{
         "softly", "quietly", "loudly", "flatly", "dryly", "coldly", "warmly", "gently",
         "quickly", "slowly", "finally", "simply", "calmly", "angrily", "nervously",
-        "hesitantly", "sharply", "firmly", "sadly", "brightly", "breathlessly"
+        "hesitantly", "sharply", "firmly", "sadly", "brightly", "breathlessly",
+        "cheerfully", "anxiously", "reluctantly", "impatiently", "excitedly", "weakly"
     };
     return common.count(word) != 0 || (word.size() > 4 && EndsWith(word, "ly"));
 }
@@ -322,7 +365,7 @@ std::string InferExpression(std::string_view phrase) {
     static const std::map<std::string, std::string> cues{
         {"happy", "happy"}, {"happily", "happy"}, {"cheerful", "happy"},
         {"cheerfully", "happy"}, {"smile", "happy"}, {"smiled", "happy"}, {"smiles", "happy"},
-        {"grinned", "happy"}, {"grins", "happy"}, {"beamed", "happy"},
+        {"grin", "happy"}, {"grinned", "happy"}, {"grins", "happy"}, {"beamed", "happy"},
         {"angry", "angry"}, {"angrily", "angry"}, {"furious", "angry"},
         {"furiously", "angry"}, {"glared", "angry"}, {"glares", "angry"},
         {"sad", "sad"}, {"sadly", "sad"}, {"sorrowful", "sad"},
@@ -357,6 +400,24 @@ bool IsSpeechVerb(std::string word) {
     return std::find(SpeechVerbs().begin(), SpeechVerbs().end(), word) != SpeechVerbs().end();
 }
 
+std::string JoinWords(const std::vector<std::string>& words) {
+    std::string result;
+    for (const auto& word : words) {
+        if (!result.empty()) result += ' ';
+        result += word;
+    }
+    return result;
+}
+
+std::string StripWordPunctuation(std::string word) {
+    while (!word.empty() && (word.front() == ',' || word.front() == ';' || word.front() == ':'))
+        word.erase(word.begin());
+    while (!word.empty() && (word.back() == ',' || word.back() == ';' || word.back() == ':' ||
+                             word.back() == '.' || word.back() == '!' || word.back() == '?'))
+        word.pop_back();
+    return word;
+}
+
 bool ParseAttributionPhrase(std::string phrase, std::string_view recent_speaker,
                             std::string* speaker, std::string* attributes) {
     phrase = Trim(std::move(phrase));
@@ -367,22 +428,60 @@ bool ParseAttributionPhrase(std::string phrase, std::string_view recent_speaker,
     std::istringstream input(phrase);
     std::vector<std::string> words;
     for (std::string word; input >> word;) words.push_back(std::move(word));
-    const auto verb = std::find_if(words.begin(), words.end(), IsSpeechVerb);
+    auto verb_begin = words.begin();
+    if (!words.empty()) {
+        const std::string first = UnicodeCaseFold(StripWordPunctuation(words.front()));
+        static const std::set<std::string> introductions{
+            "with", "after", "before", "without", "despite", "as", "at", "to", "while"
+        };
+        if (introductions.count(first)) {
+            const auto comma = std::find_if(words.begin(), words.end(), [](const auto& word) {
+                return word.find(',') != std::string::npos;
+            });
+            if (comma != words.end()) verb_begin = std::next(comma);
+        }
+    }
+    const auto verb = std::find_if(verb_begin, words.end(), IsSpeechVerb);
     if (verb == words.end()) return false;
     const std::size_t verb_index = static_cast<std::size_t>(verb - words.begin());
+    const bool speaker_follows_verb = verb_index == 0 || std::all_of(
+        words.begin(), verb, [](const auto& word) { return IsLikelyAdverb(word); });
     std::vector<std::string> name_words;
-    if (verb_index > 0) {
+    if (!speaker_follows_verb) {
         name_words.assign(words.begin(), words.begin() + static_cast<std::ptrdiff_t>(verb_index));
+        const std::string first = UnicodeCaseFold(StripWordPunctuation(name_words.front()));
+        static const std::set<std::string> introductions{
+            "with", "after", "before", "without", "despite", "as", "at", "to", "while"
+        };
+        if (introductions.count(first)) {
+            for (std::size_t index = name_words.size(); index-- > 0;) {
+                if (name_words[index].find(',') == std::string::npos) continue;
+                name_words.erase(name_words.begin(), name_words.begin() +
+                    static_cast<std::ptrdiff_t>(index + 1));
+                break;
+            }
+        }
+        while (name_words.size() > 1 && IsLikelyAdverb(name_words.front()))
+            name_words.erase(name_words.begin());
         while (name_words.size() > 1 && IsLikelyAdverb(name_words.back())) name_words.pop_back();
     } else {
-        name_words.assign(words.begin() + 1, words.end());
-        while (name_words.size() > 1 && IsLikelyAdverb(name_words.back())) name_words.pop_back();
+        name_words.assign(std::next(verb), words.end());
+        while (name_words.size() > 1 && IsLikelyAdverb(name_words.front()))
+            name_words.erase(name_words.begin());
+        static const std::set<std::string> modifiers{
+            "with", "while", "as", "after", "before", "and", "but", "then"
+        };
+        for (std::size_t index = 1; index < name_words.size(); ++index) {
+            const std::string folded = UnicodeCaseFold(StripWordPunctuation(name_words[index]));
+            if (modifiers.count(folded) || IsLikelyAdverb(name_words[index])) {
+                name_words.resize(index);
+                break;
+            }
+        }
     }
-    std::string name;
-    for (const auto& word : name_words) {
-        if (!name.empty()) name += ' ';
-        name += word;
-    }
+    for (auto& word : name_words) word = StripWordPunctuation(std::move(word));
+    name_words.erase(std::remove(name_words.begin(), name_words.end(), std::string{}), name_words.end());
+    std::string name = JoinWords(name_words);
     name = ResolveSpeaker(std::move(name), recent_speaker);
     const auto spec = ParseSpeakerSpec(name);
     if (!spec) return false;
@@ -394,34 +493,37 @@ bool ParseAttributionPhrase(std::string phrase, std::string_view recent_speaker,
 bool ParseAttributed(std::string_view line, std::string_view recent_speaker,
                      std::string* speaker, std::string* attributes, std::string* dialogue) {
     // Alice said happily, "Hello." / Alice [happy] said, "Hello."
-    const auto smart_open = line.find("\xe2\x80\x9c");
-    const auto straight_open = line.find('"');
-    const auto opening = smart_open == std::string_view::npos ? straight_open :
-        straight_open == std::string_view::npos ? smart_open : std::min(smart_open, straight_open);
-    if (opening != std::string_view::npos && opening > 0) {
-        std::string quote = Trim(std::string(line.substr(opening)));
-        if (IsQuoted(quote) && ParseAttributionPhrase(
-                std::string(line.substr(0, opening)), recent_speaker, speaker, attributes)) {
-            *dialogue = Unquote(std::move(quote));
+    const auto first = FindQuotedSpan(line);
+    if (!first) return false;
+    const auto quote_text = [&](const QuotedSpan& span) {
+        return std::string(line.substr(span.begin + span.opening.size(),
+            span.end - span.begin - span.opening.size() - span.closing.size()));
+    };
+    if (first->begin > 0) {
+        if (ParseAttributionPhrase(std::string(line.substr(0, first->begin)),
+                                   recent_speaker, speaker, attributes)) {
+            *dialogue = quote_text(*first);
+            for (auto next = FindQuotedSpan(line, first->end); next; next = FindQuotedSpan(line, next->end)) {
+                if (!dialogue->empty()) *dialogue += ' ';
+                *dialogue += quote_text(*next);
+            }
             return true;
         }
     }
 
-    // "Hello," Alice said. Smart and straight quotes are both accepted.
-    std::size_t quote_end = std::string_view::npos;
-    std::size_t quote_bytes = 1;
-    if (!line.empty() && line.front() == '"') quote_end = line.find('"', 1);
-    else if (StartsWith(line, "\xe2\x80\x9c")) {
-        quote_end = line.find("\xe2\x80\x9d", 3);
-        quote_bytes = 3;
-    }
-    if (quote_end == std::string_view::npos) return false;
-    const std::string quote = std::string(line.substr(0, quote_end + quote_bytes));
-    std::string attribution = Trim(std::string(line.substr(quote_end + quote_bytes)));
+    // "Hello," Alice said. International quote pairs are accepted too.
+    if (first->begin != 0) return false;
+    const auto second = FindQuotedSpan(line, first->end);
+    const std::size_t attribution_end = second ? second->begin : line.size();
+    std::string attribution = Trim(std::string(line.substr(first->end, attribution_end - first->end)));
     if (!attribution.empty() && attribution.front() == ',') attribution = Trim(attribution.substr(1));
     if (!attribution.empty() && attribution.back() == '.') attribution.pop_back();
     if (ParseAttributionPhrase(attribution, recent_speaker, speaker, attributes)) {
-        *dialogue = Unquote(quote);
+        *dialogue = quote_text(*first);
+        for (auto next = second; next; next = FindQuotedSpan(line, next->end)) {
+            if (!dialogue->empty()) *dialogue += ' ';
+            *dialogue += quote_text(*next);
+        }
         return true;
     }
     return false;
@@ -510,39 +612,139 @@ bool ParseActionBeat(std::string_view line, const ManuscriptOptions& options,
         return true;
     }
 
-    const auto smart_position = line.find("\xe2\x80\x9c");
-    const auto straight_position = line.find('"');
-    const bool smart = smart_position != std::string_view::npos &&
-        (straight_position == std::string_view::npos || smart_position < straight_position);
-    const std::string_view opening = smart ? std::string_view("\xe2\x80\x9c") : std::string_view("\"");
-    const std::string_view closing = smart ? std::string_view("\xe2\x80\x9d") : std::string_view("\"");
-    const auto first_quote = line.find(opening);
-    if (first_quote == std::string_view::npos) return false;
-    const auto quote_end = line.find(closing, first_quote + opening.size());
-    if (quote_end == std::string_view::npos) return false;
-    const std::string quote = std::string(line.substr(first_quote, quote_end + closing.size() - first_quote));
+    const auto quote = FindQuotedSpan(line);
+    if (!quote) return false;
+    const auto quote_text = [&] {
+        return std::string(line.substr(quote->begin + quote->opening.size(),
+            quote->end - quote->begin - quote->opening.size() - quote->closing.size()));
+    };
 
-    if (first_quote == 0 && quote_end + closing.size() < line.size()) {
-        std::string action = Trim(std::string(line.substr(quote_end + closing.size())));
+    if (quote->begin == 0 && quote->end < line.size()) {
+        std::string action = Trim(std::string(line.substr(quote->end)));
         const std::string speaker = SpeakerFromAction(action, options.existing_characters, recent_speaker);
         if (speaker.empty()) return false;
         result->speaker = speaker;
         result->attributes = InferExpression(action);
-        result->dialogue = Unquote(quote);
+        result->dialogue = quote_text();
         result->narration_after = std::move(action);
         return true;
     }
-    if (first_quote > 0 && quote_end + closing.size() == line.size()) {
-        std::string action = Trim(std::string(line.substr(0, first_quote)));
+    if (quote->begin > 0 && quote->end == line.size()) {
+        std::string action = Trim(std::string(line.substr(0, quote->begin)));
         const std::string speaker = SpeakerFromAction(action, options.existing_characters, recent_speaker);
         if (speaker.empty()) return false;
         result->speaker = speaker;
         result->attributes = InferExpression(action);
-        result->dialogue = Unquote(quote);
+        result->dialogue = quote_text();
         result->narration_before = std::move(action);
         return true;
     }
+    // Eileen turned away. "Go," she said.
+    if (quote->begin > 0 && quote->end < line.size()) {
+        std::string suffix = Trim(std::string(line.substr(quote->end)));
+        std::string speaker, attributes;
+        if (!suffix.empty() && suffix.front() == ',') suffix = Trim(suffix.substr(1));
+        if (ParseAttributionPhrase(suffix, recent_speaker, &speaker, &attributes)) {
+            result->speaker = std::move(speaker);
+            result->attributes = attributes.empty()
+                ? InferExpression(std::string(line.substr(0, quote->begin))) : std::move(attributes);
+            result->dialogue = quote_text();
+            result->narration_before = Trim(std::string(line.substr(0, quote->begin)));
+            return true;
+        }
+    }
     return false;
+}
+
+struct NamedDialogue {
+    SpeakerSpec speaker;
+    std::string text;
+};
+
+std::optional<SpeakerSpec> ParseDirectedSpeaker(std::string value) {
+    if (const auto direct = ParseSpeakerSpec(value)) return direct;
+    value = Trim(std::move(value));
+    if (value.empty() || value.back() != ')') return std::nullopt;
+    const auto open = value.find_last_of('(');
+    if (open == std::string::npos || open == 0) return std::nullopt;
+    auto speaker = ParseSpeakerSpec(Trim(value.substr(0, open)));
+    if (!speaker) return std::nullopt;
+    speaker->attributes = InferExpression(value.substr(open + 1, value.size() - open - 2));
+    return speaker;
+}
+
+std::optional<NamedDialogue> ParseNamedDialogue(
+    std::string_view line, std::string_view recent_speaker = {}) {
+    const std::vector<std::string_view> separators{":", " \xe2\x80\x94 ", " \xe2\x80\x93 ", " - "};
+    for (const auto separator : separators) {
+        const auto position = line.find(separator);
+        if (position == std::string_view::npos) continue;
+        const std::string left = Trim(std::string(line.substr(0, position)));
+        std::string right = Trim(std::string(line.substr(position + separator.size())));
+        if (right.empty()) continue;
+        if (separator == ":") {
+            std::string speaker, attributes;
+            if (ParseAttributionPhrase(left, recent_speaker, &speaker, &attributes))
+                return NamedDialogue{{std::move(speaker), std::move(attributes)},
+                                     Unquote(std::move(right))};
+        }
+        if (const auto spec = ParseDirectedSpeaker(left))
+            return NamedDialogue{*spec, Unquote(std::move(right))};
+    }
+    return std::nullopt;
+}
+
+bool IsUppercaseSpeakerCue(std::string_view value) {
+    bool has_letter = false;
+    for (const unsigned char byte : value) {
+        if (byte >= 0x80) continue;
+        if (std::islower(byte)) return false;
+        if (std::isalpha(byte)) has_letter = true;
+    }
+    return has_letter;
+}
+
+bool IsParenthetical(std::string_view value) {
+    return value.size() >= 2 && value.front() == '(' && value.back() == ')';
+}
+
+struct ScreenplayBlock {
+    SpeakerSpec speaker;
+    std::string text;
+    std::size_t lines = 0;
+};
+
+std::optional<ScreenplayBlock> ParseScreenplayBlock(
+    const std::vector<std::string>& lines, std::size_t index) {
+    if (index + 1 >= lines.size()) return std::nullopt;
+    if (StrongRenpyLine(lines[index])) return std::nullopt;
+    std::string cue = Trim(lines[index]);
+    std::string direction;
+    bool explicit_colon = !cue.empty() && cue.back() == ':';
+    if (explicit_colon) cue = Trim(cue.substr(0, cue.size() - 1));
+    const auto parenthetical = cue.find_last_of('(');
+    if (parenthetical != std::string::npos && cue.back() == ')' && parenthetical > 0) {
+        direction = cue.substr(parenthetical + 1, cue.size() - parenthetical - 2);
+        cue = Trim(cue.substr(0, parenthetical));
+    }
+    auto speaker = ParseSpeakerSpec(cue);
+    if (!speaker || (!explicit_colon && !IsUppercaseSpeakerCue(speaker->name)))
+        return std::nullopt;
+
+    std::size_t spoken_index = index + 1;
+    std::string spoken = Trim(lines[spoken_index]);
+    if (IsParenthetical(spoken) && spoken_index + 1 < lines.size()) {
+        if (!direction.empty()) direction += ' ';
+        direction += spoken.substr(1, spoken.size() - 2);
+        spoken = Trim(lines[++spoken_index]);
+    }
+    if (spoken.empty() || StartsWith(spoken, "::") || StrongRenpyLine(lines[spoken_index]))
+        return std::nullopt;
+    if (StartsWith(spoken, "- ")) spoken = Trim(spoken.substr(2));
+    else if (StartsWith(spoken, "\xe2\x80\x94 ") || StartsWith(spoken, "\xe2\x80\x93 "))
+        spoken = Trim(spoken.substr(3));
+    if (speaker->attributes.empty()) speaker->attributes = InferExpression(direction);
+    return ScreenplayBlock{*speaker, Unquote(std::move(spoken)), spoken_index - index + 1};
 }
 
 std::vector<ManuscriptLineReview> ClassifyLines(std::string_view text) {
@@ -564,6 +766,14 @@ std::vector<ManuscriptLineReview> ClassifyLines(std::string_view text) {
                     protected_indent = token.indentation;
                     kind = ManuscriptLineKind::Renpy;
                 } else {
+                    if (const auto screenplay = ParseScreenplayBlock(lines, index)) {
+                        recent_speaker = screenplay->speaker.name;
+                        for (std::size_t offset = 0; offset < screenplay->lines; ++offset)
+                            result.push_back({index + offset + 1, ManuscriptLineKind::Prose,
+                                              lines[index + offset]});
+                        index += screenplay->lines - 1;
+                        continue;
+                    }
                     const bool speaker_block = ParseSpeakerSpec(trimmed).has_value() && index + 1 < lines.size() &&
                         IsQuoted(Trim(lines[index + 1]));
                     if (speaker_block) {
@@ -576,16 +786,16 @@ std::vector<ManuscriptLineReview> ClassifyLines(std::string_view text) {
                         std::string speaker, dialogue;
                         RichDialogue rich;
                         ManuscriptOptions options;
-                        const auto colon = trimmed.find(':');
-                        const bool named_dialogue = colon != std::string::npos &&
-                            ParseSpeakerSpec(Trim(trimmed.substr(0, colon))).has_value();
+                        const auto named = ParseNamedDialogue(trimmed, recent_speaker);
+                        const bool named_dialogue = named.has_value();
                         std::string attributes;
                         const bool direct_attribution = ParseAttributed(
                             trimmed, recent_speaker, &speaker, &attributes, &dialogue);
                         const bool action_beat = !direct_attribution &&
                             ParseActionBeat(trimmed, options, recent_speaker, &rich);
                         const bool attributed = direct_attribution || action_beat;
-                        if (attributed || StartsWith(trimmed, "\xe2\x80\x9c"))
+                        const bool natural_quotation = IsQuoted(trimmed) && !StartsWith(trimmed, "\"");
+                        if (attributed || natural_quotation)
                             kind = ManuscriptLineKind::Prose;
                         else if (StrongRenpyLine(lines[index]) || unindented_renpy_narration)
                             kind = ManuscriptLineKind::Renpy;
@@ -595,8 +805,7 @@ std::vector<ManuscriptLineReview> ClassifyLines(std::string_view text) {
                             kind = ManuscriptLineKind::Uncertain;
                         if (direct_attribution && !speaker.empty()) recent_speaker = speaker;
                         else if (action_beat && !rich.speaker.empty()) recent_speaker = rich.speaker;
-                        else if (named_dialogue) recent_speaker = ParseSpeakerSpec(
-                            Trim(trimmed.substr(0, colon)))->name;
+                        else if (named_dialogue) recent_speaker = named->speaker.name;
                     }
                 }
             }
@@ -775,15 +984,17 @@ ManuscriptConversion convert_manuscript_to_renpy(
 
         std::string speaker, attributes, dialogue;
         RichDialogue rich;
-        const auto colon = line.find(':');
-        if (IsQuoted(line)) {
+        if (const auto screenplay = ParseScreenplayBlock(lines, index)) {
+            speaker = screenplay->speaker.name;
+            attributes = screenplay->speaker.attributes;
+            dialogue = screenplay->text;
+            index += screenplay->lines - 1;
+        } else if (IsQuoted(line)) {
             dialogue = Unquote(line);
-        } else if (colon != std::string::npos && ParseSpeakerSpec(Trim(line.substr(0, colon)))) {
-            const auto spec = *ParseSpeakerSpec(Trim(line.substr(0, colon)));
-            speaker = spec.name;
-            attributes = spec.attributes;
-            dialogue = Trim(line.substr(colon + 1));
-            dialogue = Unquote(std::move(dialogue));
+        } else if (const auto named = ParseNamedDialogue(line, recent_speaker)) {
+            speaker = named->speaker.name;
+            attributes = named->speaker.attributes;
+            dialogue = named->text;
         } else if (ParseActionBeat(line, options, recent_speaker, &rich)) {
             if (!rich.narration_before.empty())
                 entries.push_back({{}, {}, {}, rich.narration_before});

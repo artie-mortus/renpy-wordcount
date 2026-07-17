@@ -56,8 +56,11 @@ ManuscriptConversion convert_mixed_manuscript_to_renpy(
 //   Eileen: We should go.
 //   Eileen said, "We should go."
 //   "We should go," Eileen said.
+//   Eileen — We should go.
 //   Eileen             (speaker line followed by a quoted line)
+//   EILEEN             (screenplay cue followed by dialogue, with an optional parenthetical)
 //   "We should go."
+// Straight, curly, guillemet, German, and CJK quotation marks are accepted.
 // All other non-empty lines become narration. A heading written as
 // ":: scene name" starts a new Ren'Py label.
 ManuscriptConversion convert_manuscript_to_renpy(
