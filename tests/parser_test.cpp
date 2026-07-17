@@ -218,3 +218,11 @@ TEST_CASE("project warnings exclude generated RenPy support files") {
     CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.file == "script.rpy"; }));
     CHECK(std::any_of(result.warnings.begin(), result.warnings.end(), [](const auto& w) { return w.file == "chapter_two.rpy"; }));
 }
+
+TEST_CASE("character alias extraction is lightweight and syntax aware") {
+    CHECK(say_count::character_alias_on_line("define e = Character(\"Eileen\")") == "e");
+    CHECK(say_count::character_alias_on_line("default narrator = renpy.Character(None)") == "narrator");
+    CHECK_FALSE(say_count::character_alias_on_line("# define fake = Character(\"Fake\")"));
+    CHECK_FALSE(say_count::character_alias_on_line("define portrait = \"Character.png\""));
+    CHECK_FALSE(say_count::character_alias_on_line("e \"Character dialogue\""));
+}

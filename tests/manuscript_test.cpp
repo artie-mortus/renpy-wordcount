@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+
 #include "core/manuscript.h"
 #include "core/offline_prose_ai.h"
 
@@ -284,6 +286,76 @@ TEST_CASE("book speech tags ignore capitalization and allow adverbs") {
         "label start:\n"
         "    eileen \"Stay.\"\n"
         "    eileen \"Please.\"\n");
+}
+
+TEST_CASE("natural dialogue accepts international quotation marks") {
+    ManuscriptOptions options;
+    options.existing_characters = {{"e", "Élodie"}, {"l", "Lucy"}, {"a", "Akira"}};
+    const auto result = convert_manuscript_to_renpy(
+        "Élodie says, «Partons.»\n"
+        "Lucy replies, ‘Not yet.’\n"
+        "Élodie adds, „Tout de suite.“\n"
+        "Akira: 「行こう。」", options);
+    CHECK(result.script ==
+        "label start:\n"
+        "    e \"Partons.\"\n"
+        "    l \"Not yet.\"\n"
+        "    e \"Tout de suite.\"\n"
+        "    a \"行こう。\"\n");
+    CHECK(result.characters.empty());
+}
+
+TEST_CASE("flexible speech tags handle present tense modifiers and interrupted quotations") {
+    const auto result = convert_manuscript_to_renpy(
+        "Eileen says with a grin, \"Ready.\"\n"
+        "\"Almost,\" softly replies Lucy.\n"
+        "\"I mean it,\" Eileen insists. \"Today.\"\n"
+        "Eileen turned away. \"Go,\" she urged.");
+    CHECK(result.script ==
+        "define eileen = Character(\"Eileen\", image=\"eileen\")\n"
+        "define lucy = Character(\"Lucy\")\n\n"
+        "label start:\n"
+        "    eileen happy \"Ready.\"\n"
+        "    lucy \"Almost,\"\n"
+        "    eileen \"I mean it, Today.\"\n"
+        "    \"Eileen turned away.\"\n"
+        "    eileen \"Go,\"\n");
+}
+
+TEST_CASE("natural speaker cues accept speech clauses and parenthetical moods") {
+    ManuscriptOptions options;
+    options.existing_characters = {{"e", "Eileen"}, {"l", "Lucy"}};
+    const auto result = convert_manuscript_to_renpy(
+        "Eileen says: We're ready.\nLucy (nervously): Are you sure?", options);
+    CHECK(result.script ==
+        "label start:\n"
+        "    e \"We're ready.\"\n"
+        "    l nervous \"Are you sure?\"\n");
+}
+
+TEST_CASE("screenplay cues and dash dialogue convert without quotation marks") {
+    const auto result = convert_manuscript_to_renpy(
+        "EILEEN\n"
+        "(angrily)\n"
+        "— We are leaving.\n"
+        "Lucy:\n"
+        "Not without me.\n"
+        "Captain Vale — Hold the door.");
+    CHECK(result.script ==
+        "define eileen = Character(\"EILEEN\", image=\"eileen\")\n"
+        "define lucy = Character(\"Lucy\")\n"
+        "define captain_vale = Character(\"Captain Vale\")\n\n"
+        "label start:\n"
+        "    eileen angry \"We are leaving.\"\n"
+        "    lucy \"Not without me.\"\n"
+        "    captain_vale \"Hold the door.\"\n");
+
+    const auto review = review_manuscript_lines(
+        "EILEEN\n(angrily)\n— We are leaving.\nCaptain Vale — Hold the door.");
+    REQUIRE(review.size() == 4);
+    CHECK(std::all_of(review.begin(), review.end(), [](const auto& line) {
+        return line.kind == ManuscriptLineKind::Prose;
+    }));
 }
 
 TEST_CASE("natural language mood cues infer common sprite expressions") {
