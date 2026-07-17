@@ -116,13 +116,32 @@ GitResult<GitSnapshot> GitClient::Status() const {
     const auto remotes = Run(Git({"remote"}));
     if (remotes.exit_code == 0) {
         const auto names = lines(remotes.output);
-        if (std::find(names.begin(), names.end(), "origin") != names.end())
+        const auto configured_remote = [this](const std::string& key) {
+            const auto command = Run(Git({"config", "--get", key}));
+            return command.exit_code == 0 ? trim(command.output) : std::string{};
+        };
+        if (!result.value.status.branch.empty())
+            result.value.remote_name = configured_remote(
+                "branch." + result.value.status.branch + ".pushRemote");
+        if (result.value.remote_name.empty())
+            result.value.remote_name = configured_remote("remote.pushDefault");
+        if (result.value.remote_name.empty() && !result.value.status.upstream.empty()) {
+            for (const auto& name : names) {
+                if (result.value.status.upstream.rfind(name + "/", 0) == 0 &&
+                    name.size() > result.value.remote_name.size())
+                    result.value.remote_name = name;
+            }
+        }
+        if (result.value.remote_name.empty() &&
+            std::find(names.begin(), names.end(), "origin") != names.end())
             result.value.remote_name = "origin";
-        else if (!names.empty())
+        if (result.value.remote_name.empty() && !names.empty())
             result.value.remote_name = names.front();
     }
     if (!result.value.remote_name.empty()) {
-        const auto url = Run(Git({"remote", "get-url", result.value.remote_name}));
+        auto url = Run(Git({"remote", "get-url", "--push", result.value.remote_name}));
+        if (url.exit_code != 0)
+            url = Run(Git({"remote", "get-url", result.value.remote_name}));
         if (url.exit_code == 0) result.value.remote_url = trim(url.output);
     }
     const auto commit = Run(Git({"log", "-1", "--pretty=format:%h  %s"}));

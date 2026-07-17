@@ -947,8 +947,8 @@ void MainFrame::OnGitRepository(wxCommandEvent&) {
     GitDialog dialog(this, project_ ? project_->root : std::string{},
                      [this] { return notebook_->SaveAll(); });
     const int result = dialog.ShowModal();
-    if (result == wxID_OK && dialog.cloned_path()) {
-        ConnectProjectFolder(wxString::FromUTF8(*dialog.cloned_path()));
+    if (result == wxID_OK && dialog.selected_path()) {
+        ConnectProjectFolder(wxString::FromUTF8(*dialog.selected_path()));
         return;
     }
     if (project_) RefreshProjectDiscovery();

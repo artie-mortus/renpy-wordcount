@@ -23,14 +23,14 @@ public:
               std::function<bool()> save_project);
     ~GitDialog() override;
 
-    const std::optional<std::string>& cloned_path() const { return cloned_path_; }
+    const std::optional<std::string>& selected_path() const { return selected_path_; }
 
 private:
-    enum class WorkKind { Status, Initialize, SetRemote, Fetch, Pull, CommitPush, Clone };
+    enum class WorkKind { Status, OpenLocal, Initialize, SetRemote, Fetch, Pull, CommitPush, Clone };
     struct WorkResult {
         WorkKind kind = WorkKind::Status;
         app::GitSnapshot snapshot;
-        std::string cloned_path;
+        std::string selected_path;
         std::string output;
         std::string error;
     };
@@ -41,6 +41,7 @@ private:
     void SetBusy(bool busy, const wxString& status = {});
     void StartWork(WorkKind kind, std::function<WorkResult()> work,
                    const wxString& status);
+    void OnOpenLocal(wxCommandEvent& event);
     void OnClone(wxCommandEvent& event);
     void OnInitialize(wxCommandEvent& event);
     void OnSetRemote(wxCommandEvent& event);
@@ -56,7 +57,7 @@ private:
     app::GitClient client_;
     std::function<bool()> save_project_;
     app::GitSnapshot snapshot_;
-    std::optional<std::string> cloned_path_;
+    std::optional<std::string> selected_path_;
     wxStaticText* repository_value_ = nullptr;
     wxStaticText* branch_value_ = nullptr;
     wxStaticText* remote_value_ = nullptr;
@@ -64,6 +65,7 @@ private:
     wxStaticText* commit_value_ = nullptr;
     wxStaticText* operation_status_ = nullptr;
     wxDataViewListCtrl* changes_ = nullptr;
+    wxButton* open_local_ = nullptr;
     wxButton* clone_ = nullptr;
     wxButton* initialize_ = nullptr;
     wxButton* set_remote_ = nullptr;

@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 
 using namespace say_count::app;
 
@@ -60,4 +61,65 @@ TEST_CASE("Git client safely clones a local repository with quoted paths") {
     const auto status = GitClient(destination.string()).Status();
     REQUIRE(status);
     CHECK(status.value.is_repository);
+}
+
+TEST_CASE("Git client reports the repository configured push destination") {
+    TemporaryGitWorkspace workspace;
+    const auto project = workspace.root / "configured-push";
+    std::filesystem::create_directories(project);
+    GitClient client(project.string());
+    REQUIRE(client.Initialize());
+    REQUIRE(client.SetRemote("https://github.com/team/origin.git"));
+    {
+        std::ofstream config(project / ".git" / "config", std::ios::app);
+        REQUIRE(config);
+        config << "\n[remote \"publishing\"]\n"
+                  "\turl = https://github.com/team/fetch.git\n"
+                  "\tpushurl = git@github.com:team/private-story.git\n"
+                  "[remote]\n"
+                  "\tpushDefault = publishing\n";
+    }
+
+    const auto status = client.Status();
+    REQUIRE(status);
+    CHECK(status.value.remote_name == "publishing");
+    CHECK(status.value.remote_url == "git@github.com:team/private-story.git");
+}
+
+TEST_CASE("Git client commits local project updates and pushes its configured remote") {
+    TemporaryGitWorkspace workspace;
+    const auto remote = workspace.root / "remote";
+    const auto project = workspace.root / "working-copy";
+    std::filesystem::create_directories(remote);
+    std::filesystem::create_directories(project / "game");
+    GitClient remote_client(remote.string());
+    GitClient project_client(project.string());
+    REQUIRE(remote_client.Initialize());
+    REQUIRE(project_client.Initialize());
+    {
+        std::ofstream remote_config(remote / ".git" / "config", std::ios::app);
+        REQUIRE(remote_config);
+        remote_config << "\n[receive]\n\tdenyCurrentBranch = updateInstead\n";
+    }
+    {
+        std::ofstream project_config(project / ".git" / "config", std::ios::app);
+        REQUIRE(project_config);
+        project_config << "\n[user]\n\tname = Say Count Test\n"
+                          "\temail = tests@say-count.invalid\n";
+        std::ofstream script(project / "game" / "script.rpy");
+        REQUIRE(script);
+        script << "label start:\n    \"Local update\"\n";
+    }
+    REQUIRE(project_client.SetRemote(remote.string()));
+
+    const auto pushed = project_client.CommitAndPush("Update local story");
+    REQUIRE(pushed);
+    const auto local_status = project_client.Status();
+    REQUIRE(local_status);
+    CHECK(local_status.value.status.changes.empty());
+    CHECK_FALSE(local_status.value.status.upstream.empty());
+    const auto remote_status = remote_client.Status();
+    REQUIRE(remote_status);
+    CHECK(remote_status.value.last_commit.find("Update local story") != std::string::npos);
+    CHECK(std::filesystem::exists(remote / "game" / "script.rpy"));
 }

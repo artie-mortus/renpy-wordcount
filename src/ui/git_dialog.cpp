@@ -75,10 +75,12 @@ GitDialog::GitDialog(wxWindow* parent, std::string project_root,
     content->Add(explanation, 0, wxEXPAND | wxBOTTOM, FromDIP(14));
 
     auto* setup = new wxBoxSizer(wxHORIZONTAL);
+    open_local_ = new wxButton(this, wxID_ANY, "Open local repository...");
     clone_ = new wxButton(this, wxID_ANY, "Clone repository...");
     initialize_ = new wxButton(this, wxID_ANY, "Initialize");
     set_remote_ = new wxButton(this, wxID_ANY, "Set origin...");
     refresh_ = new wxButton(this, wxID_ANY, "Refresh");
+    setup->Add(open_local_, 0, wxRIGHT, FromDIP(8));
     setup->Add(clone_, 0, wxRIGHT, FromDIP(8));
     setup->Add(initialize_, 0, wxRIGHT, FromDIP(8));
     setup->Add(set_remote_, 0, wxRIGHT, FromDIP(8));
@@ -129,6 +131,7 @@ GitDialog::GitDialog(wxWindow* parent, std::string project_root,
     root->Add(content, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(20));
     SetSizer(root);
 
+    open_local_->Bind(wxEVT_BUTTON, &GitDialog::OnOpenLocal, this);
     clone_->Bind(wxEVT_BUTTON, &GitDialog::OnClone, this);
     initialize_->Bind(wxEVT_BUTTON, &GitDialog::OnInitialize, this);
     set_remote_->Bind(wxEVT_BUTTON, &GitDialog::OnSetRemote, this);
@@ -199,6 +202,7 @@ void GitDialog::RefreshUi() {
     const bool repository = has_project && snapshot_.is_repository;
     const bool remote = repository && !snapshot_.remote_name.empty();
     const bool clean = snapshot_.status.changes.empty();
+    open_local_->Enable(!busy_);
     clone_->Enable(!busy_);
     initialize_->Enable(has_project && !repository && !busy_);
     set_remote_->Enable(repository && !busy_);
@@ -213,9 +217,9 @@ void GitDialog::RefreshUi() {
         repository_value_->SetLabel("No project connected");
         branch_value_->SetLabel("—");
         remote_value_->SetLabel("—");
-        sync_value_->SetLabel("Clone to begin");
-        commit_value_->SetLabel("Connect a project folder, or clone a repository into a new folder.");
-        if (!busy_) operation_status_->SetLabel("Choose Clone repository to access an existing remote.");
+        sync_value_->SetLabel("Open or clone");
+        commit_value_->SetLabel("Open a repository already on this PC, or clone one into a new folder.");
+        if (!busy_) operation_status_->SetLabel("Choose Open local repository or Clone repository to begin.");
     } else if (!repository) {
         repository_value_->SetLabel("Not initialized");
         branch_value_->SetLabel("—");
@@ -239,6 +243,23 @@ void GitDialog::RefreshUi() {
     }
     Layout();
     commit_push_->Refresh();
+}
+
+void GitDialog::OnOpenLocal(wxCommandEvent&) {
+    wxDirDialog dialog(this, "Choose a local Git repository or its project folder",
+                       wxEmptyString, wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+    if (dialog.ShowModal() != wxID_OK) return;
+    const std::string path = dialog.GetPath().ToStdString(wxConvUTF8);
+    StartWork(WorkKind::OpenLocal, [path] {
+        WorkResult result;
+        auto status = app::GitClient(path).Status();
+        if (!status) result.error = std::move(status.error);
+        else if (!status.value.is_repository)
+            result.error = "The selected folder is not inside a Git repository.";
+        else
+            result.selected_path = path;
+        return result;
+    }, "Checking the local repository and its configured remote...");
 }
 
 void GitDialog::OnClone(wxCommandEvent&) {
@@ -271,7 +292,7 @@ void GitDialog::OnClone(wxCommandEvent&) {
     StartWork(WorkKind::Clone, [remote, destination] {
         WorkResult result;
         auto cloned = app::GitClient::Clone(remote, destination);
-        if (cloned) { result.cloned_path = std::move(cloned.value); result.output = std::move(cloned.output); }
+        if (cloned) { result.selected_path = std::move(cloned.value); result.output = std::move(cloned.output); }
         else result.error = std::move(cloned.error);
         return result;
     }, "Cloning repository. Your Git credential helper may ask you to sign in...");
@@ -383,8 +404,8 @@ void GitDialog::OnWorkDone(wxThreadEvent& event) {
             : wxString::Format("%zu changed repository file%s.", snapshot_.status.changes.size(),
                                snapshot_.status.changes.size() == 1 ? "" : "s"));
         RefreshUi();
-    } else if (result->kind == WorkKind::Clone) {
-        cloned_path_ = std::move(result->cloned_path);
+    } else if (result->kind == WorkKind::Clone || result->kind == WorkKind::OpenLocal) {
+        selected_path_ = std::move(result->selected_path);
         EndModal(wxID_OK);
     } else {
         switch (result->kind) {

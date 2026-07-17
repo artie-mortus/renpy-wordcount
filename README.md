@@ -49,16 +49,18 @@ repository desk works with standard Git remotes rather than a hosting-service
 API, so the same workflow supports GitHub, GitLab, Bitbucket, Codeberg,
 self-hosted servers, local repositories, and other Git-compatible services.
 
-- **Clone repository** accepts HTTPS, SSH, `file://`, and local repository
-  paths, then connects the cloned Ren'Py project folder.
+- **Open local repository** connects a repository that is already on this PC
+  and uses its configured push remote. **Clone repository** accepts HTTPS, SSH,
+  `file://`, and local repository paths, then connects the cloned Ren'Py project
+  folder.
 - **Initialize** turns the connected project folder into a repository.
 - **Set origin** adds or changes the default remote without restricting its
   host.
 - **Fetch** updates references from every configured remote. **Pull changes**
   accepts clean, fast-forward updates only, avoiding implicit merge commits.
 - **Commit & push** saves open scripts, stages all repository changes, creates
-  one commit, and pushes the current branch. The first push establishes its
-  upstream.
+  one commit, and pushes the current branch to its configured push remote. The
+  first push uses the repository's default remote and establishes its upstream.
 
 Private access is handled by the installed Git client. Configure an SSH agent
 and authorized key, or a system Git credential helper and access token, using
