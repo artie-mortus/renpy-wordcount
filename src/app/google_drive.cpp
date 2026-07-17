@@ -246,6 +246,10 @@ bool GoogleDriveClient::ImportClientConfiguration(std::string_view json, std::st
 
 std::optional<std::string> GoogleDriveClient::LoadRefreshToken(std::string* error) const {
     if (!credentials_) { if (error) *error = "Google Drive is not configured."; return std::nullopt; }
+#if !wxUSE_SECRETSTORE
+    if (error) *error = "This build does not support secure system keyring storage.";
+    return std::nullopt;
+#else
     wxSecretStore store = wxSecretStore::GetDefault();
     wxString store_error;
     if (!store.IsOk(&store_error)) {
@@ -264,9 +268,15 @@ std::optional<std::string> GoogleDriveClient::LoadRefreshToken(std::string* erro
     wxSecretValue::WipeString(token);
     if (error) error->clear();
     return result;
+#endif
 }
 
 bool GoogleDriveClient::SaveRefreshToken(std::string_view token, std::string* error) {
+#if !wxUSE_SECRETSTORE
+    (void)token;
+    if (error) *error = "This build does not support secure system keyring storage.";
+    return false;
+#else
     wxSecretStore store = wxSecretStore::GetDefault();
     wxString store_error;
     if (!store.IsOk(&store_error)) {
@@ -280,6 +290,7 @@ bool GoogleDriveClient::SaveRefreshToken(std::string_view token, std::string* er
     }
     if (error) error->clear();
     return true;
+#endif
 }
 
 bool GoogleDriveClient::connected(std::string* error) const {
@@ -462,8 +473,9 @@ GoogleDriveResult<bool> GoogleDriveClient::Disconnect() {
         Request("https://oauth2.googleapis.com/revoke", "POST",
             {"Content-Type: application/x-www-form-urlencoded"}, "token=" + FormValue(*refresh));
     }
-    wxSecretStore store = wxSecretStore::GetDefault();
-    if (refresh) store.Delete(kSecretService);
+#if wxUSE_SECRETSTORE
+    if (refresh) wxSecretStore::GetDefault().Delete(kSecretService);
+#endif
     access_token_.clear();
     access_token_expiry_ = {};
     return {true, {}};
