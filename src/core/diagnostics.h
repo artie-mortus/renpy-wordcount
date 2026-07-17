@@ -26,7 +26,24 @@ struct DiagnosticsOptions {
     std::size_t long_line_words = 35;
 };
 
+struct BasicFixResult {
+    std::vector<NamedScript> scripts;
+    std::size_t changed_files = 0;
+    std::size_t indentation_fixes = 0;
+    std::size_t quote_fixes = 0;
+    std::size_t colon_fixes = 0;
+    std::size_t empty_block_fixes = 0;
+
+    std::size_t total_fixes() const {
+        return indentation_fixes + quote_fixes + colon_fixes + empty_block_fixes;
+    }
+};
+
 std::vector<Diagnostic> diagnose_project(const std::vector<NamedScript>& scripts,
                                          DiagnosticsOptions options = {});
+bool has_basic_fix(const Diagnostic& diagnostic);
+std::size_t count_basic_fixes(const std::vector<Diagnostic>& diagnostics);
+BasicFixResult fix_basic_diagnostics(const std::vector<NamedScript>& scripts,
+                                     DiagnosticsOptions options = {});
 
 }  // namespace say_count

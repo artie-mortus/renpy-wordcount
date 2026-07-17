@@ -343,6 +343,7 @@ MainFrame::MainFrame()
     diagnostics_->SetJumpHandler([this](const Diagnostic& diagnostic) {
         notebook_->SelectDiagnostic(diagnostic);
     });
+    diagnostics_->SetFixHandler([this] { OnFixBasicErrors(); });
     notebook_->SetFindStatusHandler([this](const FindStatus& status) { UpdateFindStatus(status); });
     speaker_stats_->SetLineJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
@@ -1356,6 +1357,23 @@ void MainFrame::RefreshProduction() {
 void MainFrame::OnShowProduction(wxCommandEvent&) {
     RefreshProduction();
     manager_.GetPane("production-desk").Show(true); manager_.Update();
+}
+
+void MainFrame::OnFixBasicErrors() {
+    const auto fixed = fix_basic_diagnostics(notebook_->ProjectScripts());
+    if (fixed.total_fixes() == 0) {
+        SetStatusText("No automatic repairs are available");
+        return;
+    }
+    const std::size_t active = notebook_->CurrentFileIndex();
+    if (!TakeSnapshot(false, "Before fixing basic diagnostics")) return;
+    if (!notebook_->RestoreProjectScripts(fixed.scripts)) return;
+    notebook_->SelectFileIndex(active);
+    const std::string status = "Fixed " + std::to_string(fixed.total_fixes()) +
+        " basic error" + (fixed.total_fixes() == 1 ? "" : "s") + " in " +
+        std::to_string(fixed.changed_files) + " file" + (fixed.changed_files == 1 ? "" : "s") +
+        " — changes are unsaved";
+    SetStatusText(wxString::FromUTF8(status));
 }
 
 void MainFrame::OnFixIndents(wxCommandEvent&) {
