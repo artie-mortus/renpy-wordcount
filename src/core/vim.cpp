@@ -226,6 +226,15 @@ std::string VimPatternToRegex(std::string_view pattern) {
     return converted;
 }
 
+std::regex_constants::syntax_option_type VimRegexFlags(std::string_view pattern) {
+    auto flags = std::regex_constants::ECMAScript;
+    const bool has_uppercase = std::any_of(pattern.begin(), pattern.end(), [](char character) {
+        return std::isupper(static_cast<unsigned char>(character)) != 0;
+    });
+    if (!has_uppercase) flags |= std::regex_constants::icase;
+    return flags;
+}
+
 std::string VimReplacementToFormat(std::string_view replacement) {
     std::string converted;
     for (std::size_t index = 0; index < replacement.size(); ++index) {
@@ -534,7 +543,7 @@ void VimEmulator::ExecuteSubstitute(std::size_t first_line, std::size_t last_lin
     last_search_ = pattern;
     std::regex expression;
     try {
-        expression.assign(VimPatternToRegex(pattern), std::regex::ECMAScript);
+        expression.assign(VimPatternToRegex(pattern), VimRegexFlags(pattern));
     } catch (const std::regex_error&) {
         return;
     }
@@ -566,7 +575,7 @@ bool VimEmulator::SearchMove(int direction) {
     }
     std::regex expression;
     try {
-        expression.assign(VimPatternToRegex(last_search_), std::regex::ECMAScript);
+        expression.assign(VimPatternToRegex(last_search_), VimRegexFlags(last_search_));
     } catch (const std::regex_error&) {
         message_ = "Invalid pattern: " + last_search_;
         return false;

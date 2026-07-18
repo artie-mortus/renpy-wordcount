@@ -90,6 +90,18 @@ TEST_CASE("built-in Vim supports visual editing search and Ex commands") {
     state = Type(vim, std::move(state), "missing");
     state = Press(vim, std::move(state), "<CR>");
     CHECK(state.command_line == "Pattern not found: missing");
+
+    vim.Reset();
+    state = vim.ApplyKey("Iconic lines", 0, "/");
+    state = Type(vim, std::move(state), "iconic");
+    state = Press(vim, std::move(state), "<CR>");
+    CHECK(state.search_match);
+    CHECK(state.search_match_start == 0);
+
+    state = Press(vim, std::move(state), "/");
+    state = Type(vim, std::move(state), "ICONIC");
+    state = Press(vim, std::move(state), "<CR>");
+    CHECK(state.command_line == "Pattern not found: ICONIC");
 }
 
 TEST_CASE("built-in Vim supports line motions find replace and indentation") {
