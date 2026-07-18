@@ -2,6 +2,8 @@
 
 #include "app/nvim_client.h"
 
+#include <chrono>
+
 #include <wx/init.h>
 
 TEST_CASE("embedded Neovim supplies motions operators and visual selections") {
@@ -71,4 +73,44 @@ TEST_CASE("embedded Neovim supplies motions operators and visual selections") {
     REQUIRE(escaped_state);
     CHECK(escaped_state->mode == "n");
     CHECK(escaped_state->text.size() == large_source.size() + 1);
+}
+
+TEST_CASE("keys that leave Neovim waiting for input return a pending state") {
+    wxInitializer initializer;
+    REQUIRE(initializer.IsOk());
+    say_count::app::NvimClient client;
+    std::string error;
+    INFO(error);
+    REQUIRE(client.Start(&error));
+    const auto buffer = client.CreateBuffer("one two three", "pending-test.rpy", &error);
+    INFO(error);
+    REQUIRE(buffer);
+
+    const auto started = std::chrono::steady_clock::now();
+    auto pending = client.ApplyKey(*buffer, "one two three", 0, "f", &error);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - started).count();
+    INFO(error);
+    REQUIRE(pending);
+    CHECK(elapsed < 2500);
+    CHECK(pending->text == "one two three");
+    CHECK(pending->caret == 0);
+
+    auto jumped = client.ApplyKey(*buffer, pending->text, pending->caret, "t", &error);
+    REQUIRE(jumped);
+    CHECK(jumped->caret == 4);
+    CHECK(jumped->mode == "n");
+
+    auto replacing = client.ApplyKey(*buffer, jumped->text, jumped->caret, "r", &error);
+    REQUIRE(replacing);
+    auto replaced = client.ApplyKey(*buffer, replacing->text, replacing->caret, "T", &error);
+    REQUIRE(replaced);
+    CHECK(replaced->text == "one Two three");
+
+    auto cancelled = client.ApplyKey(*buffer, replaced->text, replaced->caret, "f", &error);
+    REQUIRE(cancelled);
+    cancelled = client.ApplyKey(*buffer, cancelled->text, cancelled->caret, "<Esc>", &error);
+    REQUIRE(cancelled);
+    CHECK(cancelled->mode == "n");
+    CHECK(cancelled->text == "one Two three");
 }
