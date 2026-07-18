@@ -17,6 +17,9 @@ struct VimState {
     bool visual = false;
     bool visual_line = false;
     bool visual_block = false;
+    bool search_match = false;
+    std::size_t search_match_start = 0;
+    std::size_t search_match_end = 0;
     bool host_undo = false;
     bool host_redo = false;
     bool host_save = false;
@@ -81,6 +84,10 @@ private:
     bool host_undo_ = false;
     bool host_redo_ = false;
     bool host_save_ = false;
+    bool search_match_ = false;
+    std::size_t search_match_start_ = 0;
+    std::size_t search_match_end_ = 0;
+    std::string message_;
 };
 
 }  // namespace say_count

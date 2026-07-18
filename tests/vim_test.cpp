@@ -71,6 +71,10 @@ TEST_CASE("built-in Vim supports visual editing search and Ex commands") {
     state = Type(vim, std::move(state), "beta");
     state = Press(vim, std::move(state), "<CR>");
     CHECK(state.caret == 6);
+    CHECK(state.search_match);
+    CHECK(state.search_match_start == 6);
+    CHECK(state.search_match_end == 10);
+    CHECK(state.command_line == "/beta");
 
     state = Press(vim, std::move(state), ":");
     state = Type(vim, std::move(state), "%s/alpha/omega/g");
@@ -81,6 +85,11 @@ TEST_CASE("built-in Vim supports visual editing search and Ex commands") {
     state = Press(vim, std::move(state), "w");
     state = Press(vim, std::move(state), "<CR>");
     CHECK(state.host_save);
+
+    state = Press(vim, std::move(state), "/");
+    state = Type(vim, std::move(state), "missing");
+    state = Press(vim, std::move(state), "<CR>");
+    CHECK(state.command_line == "Pattern not found: missing");
 }
 
 TEST_CASE("built-in Vim supports line motions find replace and indentation") {

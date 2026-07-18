@@ -30,6 +30,7 @@ constexpr int kFindIndicator = 8;
 constexpr int kDiagnosticErrorIndicator = 9;
 constexpr int kDiagnosticWarningIndicator = 10;
 constexpr int kDiagnosticNoticeIndicator = 11;
+constexpr int kVimSearchIndicator = 12;
 constexpr int kDiagnosticErrorMarker = 20;
 constexpr int kDiagnosticWarningMarker = 21;
 constexpr int kDiagnosticNoticeMarker = 22;
@@ -294,6 +295,11 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->IndicatorSetForeground(kFindIndicator, dark ? wxColour("#f2ca72") : wxColour("#d49a13"));
     editor->IndicatorSetAlpha(kFindIndicator, 80);
     editor->IndicatorSetOutlineAlpha(kFindIndicator, 180);
+    editor->IndicatorSetStyle(kVimSearchIndicator, wxSTC_INDIC_ROUNDBOX);
+    editor->IndicatorSetForeground(kVimSearchIndicator,
+                                   dark ? wxColour("#5ec4ff") : wxColour("#1776b6"));
+    editor->IndicatorSetAlpha(kVimSearchIndicator, 105);
+    editor->IndicatorSetOutlineAlpha(kVimSearchIndicator, 220);
     editor->IndicatorSetStyle(kDiagnosticErrorIndicator, wxSTC_INDIC_SQUIGGLE);
     editor->IndicatorSetForeground(kDiagnosticErrorIndicator, wxColour("#d64545"));
     editor->IndicatorSetStyle(kDiagnosticWarningIndicator, wxSTC_INDIC_SQUIGGLE);
@@ -628,6 +634,13 @@ void EditorNotebook::ApplyNvimState(wxStyledTextCtrl* editor, const VimState& st
                              static_cast<int>(state.selection_end));
     } else {
         editor->SetEmptySelection(static_cast<int>(state.caret));
+    }
+    editor->SetIndicatorCurrent(kVimSearchIndicator);
+    editor->IndicatorClearRange(0, editor->GetTextLength());
+    if (state.search_match && state.search_match_end > state.search_match_start) {
+        editor->IndicatorFillRange(static_cast<int>(state.search_match_start),
+                                   static_cast<int>(state.search_match_end -
+                                                    state.search_match_start));
     }
     nvim_modes_[editor] = state.mode;
     nvim_command_line_ = state.command_line;

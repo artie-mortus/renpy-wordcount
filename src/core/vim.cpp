@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <regex>
+#include <utility>
 #include <vector>
 
 namespace say_count {
@@ -313,6 +314,8 @@ VimState VimEmulator::ApplyKey(std::string_view source, std::size_t caret,
     caret_ = std::min(caret, text_.size());
     anchor_ = std::min(anchor_, text_.size());
     host_undo_ = host_redo_ = host_save_ = false;
+    search_match_ = false;
+    message_.clear();
     goal_column_used_ = false;
 
     if (mode_ == Mode::Insert) {
@@ -349,6 +352,9 @@ VimState VimEmulator::MakeState() const {
     state.host_undo = host_undo_;
     state.host_redo = host_redo_;
     state.host_save = host_save_;
+    state.search_match = search_match_;
+    state.search_match_start = search_match_start_;
+    state.search_match_end = search_match_end_;
     switch (mode_) {
         case Mode::Normal:
             state.mode = op_ ? "no" : "n";
@@ -388,6 +394,7 @@ VimState VimEmulator::MakeState() const {
             state.selection_end = NextCp(text_, std::max(state.visual_anchor, state.caret));
             break;
     }
+    if (mode_ != Mode::Command && !message_.empty()) state.command_line = message_;
     return state;
 }
 
@@ -553,29 +560,45 @@ void VimEmulator::ExecuteSubstitute(std::size_t first_line, std::size_t last_lin
 }
 
 bool VimEmulator::SearchMove(int direction) {
-    if (last_search_.empty()) return false;
+    if (last_search_.empty()) {
+        message_ = "No previous search pattern";
+        return false;
+    }
     std::regex expression;
     try {
         expression.assign(VimPatternToRegex(last_search_), std::regex::ECMAScript);
     } catch (const std::regex_error&) {
+        message_ = "Invalid pattern: " + last_search_;
         return false;
     }
-    std::vector<std::size_t> positions;
+    std::vector<std::pair<std::size_t, std::size_t>> matches;
     const auto begin = std::sregex_iterator(text_.begin(), text_.end(), expression);
     for (auto found = begin; found != std::sregex_iterator(); ++found) {
         if (found->length() == 0) break;
-        positions.push_back(static_cast<std::size_t>(found->position()));
+        matches.emplace_back(static_cast<std::size_t>(found->position()),
+                             static_cast<std::size_t>(found->length()));
     }
-    if (positions.empty()) return false;
-    std::size_t target;
+    if (matches.empty()) {
+        message_ = "Pattern not found: " + last_search_;
+        return false;
+    }
+    auto selected = matches.begin();
     if (direction > 0) {
-        const auto found = std::upper_bound(positions.begin(), positions.end(), caret_);
-        target = found == positions.end() ? positions.front() : *found;
+        const auto found = std::upper_bound(
+            matches.begin(), matches.end(), caret_,
+            [](std::size_t position, const auto& match) { return position < match.first; });
+        selected = found == matches.end() ? matches.begin() : found;
     } else {
-        const auto found = std::lower_bound(positions.begin(), positions.end(), caret_);
-        target = found == positions.begin() ? positions.back() : *(found - 1);
+        const auto found = std::lower_bound(
+            matches.begin(), matches.end(), caret_,
+            [](const auto& match, std::size_t position) { return match.first < position; });
+        selected = found == matches.begin() ? matches.end() - 1 : found - 1;
     }
-    caret_ = ClampToLine(text_, target);
+    caret_ = ClampToLine(text_, selected->first);
+    search_match_ = true;
+    search_match_start_ = selected->first;
+    search_match_end_ = selected->first + selected->second;
+    message_ = "/" + last_search_;
     return true;
 }
 
