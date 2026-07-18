@@ -61,6 +61,7 @@ constexpr int kDefaultWidth = 1380;
 constexpr int kDefaultHeight = 860;
 enum MenuId {
     kToggleWrap = wxID_HIGHEST + 1,
+    kToggleNvimMotions,
     kFontIncrease,
     kFontDecrease,
     kFontReset,
@@ -221,7 +222,9 @@ MainFrame::MainFrame()
         (settings_.data_directory() + wxFILE_SEP_PATH + "manual-coverage.dat").ToStdString(wxConvUTF8));
     manual_coverage_projects_ = manual_coverage_store_->Load();
     BuildMenus();
-    CreateStatusBar();
+    CreateStatusBar(2);
+    const int status_widths[] = {-1, 112};
+    GetStatusBar()->SetStatusWidths(2, status_widths);
     speaker_stats_ = new SpeakerStatsPanel(
         this, wxFileName(settings_.path()).GetPath() + wxFILE_SEP_PATH + "targets.ini");
     outline_ = new OutlinePanel(this);
@@ -258,6 +261,9 @@ MainFrame::MainFrame()
         outline_->SetDocument(source, analysis);
         if (notebook_) RefreshRoutes();
         if (notebook_) RefreshProduction();
+    });
+    notebook_->SetNvimModeHandler([this](bool enabled, bool normal) {
+        SetStatusText(enabled ? (normal ? "NVIM  NORMAL" : "NVIM  INSERT") : "", 1);
     });
     RefreshRoutes();
     RefreshProduction();
@@ -418,6 +424,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnCloseTab, this, wxID_CLOSE);
     Bind(wxEVT_MENU, &MainFrame::OnAbout, this, wxID_ABOUT);
     Bind(wxEVT_MENU, &MainFrame::OnToggleWrap, this, kToggleWrap);
+    Bind(wxEVT_MENU, &MainFrame::OnToggleNvimMotions, this, kToggleNvimMotions);
     Bind(wxEVT_MENU, &MainFrame::OnFontSize, this, kFontIncrease, kFontReset);
     Bind(wxEVT_MENU, &MainFrame::OnTheme, this, kThemeSystem, kThemeDark);
     Bind(wxEVT_MENU, &MainFrame::OnExport, this, kExportCsv, kExportHtml);
@@ -587,6 +594,9 @@ void MainFrame::BuildMenus() {
     edit->AppendSeparator();
     edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
+    edit->AppendCheckItem(kToggleNvimMotions, "&Neovim Motions",
+                          "Use Neovim-style normal and insert modes in the editor");
+    edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
     edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
                  "Convert selected prose, or the entire active editor, to Ren'Py script");
     edit->Append(kConfigureOfflineProseAi, "Configure &Offline Prose AI...",
@@ -1709,6 +1719,7 @@ void MainFrame::OnShowShortcuts(wxCommandEvent&) {
         "Ctrl+= / - / 0         Editor font size\n"
         "Ctrl+K                 This shortcut sheet\n"
         "Ctrl+Shift+F           Focus mode\n"
+        "Neovim mode            Esc normal · i/a/o insert · hjkl/wbe/0^$/gg/G move\n"
         "Quotes, (, [           Auto-close or wrap selection\n"
         "Esc                    Close find";
     wxMessageBox(shortcuts, "Keyboard Shortcuts", wxOK | wxICON_INFORMATION, this);
@@ -1841,9 +1852,10 @@ void MainFrame::OnQuickOpen(wxCommandEvent&) {
 void MainFrame::DispatchCommand(int id) {
     wxCommandEvent command(wxEVT_MENU, id);
     command.SetEventObject(this);
-    if (id == kToggleWrap || id == kFocusMode || id == kShowOutline ||
+    if (id == kToggleWrap || id == kToggleNvimMotions || id == kFocusMode || id == kShowOutline ||
         id == kShowSpeakerStats || id == kShowDiagnostics) {
         const bool checked = id == kToggleWrap ? !editor_settings_.word_wrap :
+            id == kToggleNvimMotions ? !editor_settings_.nvim_motions :
             id == kFocusMode ? !focus_mode_ :
             id == kShowOutline ? !manager_.GetPane("outline").IsShown() :
             id == kShowSpeakerStats ? !manager_.GetPane("speaker-statistics").IsShown() :
@@ -1867,6 +1879,7 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
         {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},
         {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
+        {"Toggle Neovim motions", "Normal/insert modes · Edit", kToggleNvimMotions},
         {"Convert prose to Ren'Py", "Edit", kWriteManuscript},
         {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
         {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
@@ -2014,6 +2027,15 @@ void MainFrame::OnToggleWrap(wxCommandEvent& event) {
     editor_settings_.word_wrap = event.IsChecked();
     notebook_->SetWordWrap(editor_settings_.word_wrap);
     settings_.SaveEditor(editor_settings_);
+}
+
+void MainFrame::OnToggleNvimMotions(wxCommandEvent& event) {
+    editor_settings_.nvim_motions = event.IsChecked();
+    notebook_->SetNvimMotions(editor_settings_.nvim_motions);
+    settings_.SaveEditor(editor_settings_);
+    SetStatusText(editor_settings_.nvim_motions
+        ? "Neovim motions enabled · NORMAL mode"
+        : "Neovim motions disabled");
 }
 
 void MainFrame::OnFontSize(wxCommandEvent& event) {

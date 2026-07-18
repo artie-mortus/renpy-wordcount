@@ -81,6 +81,7 @@ private:
     void OnSave(wxCommandEvent& event);
     void OnSaveAs(wxCommandEvent& event);
     void OnToggleWrap(wxCommandEvent& event);
+    void OnToggleNvimMotions(wxCommandEvent& event);
     void OnFontSize(wxCommandEvent& event);
     void OnTheme(wxCommandEvent& event);
     void OnExport(wxCommandEvent& event);

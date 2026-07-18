@@ -19,6 +19,7 @@ enum class EditorTheme { System, Light, Dark };
 struct EditorSettings {
     int font_size = 16;
     bool word_wrap = false;
+    bool nvim_motions = false;
     EditorTheme theme = EditorTheme::System;
     wxString renpy_sdk_path;
     bool offline_prose_ai = false;

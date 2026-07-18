@@ -130,6 +130,7 @@ EditorSettings Settings::LoadEditor() const {
     if (!contents) return result;
     if (const auto size = ReadInt(*contents, "fontSize")) result.font_size = std::clamp(*size, 10, 32);
     if (const auto wrap = ReadBool(*contents, "wordWrap")) result.word_wrap = *wrap;
+    if (const auto motions = ReadBool(*contents, "nvimMotions")) result.nvim_motions = *motions;
     if (const auto theme = ReadString(*contents, "theme")) {
         if (*theme == "light") result.theme = EditorTheme::Light;
         else if (*theme == "dark") result.theme = EditorTheme::Dark;
@@ -186,6 +187,7 @@ bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSe
     output << "  \"editor\": {\n"
            << "    \"fontSize\": " << editor.font_size << ",\n"
            << "    \"wordWrap\": " << (editor.word_wrap ? "true" : "false") << ",\n"
+           << "    \"nvimMotions\": " << (editor.nvim_motions ? "true" : "false") << ",\n"
            << "    \"theme\": \"" << theme << "\",\n"
            << "    \"renpySdkPath\": \"" << JsonEscape(editor.renpy_sdk_path.ToStdString(wxConvUTF8)) << "\",\n"
            << "    \"offlineProseAi\": " << (editor.offline_prose_ai ? "true" : "false") << ",\n"

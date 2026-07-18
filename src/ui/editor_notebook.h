@@ -56,6 +56,7 @@ public:
     using AnalysisHandler = std::function<void(const wxString&, const ScriptAnalysis&)>;
     using FindStatusHandler = std::function<void(const FindStatus&)>;
     using DiagnosticsHandler = std::function<void(const std::vector<Diagnostic>&)>;
+    using NvimModeHandler = std::function<void(bool enabled, bool normal)>;
 
     EditorNotebook(wxWindow* parent, const app::EditorSettings& settings,
                    AnalysisHandler analysis_handler);
@@ -70,6 +71,8 @@ public:
     void SetWordWrap(bool enabled);
     void SetFontSize(int size);
     void SetTheme(app::EditorTheme theme);
+    void SetNvimMotions(bool enabled);
+    void SetNvimModeHandler(NvimModeHandler handler);
     void JumpToLine(std::size_t line_number);
     std::string SelectedText() const;
     FindStatus SetFindQuery(std::string query, FindOptions options);
@@ -128,6 +131,10 @@ private:
     void OnDwellStart(wxStyledTextEvent& event);
     void OnDwellEnd(wxStyledTextEvent& event);
     void OnKeyDown(wxKeyEvent& event);
+    void SetNvimNormalMode(wxStyledTextCtrl* editor, bool normal);
+    bool HandleNvimNormalKey(wxStyledTextCtrl* editor, wxKeyEvent& event);
+    void ClampNvimCaret(wxStyledTextCtrl* editor);
+    void NotifyNvimMode();
     void OnPageChanged(wxAuiNotebookEvent& event);
     void OnAnalysisTimer(wxTimerEvent& event);
     void OnCompletionTimer(wxTimerEvent& event);
@@ -159,6 +166,9 @@ private:
     FindStatusHandler find_status_handler_;
     std::vector<Diagnostic> diagnostics_;
     DiagnosticsHandler diagnostics_handler_;
+    NvimModeHandler nvim_mode_handler_;
+    std::unordered_map<wxStyledTextCtrl*, bool> nvim_normal_modes_;
+    std::unordered_set<wxStyledTextCtrl*> nvim_pending_g_;
     bool count_menu_choices_ = false;
 };
 
