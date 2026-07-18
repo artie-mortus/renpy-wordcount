@@ -607,7 +607,9 @@ bool VimEmulator::SearchMove(int direction) {
     search_match_ = true;
     search_match_start_ = selected->first;
     search_match_end_ = selected->first + selected->second;
-    message_ = "/" + last_search_;
+    const auto match_number = static_cast<std::size_t>(selected - matches.begin()) + 1;
+    message_ = "/" + last_search_ + " · " + std::to_string(match_number) +
+               " of " + std::to_string(matches.size());
     return true;
 }
 
@@ -977,6 +979,14 @@ void VimEmulator::HandleKey(std::string_view key) {
         op_ = op;
         op_count_.swap(count_);
         count_.clear();
+        return;
+    }
+
+    if (key == "<CR>" && !last_search_.empty()) {
+        const std::size_t repeats = EffectiveCount();
+        for (std::size_t step = 0; step < repeats; ++step)
+            if (!SearchMove(1)) break;
+        ClearPending();
         return;
     }
 

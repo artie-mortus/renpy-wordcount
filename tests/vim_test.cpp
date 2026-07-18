@@ -74,7 +74,7 @@ TEST_CASE("built-in Vim supports visual editing search and Ex commands") {
     CHECK(state.search_match);
     CHECK(state.search_match_start == 6);
     CHECK(state.search_match_end == 10);
-    CHECK(state.command_line == "/beta");
+    CHECK(state.command_line == "/beta · 1 of 1");
 
     state = Press(vim, std::move(state), ":");
     state = Type(vim, std::move(state), "%s/alpha/omega/g");
@@ -102,6 +102,20 @@ TEST_CASE("built-in Vim supports visual editing search and Ex commands") {
     state = Type(vim, std::move(state), "ICONIC");
     state = Press(vim, std::move(state), "<CR>");
     CHECK(state.command_line == "Pattern not found: ICONIC");
+
+    vim.Reset();
+    const std::string repeated = "Iconic opening and iconic ending";
+    state = vim.ApplyKey(repeated, repeated.size(), "/");
+    state = Type(vim, std::move(state), "iconic");
+    state = Press(vim, std::move(state), "<CR>");
+    CHECK(state.search_match_start == 0);
+    CHECK(state.command_line == "/iconic · 1 of 2");
+    state = Press(vim, std::move(state), "<CR>");
+    CHECK(state.search_match_start == 19);
+    CHECK(state.command_line == "/iconic · 2 of 2");
+    state = Press(vim, std::move(state), "<CR>");
+    CHECK(state.search_match_start == 0);
+    CHECK(state.command_line == "/iconic · 1 of 2");
 }
 
 TEST_CASE("built-in Vim supports line motions find replace and indentation") {
