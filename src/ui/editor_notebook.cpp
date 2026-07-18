@@ -90,6 +90,9 @@ void EditorNotebook::SetFilePath(wxStyledTextCtrl* editor, const wxString& path)
 
 bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_existing) {
     bool opened = false;
+    bool changed = false;
+    const bool was_opening_files = opening_files_;
+    opening_files_ = true;
     for (const auto& path : paths) {
         const wxString absolute_path = wxFileName(path).GetAbsolutePath();
         int existing = wxNOT_FOUND;
@@ -122,10 +125,9 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_ex
         editor->Bind(wxEVT_STC_SAVEPOINTLEFT, &EditorNotebook::OnSavePointChanged, this);
         editor->Bind(wxEVT_STC_SAVEPOINTREACHED, &EditorNotebook::OnSavePointChanged, this);
         AddPage(editor, editor->GetName(), true);
-        RefreshCompletionDocument(editor);
         editor->SetFocus();
-        AnalyzeActive();
         opened = true;
+        changed = true;
     }
     if (opened && GetPageCount() > 1) {
         for (size_t index = GetPageCount(); index-- > 0;) {
@@ -133,10 +135,14 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_ex
             if (editor && FilePath(editor).empty() && !editor->GetModify() && editor->GetText().empty()) {
                 DropEditorState(editor);
                 DeletePage(index);
+                changed = true;
             }
         }
-        MergeCompletionIndex();
-        AnalyzeActive();
+    }
+    opening_files_ = was_opening_files;
+    if (!opening_files_) {
+        if (changed) RefreshCompletionIndex();
+        if (opened) AnalyzeActive();
     }
     return opened;
 }
@@ -1289,6 +1295,10 @@ void EditorNotebook::OnCompletionTimer(wxTimerEvent&) {
 }
 
 void EditorNotebook::OnPageChanged(wxAuiNotebookEvent& event) {
+    if (opening_files_) {
+        event.Skip();
+        return;
+    }
     analysis_timer_.Stop();
     AnalyzeActive();
     if (!find_query_.empty()) RefreshFindHighlights();

@@ -1378,6 +1378,10 @@ void MainFrame::OnShowRoutes(wxCommandEvent&) {
 
 void MainFrame::RefreshProduction() {
     if (!notebook_ || !production_panel_) return;
+    // Production analysis includes prose, voice, continuity, and accessibility
+    // passes across the whole project. Build it only when its pane is visible.
+    const auto& pane = manager_.GetPane("production-desk");
+    if (pane.IsOk() && !pane.IsShown()) return;
     const auto scripts = notebook_->ProjectScripts();
     const std::size_t active = notebook_->CurrentFileIndex();
     production_panel_->SetProject(
@@ -1387,8 +1391,9 @@ void MainFrame::RefreshProduction() {
 }
 
 void MainFrame::OnShowProduction(wxCommandEvent&) {
+    manager_.GetPane("production-desk").Show(true);
+    manager_.Update();
     RefreshProduction();
-    manager_.GetPane("production-desk").Show(true); manager_.Update();
 }
 
 void MainFrame::OnFixBasicErrors() {
@@ -1837,6 +1842,8 @@ void MainFrame::RestoreWorkspace() {
         manager_.GetPane("command-bar").Show(true);
         manager_.Update();
     }
+    RefreshRoutes();
+    RefreshProduction();
     if (GetMenuBar()) {
         GetMenuBar()->Check(kShowOutline, manager_.GetPane("outline").IsShown());
         GetMenuBar()->Check(kShowSpeakerStats, manager_.GetPane("speaker-statistics").IsShown());

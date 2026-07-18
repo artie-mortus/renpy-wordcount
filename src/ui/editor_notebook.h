@@ -172,6 +172,7 @@ private:
     std::unordered_map<wxStyledTextCtrl*, VimEmulator> vim_emulators_;
     std::unordered_map<wxStyledTextCtrl*, std::string> nvim_modes_;
     std::string nvim_command_line_;
+    bool opening_files_ = false;
     bool count_menu_choices_ = false;
 };
 
