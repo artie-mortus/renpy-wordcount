@@ -224,7 +224,7 @@ bool EditorNotebook::ApplyExternalVersion(const wxString& path, std::string_view
 }
 
 void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
-    nvim_normal_modes_.try_emplace(editor, settings_.nvim_motions);
+    nvim_modes_.try_emplace(editor, settings_.nvim_motions ? "n" : "i");
     editor->SetLexer(wxSTC_LEX_CONTAINER);
     editor->Unbind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);
     editor->Bind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);
@@ -253,7 +253,7 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->SetCaretLineVisible(true);
     editor->SetCaretLineVisibleAlways(true);
     editor->SetCaretWidth(2);
-    editor->SetCaretStyle(settings_.nvim_motions && nvim_normal_modes_[editor]
+    editor->SetCaretStyle(settings_.nvim_motions && nvim_modes_[editor] != "i"
         ? wxSTC_CARETSTYLE_BLOCK : wxSTC_CARETSTYLE_LINE);
     editor->SetExtraAscent(3);
     editor->SetExtraDescent(3);
@@ -402,8 +402,12 @@ void EditorNotebook::DropEditorState(wxStyledTextCtrl* editor) {
     pending_completion_editors_.erase(editor);
     completions_.erase(editor);
     empty_hints_.erase(editor);
-    nvim_normal_modes_.erase(editor);
-    nvim_pending_g_.erase(editor);
+    if (nvim_client_) {
+        const auto found = nvim_buffers_.find(editor);
+        if (found != nvim_buffers_.end()) nvim_client_->CloseBuffer(found->second);
+    }
+    nvim_buffers_.erase(editor);
+    nvim_modes_.erase(editor);
 }
 
 void EditorNotebook::RefreshCompletionIndex() {
@@ -597,138 +601,133 @@ void EditorNotebook::ToggleComments() {
         static_cast<std::size_t>(editor->GetSelectionEnd())));
 }
 
-void EditorNotebook::SetNvimNormalMode(wxStyledTextCtrl* editor, bool normal) {
-    if (!editor) return;
-    nvim_normal_modes_[editor] = normal;
-    nvim_pending_g_.erase(editor);
-    editor->SetCaretStyle(normal ? wxSTC_CARETSTYLE_BLOCK : wxSTC_CARETSTYLE_LINE);
-    if (normal) ClampNvimCaret(editor);
-    NotifyNvimMode();
-}
-
-void EditorNotebook::ClampNvimCaret(wxStyledTextCtrl* editor) {
-    if (!editor) return;
-    const int position = editor->GetCurrentPos();
-    const int line = editor->LineFromPosition(position);
-    const int start = editor->PositionFromLine(line);
-    const int end = editor->GetLineEndPosition(line);
-    if (end > start && position >= end) editor->SetEmptySelection(editor->PositionBefore(end));
-}
-
 void EditorNotebook::NotifyNvimMode() {
     if (!nvim_mode_handler_) return;
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
-    const bool normal = editor && nvim_normal_modes_[editor];
-    nvim_mode_handler_(settings_.nvim_motions, normal);
+    const std::string mode = editor && nvim_modes_.count(editor) ? nvim_modes_[editor] : "i";
+    nvim_mode_handler_(settings_.nvim_motions, mode, nvim_command_line_);
 }
 
-bool EditorNotebook::HandleNvimNormalKey(wxStyledTextCtrl* editor, wxKeyEvent& event) {
+bool EditorNotebook::EnsureNvimBuffer(wxStyledTextCtrl* editor, std::string* error) {
+    if (!editor) return false;
+    if (!nvim_client_) nvim_client_ = std::make_unique<app::NvimClient>();
+    if (!nvim_client_->Start(error)) return false;
+    if (nvim_buffers_.count(editor)) return true;
+    wxString name = FilePath(editor);
+    if (name.empty()) name = editor->GetName();
+    const auto buffer = nvim_client_->CreateBuffer(
+        editor->GetText().ToStdString(wxConvUTF8), name.ToStdString(wxConvUTF8), error);
+    if (!buffer) return false;
+    nvim_buffers_[editor] = *buffer;
+    nvim_modes_[editor] = "n";
+    return true;
+}
+
+void EditorNotebook::ApplyNvimState(wxStyledTextCtrl* editor, const app::NvimEditorState& state) {
+    if (!editor) return;
+    const std::string current = editor->GetText().ToStdString(wxConvUTF8);
+    if (current != state.text) {
+        editor->BeginUndoAction();
+        editor->SetTargetStart(0);
+        editor->SetTargetEnd(editor->GetTextLength());
+        editor->ReplaceTarget(wxString::FromUTF8(state.text));
+        editor->EndUndoAction();
+    }
+    if (state.visual_block) {
+        editor->SetRectangularSelectionAnchor(static_cast<int>(state.visual_anchor));
+        editor->SetRectangularSelectionCaret(static_cast<int>(state.caret));
+    } else if (state.visual) {
+        editor->SetSelection(static_cast<int>(state.selection_start),
+                             static_cast<int>(state.selection_end));
+    } else {
+        editor->SetEmptySelection(static_cast<int>(state.caret));
+    }
+    nvim_modes_[editor] = state.mode;
+    nvim_command_line_ = state.command_line;
+    const bool insert = !state.mode.empty() && state.mode.front() == 'i';
+    editor->SetCaretStyle(insert ? wxSTC_CARETSTYLE_LINE : wxSTC_CARETSTYLE_BLOCK);
+    editor->EnsureCaretVisible();
+    NotifyNvimMode();
+}
+
+bool EditorNotebook::HandleNvimKey(wxStyledTextCtrl* editor, wxKeyEvent& event) {
     const int key = event.GetKeyCode();
     const int unicode = event.GetUnicodeKey();
     const bool control = event.ControlDown() || event.CmdDown();
-
-    if (event.AltDown()) return false;
-    if (control) {
-        if (key == 'D' || key == 'd') {
-            editor->PageDown();
-            ClampNvimCaret(editor);
-            return true;
-        }
-        if (key == 'U' || key == 'u') {
-            editor->PageUp();
-            ClampNvimCaret(editor);
-            return true;
-        }
-        return false;
+    int character = unicode == WXK_NONE ? key : unicode;
+    if (!event.ShiftDown() && character >= 'A' && character <= 'Z') {
+        character += 'a' - 'A';
     }
 
-    const bool had_pending_g = nvim_pending_g_.erase(editor) != 0;
-    if (unicode == 'g') {
-        if (had_pending_g) {
-            editor->DocumentStart();
-            ClampNvimCaret(editor);
-        } else {
-            nvim_pending_g_.insert(editor);
+    // These remain Say Count shortcuts, matching VSCode Neovim's host-key
+    // passthrough model.
+    if (control && !event.AltDown()) {
+        const int normalized = key >= 'a' && key <= 'z' ? key - ('a' - 'A') : key;
+        if (normalized == 'N' || normalized == 'O' || normalized == 'S' ||
+            normalized == 'W' || normalized == 'Q' || normalized == 'F' ||
+            normalized == 'P' || normalized == 'G' || normalized == 'K' ||
+            normalized == 'Z' ||
+            normalized == '/' || normalized == '=' || normalized == '-' ||
+            normalized == '0' || key == WXK_UP || key == WXK_DOWN ||
+            key == WXK_PAGEUP || key == WXK_PAGEDOWN) return false;
+    }
+    if (event.AltDown() && (key == WXK_UP || key == WXK_DOWN)) return false;
+    if (key == WXK_F3 || key == WXK_F6 || key == WXK_F7) return false;
+
+    std::string notation;
+    if (control && key > 0 && key < 128) {
+        int base = key;
+        if (base >= 'A' && base <= 'Z') base += 'a' - 'A';
+        notation = "<C-";
+        notation.push_back(static_cast<char>(base));
+        notation.push_back('>');
+    } else if (event.AltDown() && key > 0 && key < 128) {
+        int base = key;
+        if (!event.ShiftDown() && base >= 'A' && base <= 'Z') base += 'a' - 'A';
+        notation = "<M-";
+        notation.push_back(static_cast<char>(base));
+        notation.push_back('>');
+    } else {
+        switch (key) {
+            case WXK_ESCAPE: notation = "<Esc>"; break;
+            case WXK_RETURN:
+            case WXK_NUMPAD_ENTER: notation = "<CR>"; break;
+            case WXK_BACK: notation = "<BS>"; break;
+            case WXK_DELETE: notation = "<Del>"; break;
+            case WXK_TAB: notation = event.ShiftDown() ? "<S-Tab>" : "<Tab>"; break;
+            case WXK_LEFT: notation = event.ShiftDown() ? "<S-Left>" : "<Left>"; break;
+            case WXK_RIGHT: notation = event.ShiftDown() ? "<S-Right>" : "<Right>"; break;
+            case WXK_UP: notation = event.ShiftDown() ? "<S-Up>" : "<Up>"; break;
+            case WXK_DOWN: notation = event.ShiftDown() ? "<S-Down>" : "<Down>"; break;
+            case WXK_HOME: notation = "<Home>"; break;
+            case WXK_END: notation = "<End>"; break;
+            case WXK_PAGEUP: notation = "<PageUp>"; break;
+            case WXK_PAGEDOWN: notation = "<PageDown>"; break;
+            default: break;
         }
+        if (notation.empty() && character != WXK_NONE && character > 0) {
+            notation = wxString(static_cast<wxUniChar>(character)).ToStdString(wxConvUTF8);
+        }
+    }
+    if (notation.empty()) return false;
+
+    std::string error;
+    if (!EnsureNvimBuffer(editor, &error)) {
+        SetNvimMotions(false);
+        if (nvim_error_handler_) nvim_error_handler_(error);
         return true;
     }
-
-    switch (unicode) {
-        case 'h': {
-            const int position = editor->GetCurrentPos();
-            const int start = editor->PositionFromLine(editor->LineFromPosition(position));
-            if (position > start) editor->SetEmptySelection(editor->PositionBefore(position));
-            return true;
-        }
-        case 'j': editor->LineDown(); ClampNvimCaret(editor); return true;
-        case 'k': editor->LineUp(); ClampNvimCaret(editor); return true;
-        case 'l': {
-            const int position = editor->GetCurrentPos();
-            const int end = editor->GetLineEndPosition(editor->LineFromPosition(position));
-            const int next = editor->PositionAfter(position);
-            if (next < end) editor->SetEmptySelection(next);
-            return true;
-        }
-        case 'w': editor->WordRight(); ClampNvimCaret(editor); return true;
-        case 'b': editor->WordLeft(); ClampNvimCaret(editor); return true;
-        case 'e': {
-            editor->WordRightEnd();
-            const int position = editor->GetCurrentPos();
-            if (position > 0) editor->SetEmptySelection(editor->PositionBefore(position));
-            ClampNvimCaret(editor);
-            return true;
-        }
-        case '0': editor->Home(); ClampNvimCaret(editor); return true;
-        case '^': editor->VCHome(); ClampNvimCaret(editor); return true;
-        case '$': editor->LineEnd(); ClampNvimCaret(editor); return true;
-        case 'G': editor->DocumentEnd(); ClampNvimCaret(editor); return true;
-        case 'i': SetNvimNormalMode(editor, false); return true;
-        case 'a': {
-            const int position = editor->GetCurrentPos();
-            const int end = editor->GetLineEndPosition(editor->LineFromPosition(position));
-            if (position < end) editor->SetEmptySelection(editor->PositionAfter(position));
-            SetNvimNormalMode(editor, false);
-            return true;
-        }
-        case 'I': editor->VCHome(); SetNvimNormalMode(editor, false); return true;
-        case 'A': editor->LineEnd(); SetNvimNormalMode(editor, false); return true;
-        case 'o': editor->LineEnd(); editor->NewLine(); SetNvimNormalMode(editor, false); return true;
-        case 'O': {
-            const int line = editor->GetCurrentLine();
-            const int start = editor->PositionFromLine(line);
-            const wxString indentation = editor->GetTextRange(start, editor->GetLineIndentPosition(line));
-            editor->BeginUndoAction();
-            editor->InsertText(start, indentation + "\n");
-            editor->EndUndoAction();
-            editor->SetEmptySelection(start + static_cast<int>(indentation.length()));
-            SetNvimNormalMode(editor, false);
-            return true;
-        }
-        default: break;
+    const auto state = nvim_client_->ApplyKey(
+        nvim_buffers_[editor], editor->GetText().ToStdString(wxConvUTF8),
+        static_cast<std::size_t>(editor->GetCurrentPos()), notation, &error);
+    if (!state) {
+        SetNvimMotions(false);
+        if (nvim_error_handler_) nvim_error_handler_(error);
+        return true;
     }
-
-    switch (key) {
-        case WXK_LEFT: editor->CharLeft(); ClampNvimCaret(editor); return true;
-        case WXK_RIGHT: editor->CharRight(); ClampNvimCaret(editor); return true;
-        case WXK_UP: editor->LineUp(); ClampNvimCaret(editor); return true;
-        case WXK_DOWN:
-        case WXK_RETURN:
-        case WXK_NUMPAD_ENTER: editor->LineDown(); ClampNvimCaret(editor); return true;
-        case WXK_HOME: editor->Home(); ClampNvimCaret(editor); return true;
-        case WXK_END: editor->LineEnd(); ClampNvimCaret(editor); return true;
-        case WXK_PAGEUP: editor->PageUp(); ClampNvimCaret(editor); return true;
-        case WXK_PAGEDOWN: editor->PageDown(); ClampNvimCaret(editor); return true;
-        case WXK_ESCAPE:
-        case WXK_BACK:
-        case WXK_DELETE:
-        case WXK_TAB: return true;
-        default: break;
-    }
-
-    // Normal mode must consume unmodified text keys so they cannot edit the document.
-    if (unicode != WXK_NONE) return true;
-    return false;
+    ApplyNvimState(editor, *state);
+    return true;
 }
 
 void EditorNotebook::OnKeyDown(wxKeyEvent& event) {
@@ -737,14 +736,12 @@ void EditorNotebook::OnKeyDown(wxKeyEvent& event) {
     const int key = event.GetKeyCode();
     const bool control = event.ControlDown() || event.CmdDown();
     if (settings_.nvim_motions) {
-        const bool normal = nvim_normal_modes_[editor];
-        if (!normal && key == WXK_ESCAPE) {
-            editor->AutoCompCancel();
-            editor->SetEmptySelection(editor->GetCurrentPos());
-            SetNvimNormalMode(editor, true);
-            return;
-        }
-        if (normal && HandleNvimNormalKey(editor, event)) return;
+        const std::string mode = nvim_modes_.count(editor) ? nvim_modes_[editor] : "n";
+        const bool insert = !mode.empty() && mode.front() == 'i';
+        const bool insert_escape = key == WXK_ESCAPE ||
+            (control && (key == '[' || key == 'C' || key == 'c'));
+        if (insert && insert_escape) editor->AutoCompCancel();
+        if ((!insert || insert_escape) && HandleNvimKey(editor, event)) return;
     }
     if (control && !event.AltDown()) {
         if (!event.ShiftDown() && (key == WXK_UP || key == WXK_DOWN)) {
@@ -1328,21 +1325,61 @@ void EditorNotebook::SetTheme(app::EditorTheme theme) {
 
 void EditorNotebook::SetNvimMotions(bool enabled) {
     settings_.nvim_motions = enabled;
-    nvim_pending_g_.clear();
+    nvim_command_line_.clear();
+    std::string error;
+    if (enabled) {
+        for (size_t index = 0; index < GetPageCount(); ++index) {
+            if (!EnsureNvimBuffer(EditorAt(index), &error)) {
+                settings_.nvim_motions = false;
+                enabled = false;
+                break;
+            }
+        }
+    }
+    if (!enabled && nvim_client_) nvim_client_->Stop();
+    if (!enabled) nvim_buffers_.clear();
     for (size_t index = 0; index < GetPageCount(); ++index) {
         auto* editor = EditorAt(index);
         if (!editor) continue;
-        nvim_normal_modes_[editor] = enabled;
+        nvim_modes_[editor] = enabled ? "n" : "i";
         editor->SetEmptySelection(editor->GetCurrentPos());
         editor->SetCaretStyle(enabled ? wxSTC_CARETSTYLE_BLOCK : wxSTC_CARETSTYLE_LINE);
-        if (enabled) ClampNvimCaret(editor);
     }
+    if (!error.empty() && nvim_error_handler_) nvim_error_handler_(error);
     NotifyNvimMode();
 }
 
 void EditorNotebook::SetNvimModeHandler(NvimModeHandler handler) {
     nvim_mode_handler_ = std::move(handler);
     NotifyNvimMode();
+}
+
+void EditorNotebook::SetNvimErrorHandler(NvimErrorHandler handler) {
+    nvim_error_handler_ = std::move(handler);
+}
+
+bool EditorNotebook::ExitNvimMode() {
+    if (!settings_.nvim_motions) return false;
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor || wxWindow::FindFocus() != editor) return false;
+    editor->AutoCompCancel();
+    std::string error;
+    if (!EnsureNvimBuffer(editor, &error)) {
+        SetNvimMotions(false);
+        if (nvim_error_handler_) nvim_error_handler_(error);
+        return true;
+    }
+    const auto state = nvim_client_->ApplyKey(
+        nvim_buffers_[editor], editor->GetText().ToStdString(wxConvUTF8),
+        static_cast<std::size_t>(editor->GetCurrentPos()), "<Esc>", &error);
+    if (!state) {
+        SetNvimMotions(false);
+        if (nvim_error_handler_) nvim_error_handler_(error);
+        return true;
+    }
+    ApplyNvimState(editor, *state);
+    return true;
 }
 
 bool EditorNotebook::SaveEditor(wxStyledTextCtrl* editor, const wxString& path) {
