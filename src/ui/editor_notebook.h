@@ -78,6 +78,7 @@ public:
     void SetNvimMotions(bool enabled);
     void SetNvimModeHandler(NvimModeHandler handler);
     void SetNvimErrorHandler(NvimErrorHandler handler);
+    bool ExitNvimMode();
     void JumpToLine(std::size_t line_number);
     std::string SelectedText() const;
     FindStatus SetFindQuery(std::string query, FindOptions options);

@@ -1358,6 +1358,30 @@ void EditorNotebook::SetNvimErrorHandler(NvimErrorHandler handler) {
     nvim_error_handler_ = std::move(handler);
 }
 
+bool EditorNotebook::ExitNvimMode() {
+    if (!settings_.nvim_motions) return false;
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor || wxWindow::FindFocus() != editor) return false;
+    editor->AutoCompCancel();
+    std::string error;
+    if (!EnsureNvimBuffer(editor, &error)) {
+        SetNvimMotions(false);
+        if (nvim_error_handler_) nvim_error_handler_(error);
+        return true;
+    }
+    const auto state = nvim_client_->ApplyKey(
+        nvim_buffers_[editor], editor->GetText().ToStdString(wxConvUTF8),
+        static_cast<std::size_t>(editor->GetCurrentPos()), "<Esc>", &error);
+    if (!state) {
+        SetNvimMotions(false);
+        if (nvim_error_handler_) nvim_error_handler_(error);
+        return true;
+    }
+    ApplyNvimState(editor, *state);
+    return true;
+}
+
 bool EditorNotebook::SaveEditor(wxStyledTextCtrl* editor, const wxString& path) {
     // Write a sibling temp file and rename so a failed write never truncates the script.
     const wxString temporary = path + ".saycount-tmp";

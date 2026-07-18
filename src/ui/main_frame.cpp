@@ -1718,6 +1718,7 @@ void MainFrame::OnCharHook(wxKeyEvent& event) {
         OnCloseFind(close);
         return;
     }
+    if (event.GetKeyCode() == WXK_ESCAPE && notebook_ && notebook_->ExitNvimMode()) return;
     event.Skip();
 }
 
