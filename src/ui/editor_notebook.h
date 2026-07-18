@@ -5,7 +5,6 @@
 #include <wx/timer.h>
 
 #include <functional>
-#include <memory>
 #include <optional>
 #include <vector>
 #include <unordered_map>
@@ -13,7 +12,6 @@
 #include <string>
 
 #include "app/settings.h"
-#include "app/nvim_client.h"
 #include "core/parser.h"
 #include "core/autocomplete.h"
 #include "core/find_replace.h"
@@ -22,6 +20,7 @@
 #include "core/project.h"
 #include "core/workspace.h"
 #include "core/manuscript.h"
+#include "core/vim.h"
 
 class wxStyledTextCtrl;
 class wxStyledTextEvent;
@@ -60,7 +59,6 @@ public:
     using DiagnosticsHandler = std::function<void(const std::vector<Diagnostic>&)>;
     using NvimModeHandler = std::function<void(bool enabled, const std::string& mode,
                                                 const std::string& command_line)>;
-    using NvimErrorHandler = std::function<void(const std::string&)>;
 
     EditorNotebook(wxWindow* parent, const app::EditorSettings& settings,
                    AnalysisHandler analysis_handler);
@@ -77,7 +75,6 @@ public:
     void SetTheme(app::EditorTheme theme);
     void SetNvimMotions(bool enabled);
     void SetNvimModeHandler(NvimModeHandler handler);
-    void SetNvimErrorHandler(NvimErrorHandler handler);
     bool ExitNvimMode();
     void JumpToLine(std::size_t line_number);
     std::string SelectedText() const;
@@ -137,9 +134,8 @@ private:
     void OnDwellStart(wxStyledTextEvent& event);
     void OnDwellEnd(wxStyledTextEvent& event);
     void OnKeyDown(wxKeyEvent& event);
-    bool EnsureNvimBuffer(wxStyledTextCtrl* editor, std::string* error);
     bool HandleNvimKey(wxStyledTextCtrl* editor, wxKeyEvent& event);
-    void ApplyNvimState(wxStyledTextCtrl* editor, const app::NvimEditorState& state);
+    void ApplyNvimState(wxStyledTextCtrl* editor, const VimState& state);
     void NotifyNvimMode();
     void OnPageChanged(wxAuiNotebookEvent& event);
     void OnAnalysisTimer(wxTimerEvent& event);
@@ -173,9 +169,7 @@ private:
     std::vector<Diagnostic> diagnostics_;
     DiagnosticsHandler diagnostics_handler_;
     NvimModeHandler nvim_mode_handler_;
-    NvimErrorHandler nvim_error_handler_;
-    std::unique_ptr<app::NvimClient> nvim_client_;
-    std::unordered_map<wxStyledTextCtrl*, std::int64_t> nvim_buffers_;
+    std::unordered_map<wxStyledTextCtrl*, VimEmulator> vim_emulators_;
     std::unordered_map<wxStyledTextCtrl*, std::string> nvim_modes_;
     std::string nvim_command_line_;
     bool count_menu_choices_ = false;

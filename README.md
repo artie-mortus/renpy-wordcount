@@ -9,10 +9,9 @@ search application commands.
 
 ## Build
 
-Install CMake, pkg-config, a C++17 compiler, Git, msgpack-c, wxWidgets 3.2 or
-newer with the `core`, `base`, `stc`, `aui`, `adv`, `html`, `xml`, and `media`
-components, and network access for CMake to fetch Catch2 the first time. Then
-run:
+Install CMake, a C++17 compiler, Git, wxWidgets 3.2 or newer with the `core`,
+`base`, `stc`, `aui`, `adv`, `html`, `xml`, and `media` components, and network
+access for CMake to fetch Catch2 the first time. Then run:
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
@@ -22,15 +21,10 @@ ctest --test-dir build --output-on-failure
 
 If Catch2 cannot be downloaded, configure again after restoring network access or provide a pre-populated FetchContent source/cache for Catch2 v3. The application binary is `build/say-count`.
 
-Install Neovim 0.10 or newer to use **Edit → Neovim Motions**. Say Count runs
-an isolated embedded Neovim process and delegates normal, operator-pending,
-visual, replace, search, and command-line editing to it. Insert mode remains in
-the native editor so autocomplete, snippets, and Ren'Py indentation continue to
-work normally. By default the embedded process uses Neovim's clean mode. To add
-intentional normal/visual mappings or editing plugins, place a dedicated configuration at
-`$XDG_CONFIG_HOME/say-count/init.lua` (normally
-`~/.config/say-count/init.lua`); `g:say_count` is available for conditional
-configuration.
+Use **Edit → Vim Motions (Built-in)** for normal, operator-pending, visual,
+search, and command-line editing. The modal engine runs entirely inside Say
+Count, with no Neovim installation or subprocess. Insert mode remains in the
+native editor so autocomplete, snippets, and Ren'Py indentation work normally.
 
 For an optimized stripped build:
 

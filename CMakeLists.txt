@@ -42,9 +42,6 @@ else()
     set(SAY_COUNT_WX_LIBRARIES ${wxWidgets_LIBRARIES})
 endif()
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MSGPACK REQUIRED IMPORTED_TARGET msgpack-c)
-
 add_library(say_count_core STATIC
     src/core/count_expression.cpp
     src/core/parser.cpp
@@ -77,6 +74,7 @@ add_library(say_count_core STATIC
     src/core/workspace.cpp
     src/core/navigator.cpp
     src/core/git_repository.cpp
+    src/core/vim.cpp
 )
 target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VERSION}")
@@ -84,7 +82,6 @@ target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VE
 add_executable(say-count
     src/app/main.cpp
     src/app/settings.cpp
-    src/app/nvim_client.cpp
     src/app/git_client.cpp
     src/app/offline_prose_runner.cpp
     src/ui/editor_notebook.cpp
@@ -108,8 +105,7 @@ add_executable(say-count
     src/ui/git_dialog.cpp
 )
 find_package(Threads REQUIRED)
-target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES} PkgConfig::MSGPACK
-    Threads::Threads)
+target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
     target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
@@ -180,16 +176,9 @@ if(BUILD_TESTING)
         tests/navigator_test.cpp
         tests/git_repository_test.cpp
         tests/git_client_test.cpp
+        tests/vim_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
-
-    add_executable(say-count-nvim-tests
-        src/app/nvim_client.cpp
-        tests/nvim_client_test.cpp
-    )
-    target_include_directories(say-count-nvim-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(say-count-nvim-tests PRIVATE Catch2::Catch2WithMain
-        ${SAY_COUNT_WX_LIBRARIES} PkgConfig::MSGPACK)
 
     add_executable(say-count-performance tests/performance_benchmark.cpp)
     target_link_libraries(say-count-performance PRIVATE say_count_core)
@@ -200,7 +189,6 @@ if(BUILD_TESTING)
 
     include(Catch)
     catch_discover_tests(say-count-tests)
-    catch_discover_tests(say-count-nvim-tests)
 
     find_program(NODE_EXECUTABLE node REQUIRED)
     add_test(

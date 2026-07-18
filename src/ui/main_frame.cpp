@@ -266,14 +266,14 @@ MainFrame::MainFrame()
                                          const std::string& command_line) {
         wxString label;
         if (enabled) {
-            if (!mode.empty() && mode.front() == 'i') label = "NVIM  INSERT";
-            else if (mode == "v") label = "NVIM  VISUAL";
-            else if (mode == "V") label = "NVIM  V-LINE";
-            else if (mode == std::string(1, '\x16')) label = "NVIM  V-BLOCK";
-            else if (!mode.empty() && mode.front() == 'c') label = "NVIM  COMMAND";
-            else if (!mode.empty() && mode.front() == 'R') label = "NVIM  REPLACE";
-            else if (mode.rfind("no", 0) == 0) label = "NVIM  OPERATOR";
-            else label = "NVIM  NORMAL";
+            if (!mode.empty() && mode.front() == 'i') label = "VIM  INSERT";
+            else if (mode == "v") label = "VIM  VISUAL";
+            else if (mode == "V") label = "VIM  V-LINE";
+            else if (mode == std::string(1, '\x16')) label = "VIM  V-BLOCK";
+            else if (!mode.empty() && mode.front() == 'c') label = "VIM  COMMAND";
+            else if (!mode.empty() && mode.front() == 'R') label = "VIM  REPLACE";
+            else if (mode.rfind("no", 0) == 0) label = "VIM  OPERATOR";
+            else label = "VIM  NORMAL";
         }
         SetStatusText(label, 1);
         if (!command_line.empty()) {
@@ -286,14 +286,6 @@ MainFrame::MainFrame()
                 std::to_string(analysis_.reading_minutes) + " min reading time"));
             nvim_command_active_ = false;
         }
-    });
-    notebook_->SetNvimErrorHandler([this](const std::string& error) {
-        editor_settings_.nvim_motions = false;
-        if (GetMenuBar()) GetMenuBar()->Check(kToggleNvimMotions, false);
-        settings_.SaveEditor(editor_settings_);
-        SetStatusText("Neovim integration disabled");
-        wxMessageBox(wxString::FromUTF8(error), "Neovim integration failed",
-                     wxOK | wxICON_ERROR, this);
     });
     RefreshRoutes();
     RefreshProduction();
@@ -624,8 +616,8 @@ void MainFrame::BuildMenus() {
     edit->AppendSeparator();
     edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
-    edit->AppendCheckItem(kToggleNvimMotions, "&Neovim Motions",
-                          "Use an embedded Neovim engine for modal editing");
+    edit->AppendCheckItem(kToggleNvimMotions, "&Vim Motions (Built-in)",
+                          "Use built-in modal editing without an external process");
     edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
     edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
                  "Convert selected prose, or the entire active editor, to Ren'Py script");
@@ -1750,7 +1742,7 @@ void MainFrame::OnShowShortcuts(wxCommandEvent&) {
         "Ctrl+= / - / 0         Editor font size\n"
         "Ctrl+K                 This shortcut sheet\n"
         "Ctrl+Shift+F           Focus mode\n"
-        "Neovim mode            Real motions, counts, operators, visual mode, search, and commands\n"
+        "Vim mode               Motions, counts, operators, visual mode, search, and commands\n"
         "Quotes, (, [           Auto-close or wrap selection\n"
         "Esc                    Close find";
     wxMessageBox(shortcuts, "Keyboard Shortcuts", wxOK | wxICON_INFORMATION, this);
@@ -1910,7 +1902,7 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
         {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},
         {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
-        {"Toggle Neovim motions", "Normal/insert modes · Edit", kToggleNvimMotions},
+        {"Toggle built-in Vim motions", "Normal/insert modes · Edit", kToggleNvimMotions},
         {"Convert prose to Ren'Py", "Edit", kWriteManuscript},
         {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
         {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
@@ -2065,8 +2057,8 @@ void MainFrame::OnToggleNvimMotions(wxCommandEvent& event) {
     notebook_->SetNvimMotions(editor_settings_.nvim_motions);
     settings_.SaveEditor(editor_settings_);
     SetStatusText(editor_settings_.nvim_motions
-        ? "Neovim motions enabled · NORMAL mode"
-        : "Neovim motions disabled");
+        ? "Built-in Vim motions enabled · NORMAL mode"
+        : "Built-in Vim motions disabled");
 }
 
 void MainFrame::OnFontSize(wxCommandEvent& event) {

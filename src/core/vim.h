@@ -34,7 +34,7 @@ public:
 
 private:
     enum class Mode { Normal, Insert, VisualChar, VisualLine, VisualBlock, Command };
-    enum class CharWait { None, FindF, FindT, FindBackF, FindBackT, Replace };
+    enum class CharWait { None, FindF, FindT, FindBackF, FindTillBack, Replace };
 
     VimState MakeState() const;
     void ClearPending();

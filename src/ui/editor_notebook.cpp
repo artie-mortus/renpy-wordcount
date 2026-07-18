@@ -224,6 +224,7 @@ bool EditorNotebook::ApplyExternalVersion(const wxString& path, std::string_view
 }
 
 void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
+    vim_emulators_.try_emplace(editor);
     nvim_modes_.try_emplace(editor, settings_.nvim_motions ? "n" : "i");
     editor->SetLexer(wxSTC_LEX_CONTAINER);
     editor->Unbind(wxEVT_STC_STYLENEEDED, &EditorNotebook::OnStyleNeeded, this);
@@ -402,11 +403,7 @@ void EditorNotebook::DropEditorState(wxStyledTextCtrl* editor) {
     pending_completion_editors_.erase(editor);
     completions_.erase(editor);
     empty_hints_.erase(editor);
-    if (nvim_client_) {
-        const auto found = nvim_buffers_.find(editor);
-        if (found != nvim_buffers_.end()) nvim_client_->CloseBuffer(found->second);
-    }
-    nvim_buffers_.erase(editor);
+    vim_emulators_.erase(editor);
     nvim_modes_.erase(editor);
 }
 
@@ -609,25 +606,14 @@ void EditorNotebook::NotifyNvimMode() {
     nvim_mode_handler_(settings_.nvim_motions, mode, nvim_command_line_);
 }
 
-bool EditorNotebook::EnsureNvimBuffer(wxStyledTextCtrl* editor, std::string* error) {
-    if (!editor) return false;
-    if (!nvim_client_) nvim_client_ = std::make_unique<app::NvimClient>();
-    if (!nvim_client_->Start(error)) return false;
-    if (nvim_buffers_.count(editor)) return true;
-    wxString name = FilePath(editor);
-    if (name.empty()) name = editor->GetName();
-    const auto buffer = nvim_client_->CreateBuffer(
-        editor->GetText().ToStdString(wxConvUTF8), name.ToStdString(wxConvUTF8), error);
-    if (!buffer) return false;
-    nvim_buffers_[editor] = *buffer;
-    nvim_modes_[editor] = "n";
-    return true;
-}
-
-void EditorNotebook::ApplyNvimState(wxStyledTextCtrl* editor, const app::NvimEditorState& state) {
+void EditorNotebook::ApplyNvimState(wxStyledTextCtrl* editor, const VimState& state) {
     if (!editor) return;
     const std::string current = editor->GetText().ToStdString(wxConvUTF8);
-    if (current != state.text) {
+    if (state.host_undo) {
+        if (editor->CanUndo()) editor->Undo();
+    } else if (state.host_redo) {
+        if (editor->CanRedo()) editor->Redo();
+    } else if (current != state.text) {
         editor->BeginUndoAction();
         editor->SetTargetStart(0);
         editor->SetTargetEnd(editor->GetTextLength());
@@ -648,6 +634,7 @@ void EditorNotebook::ApplyNvimState(wxStyledTextCtrl* editor, const app::NvimEdi
     const bool insert = !state.mode.empty() && state.mode.front() == 'i';
     editor->SetCaretStyle(insert ? wxSTC_CARETSTYLE_LINE : wxSTC_CARETSTYLE_BLOCK);
     editor->EnsureCaretVisible();
+    if (state.host_save) SaveCurrent();
     NotifyNvimMode();
 }
 
@@ -660,8 +647,7 @@ bool EditorNotebook::HandleNvimKey(wxStyledTextCtrl* editor, wxKeyEvent& event) 
         character += 'a' - 'A';
     }
 
-    // These remain Say Count shortcuts, matching VSCode Neovim's host-key
-    // passthrough model.
+    // These remain Say Count shortcuts while modal editing is enabled.
     if (control && !event.AltDown()) {
         const int normalized = key >= 'a' && key <= 'z' ? key - ('a' - 'A') : key;
         if (normalized == 'N' || normalized == 'O' || normalized == 'S' ||
@@ -712,21 +698,11 @@ bool EditorNotebook::HandleNvimKey(wxStyledTextCtrl* editor, wxKeyEvent& event) 
     }
     if (notation.empty()) return false;
 
-    std::string error;
-    if (!EnsureNvimBuffer(editor, &error)) {
-        SetNvimMotions(false);
-        if (nvim_error_handler_) nvim_error_handler_(error);
-        return true;
-    }
-    const auto state = nvim_client_->ApplyKey(
-        nvim_buffers_[editor], editor->GetText().ToStdString(wxConvUTF8),
-        static_cast<std::size_t>(editor->GetCurrentPos()), notation, &error);
-    if (!state) {
-        SetNvimMotions(false);
-        if (nvim_error_handler_) nvim_error_handler_(error);
-        return true;
-    }
-    ApplyNvimState(editor, *state);
+    auto& emulator = vim_emulators_[editor];
+    const auto state = emulator.ApplyKey(
+        editor->GetText().ToStdString(wxConvUTF8),
+        static_cast<std::size_t>(editor->GetCurrentPos()), notation);
+    ApplyNvimState(editor, state);
     return true;
 }
 
@@ -1326,26 +1302,14 @@ void EditorNotebook::SetTheme(app::EditorTheme theme) {
 void EditorNotebook::SetNvimMotions(bool enabled) {
     settings_.nvim_motions = enabled;
     nvim_command_line_.clear();
-    std::string error;
-    if (enabled) {
-        const int selection = GetSelection();
-        auto* active = selection == wxNOT_FOUND
-            ? nullptr : EditorAt(static_cast<size_t>(selection));
-        if (active && !EnsureNvimBuffer(active, &error)) {
-            settings_.nvim_motions = false;
-            enabled = false;
-        }
-    }
-    if (!enabled && nvim_client_) nvim_client_->Stop();
-    if (!enabled) nvim_buffers_.clear();
     for (size_t index = 0; index < GetPageCount(); ++index) {
         auto* editor = EditorAt(index);
         if (!editor) continue;
+        vim_emulators_[editor].Reset();
         nvim_modes_[editor] = enabled ? "n" : "i";
         editor->SetEmptySelection(editor->GetCurrentPos());
         editor->SetCaretStyle(enabled ? wxSTC_CARETSTYLE_BLOCK : wxSTC_CARETSTYLE_LINE);
     }
-    if (!error.empty() && nvim_error_handler_) nvim_error_handler_(error);
     NotifyNvimMode();
 }
 
@@ -1354,31 +1318,17 @@ void EditorNotebook::SetNvimModeHandler(NvimModeHandler handler) {
     NotifyNvimMode();
 }
 
-void EditorNotebook::SetNvimErrorHandler(NvimErrorHandler handler) {
-    nvim_error_handler_ = std::move(handler);
-}
-
 bool EditorNotebook::ExitNvimMode() {
     if (!settings_.nvim_motions) return false;
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || wxWindow::FindFocus() != editor) return false;
     editor->AutoCompCancel();
-    std::string error;
-    if (!EnsureNvimBuffer(editor, &error)) {
-        SetNvimMotions(false);
-        if (nvim_error_handler_) nvim_error_handler_(error);
-        return true;
-    }
-    const auto state = nvim_client_->ApplyKey(
-        nvim_buffers_[editor], editor->GetText().ToStdString(wxConvUTF8),
-        static_cast<std::size_t>(editor->GetCurrentPos()), "<Esc>", &error);
-    if (!state) {
-        SetNvimMotions(false);
-        if (nvim_error_handler_) nvim_error_handler_(error);
-        return true;
-    }
-    ApplyNvimState(editor, *state);
+    auto& emulator = vim_emulators_[editor];
+    const auto state = emulator.ApplyKey(
+        editor->GetText().ToStdString(wxConvUTF8),
+        static_cast<std::size_t>(editor->GetCurrentPos()), "<Esc>");
+    ApplyNvimState(editor, state);
     return true;
 }
 
