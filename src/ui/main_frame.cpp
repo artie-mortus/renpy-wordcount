@@ -262,8 +262,38 @@ MainFrame::MainFrame()
         if (notebook_) RefreshRoutes();
         if (notebook_) RefreshProduction();
     });
-    notebook_->SetNvimModeHandler([this](bool enabled, bool normal) {
-        SetStatusText(enabled ? (normal ? "NVIM  NORMAL" : "NVIM  INSERT") : "", 1);
+    notebook_->SetNvimModeHandler([this](bool enabled, const std::string& mode,
+                                         const std::string& command_line) {
+        wxString label;
+        if (enabled) {
+            if (!mode.empty() && mode.front() == 'i') label = "NVIM  INSERT";
+            else if (mode == "v") label = "NVIM  VISUAL";
+            else if (mode == "V") label = "NVIM  V-LINE";
+            else if (mode == std::string(1, '\x16')) label = "NVIM  V-BLOCK";
+            else if (!mode.empty() && mode.front() == 'c') label = "NVIM  COMMAND";
+            else if (!mode.empty() && mode.front() == 'R') label = "NVIM  REPLACE";
+            else if (mode.rfind("no", 0) == 0) label = "NVIM  OPERATOR";
+            else label = "NVIM  NORMAL";
+        }
+        SetStatusText(label, 1);
+        if (!command_line.empty()) {
+            SetStatusText(wxString::FromUTF8(command_line));
+            nvim_command_active_ = true;
+        } else if (nvim_command_active_) {
+            SetStatusText(wxString::FromUTF8(
+                std::to_string(analysis_.total_words) + " dialogue words · " +
+                std::to_string(analysis_.dialogue_lines) + " dialogue lines · " +
+                std::to_string(analysis_.reading_minutes) + " min reading time"));
+            nvim_command_active_ = false;
+        }
+    });
+    notebook_->SetNvimErrorHandler([this](const std::string& error) {
+        editor_settings_.nvim_motions = false;
+        if (GetMenuBar()) GetMenuBar()->Check(kToggleNvimMotions, false);
+        settings_.SaveEditor(editor_settings_);
+        SetStatusText("Neovim integration disabled");
+        wxMessageBox(wxString::FromUTF8(error), "Neovim integration failed",
+                     wxOK | wxICON_ERROR, this);
     });
     RefreshRoutes();
     RefreshProduction();
@@ -1688,6 +1718,7 @@ void MainFrame::OnCharHook(wxKeyEvent& event) {
         OnCloseFind(close);
         return;
     }
+    if (event.GetKeyCode() == WXK_ESCAPE && notebook_ && notebook_->ExitNvimMode()) return;
     event.Skip();
 }
 

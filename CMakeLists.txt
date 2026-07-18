@@ -11,6 +11,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MSGPACK REQUIRED IMPORTED_TARGET msgpack-c)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(SAY_COUNT_BUNDLED_WX "Build and statically link wxWidgets from source" OFF)
@@ -81,6 +84,7 @@ target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VE
 add_executable(say-count
     src/app/main.cpp
     src/app/settings.cpp
+    src/app/nvim_client.cpp
     src/app/git_client.cpp
     src/app/offline_prose_runner.cpp
     src/ui/editor_notebook.cpp
@@ -104,7 +108,7 @@ add_executable(say-count
     src/ui/git_dialog.cpp
 )
 find_package(Threads REQUIRED)
-target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES}
+target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES} PkgConfig::MSGPACK
     Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
@@ -179,6 +183,14 @@ if(BUILD_TESTING)
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
 
+    add_executable(say-count-nvim-tests
+        src/app/nvim_client.cpp
+        tests/nvim_client_test.cpp
+    )
+    target_include_directories(say-count-nvim-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(say-count-nvim-tests PRIVATE Catch2::Catch2WithMain
+        ${SAY_COUNT_WX_LIBRARIES} PkgConfig::MSGPACK)
+
     add_executable(say-count-performance tests/performance_benchmark.cpp)
     target_link_libraries(say-count-performance PRIVATE say_count_core)
     add_custom_target(performance-check
@@ -188,6 +200,7 @@ if(BUILD_TESTING)
 
     include(Catch)
     catch_discover_tests(say-count-tests)
+    catch_discover_tests(say-count-nvim-tests)
 
     find_program(NODE_EXECUTABLE node REQUIRED)
     add_test(
