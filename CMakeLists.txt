@@ -107,7 +107,7 @@ add_executable(say-count
 find_package(Threads REQUIRED)
 target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
 target_compile_definitions(say-count PRIVATE
-    SAY_COUNT_ICON_PATH="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/1024x1024/apps/say-count.png"
+    SAY_COUNT_ICON_PATH="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/512x512/apps/say-count.png"
     SAY_COUNT_SOURCE_ICON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/say-count.png")
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
@@ -119,8 +119,10 @@ install(TARGETS say-count RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 configure_file(resources/say-count.desktop.in ${CMAKE_CURRENT_BINARY_DIR}/say-count.desktop @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/say-count.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-install(FILES resources/say-count.png
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/1024x1024/apps)
+foreach(icon_size IN ITEMS 48 128 256 512)
+    install(FILES resources/icons/${icon_size}x${icon_size}/say-count.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${icon_size}x${icon_size}/apps)
+endforeach()
 install(FILES resources/text-x-renpy.xml
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
 

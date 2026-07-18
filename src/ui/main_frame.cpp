@@ -211,7 +211,7 @@ void SetApplicationIcon(wxFrame& frame) {
     const wxFileName user_install_icon(
         executable.GetPath() + wxFILE_SEP_PATH + ".." + wxFILE_SEP_PATH + "share" +
         wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH + "hicolor" + wxFILE_SEP_PATH +
-        "1024x1024" + wxFILE_SEP_PATH + "apps" + wxFILE_SEP_PATH + "say-count.png");
+        "512x512" + wxFILE_SEP_PATH + "apps" + wxFILE_SEP_PATH + "say-count.png");
     const wxString candidates[] = {
         user_install_icon.GetFullPath(),
         wxString::FromUTF8(SAY_COUNT_ICON_PATH),
