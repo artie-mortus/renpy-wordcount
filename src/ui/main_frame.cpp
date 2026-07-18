@@ -13,6 +13,7 @@
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/file.h>
+#include <wx/icon.h>
 #include <wx/datetime.h>
 #include <wx/dirdlg.h>
 #include <wx/evtloop.h>
@@ -23,6 +24,7 @@
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
+#include <wx/stdpaths.h>
 #include <wx/textctrl.h>
 #include <wx/textdlg.h>
 #include <wx/tokenzr.h>
@@ -204,11 +206,33 @@ bool IsGeometryVisible(const wxRect& rectangle) {
     return false;
 }
 
+void SetApplicationIcon(wxFrame& frame) {
+    const wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+    const wxFileName user_install_icon(
+        executable.GetPath() + wxFILE_SEP_PATH + ".." + wxFILE_SEP_PATH + "share" +
+        wxFILE_SEP_PATH + "icons" + wxFILE_SEP_PATH + "hicolor" + wxFILE_SEP_PATH +
+        "1024x1024" + wxFILE_SEP_PATH + "apps" + wxFILE_SEP_PATH + "say-count.png");
+    const wxString candidates[] = {
+        user_install_icon.GetFullPath(),
+        wxString::FromUTF8(SAY_COUNT_ICON_PATH),
+        wxString::FromUTF8(SAY_COUNT_SOURCE_ICON_PATH),
+    };
+    for (const auto& path : candidates) {
+        if (!wxFileName::FileExists(path)) continue;
+        wxIcon icon;
+        if (icon.LoadFile(path, wxBITMAP_TYPE_PNG)) {
+            frame.SetIcon(icon);
+            return;
+        }
+    }
+}
+
 }  // namespace
 
 MainFrame::MainFrame()
     : wxFrame(nullptr, wxID_ANY, "Say Count", wxDefaultPosition, wxSize(kDefaultWidth, kDefaultHeight)),
       manager_(this), snapshot_timer_(this), renpy_output_timer_(this), coverage_timer_(this) {
+    SetApplicationIcon(*this);
     SetMinSize(wxSize(820, 560));
     editor_settings_ = settings_.LoadEditor();
     DetectRenpy();

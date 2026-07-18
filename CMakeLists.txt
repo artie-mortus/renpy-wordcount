@@ -106,6 +106,9 @@ add_executable(say-count
 )
 find_package(Threads REQUIRED)
 target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
+target_compile_definitions(say-count PRIVATE
+    SAY_COUNT_ICON_PATH="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/1024x1024/apps/say-count.png"
+    SAY_COUNT_SOURCE_ICON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/say-count.png")
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
     target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
