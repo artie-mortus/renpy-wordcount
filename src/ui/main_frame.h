@@ -180,6 +180,7 @@ private:
     wxRect normal_geometry_;
     ScriptAnalysis analysis_;
     bool focus_mode_ = false;
+    bool nvim_command_active_ = false;
     wxString focus_perspective_;
     std::optional<ProjectFolder> project_;
     std::vector<wxString> recent_projects_;
