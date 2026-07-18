@@ -417,15 +417,36 @@ bool NvimClient::SetBufferText(std::int64_t buffer, std::string_view source, std
     const auto found = buffer_sources_.find(buffer);
     if (found != buffer_sources_.end() && found->second == source) return true;
     const auto lines = SplitLines(source);
-    const auto result = Call("nvim_buf_set_lines", [buffer, &lines](void* raw) {
+    std::vector<std::string> previous_lines;
+    std::size_t first_changed = 0;
+    std::size_t previous_end = 0;
+    std::size_t new_end = lines.size();
+    if (found != buffer_sources_.end()) {
+        previous_lines = SplitLines(found->second);
+        previous_end = previous_lines.size();
+        while (first_changed < previous_end && first_changed < new_end &&
+               previous_lines[first_changed] == lines[first_changed]) {
+            ++first_changed;
+        }
+        while (previous_end > first_changed && new_end > first_changed &&
+               previous_lines[previous_end - 1] == lines[new_end - 1]) {
+            --previous_end;
+            --new_end;
+        }
+    }
+    const std::int64_t replace_end = found == buffer_sources_.end()
+        ? -1 : static_cast<std::int64_t>(previous_end);
+    const auto result = Call("nvim_buf_set_lines", [buffer, &lines, first_changed,
+                                                       replace_end, new_end](void* raw) {
         auto* packer = static_cast<msgpack_packer*>(raw);
         msgpack_pack_array(packer, 5);
         PackInteger(packer, buffer);
-        msgpack_pack_int(packer, 0);
-        msgpack_pack_int(packer, -1);
+        msgpack_pack_uint64(packer, first_changed);
+        PackInteger(packer, replace_end);
         msgpack_pack_true(packer);
-        msgpack_pack_array(packer, lines.size());
-        for (const auto& line : lines) PackString(packer, line);
+        msgpack_pack_array(packer, new_end - first_changed);
+        for (std::size_t index = first_changed; index < new_end; ++index)
+            PackString(packer, lines[index]);
     }, error);
     if (!result) return false;
     buffer_sources_[buffer] = std::string(source);

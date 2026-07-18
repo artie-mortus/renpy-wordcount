@@ -1328,12 +1328,12 @@ void EditorNotebook::SetNvimMotions(bool enabled) {
     nvim_command_line_.clear();
     std::string error;
     if (enabled) {
-        for (size_t index = 0; index < GetPageCount(); ++index) {
-            if (!EnsureNvimBuffer(EditorAt(index), &error)) {
-                settings_.nvim_motions = false;
-                enabled = false;
-                break;
-            }
+        const int selection = GetSelection();
+        auto* active = selection == wxNOT_FOUND
+            ? nullptr : EditorAt(static_cast<size_t>(selection));
+        if (active && !EnsureNvimBuffer(active, &error)) {
+            settings_.nvim_motions = false;
+            enabled = false;
         }
     }
     if (!enabled && nvim_client_) nvim_client_->Stop();

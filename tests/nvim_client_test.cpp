@@ -54,16 +54,21 @@ TEST_CASE("embedded Neovim supplies motions operators and visual selections") {
     REQUIRE(count_state);
     CHECK(count_state->text == "three four");
 
-    const std::string large_source(100000, 'a');
+    std::string large_source;
+    for (int line = 0; line < 2000; ++line) {
+        if (line) large_source.push_back('\n');
+        large_source += "screen text and properties repeated across this line";
+    }
     const auto large_buffer = client.CreateBuffer(large_source, "large-test.rpy", &error);
     INFO(error);
     REQUIRE(large_buffer);
-    auto insert_state = client.ApplyKey(*large_buffer, large_source, 0, "i", &error);
+    const std::size_t edit_offset = large_source.size() / 2;
+    auto insert_state = client.ApplyKey(*large_buffer, large_source, edit_offset, "i", &error);
     REQUIRE(insert_state);
     std::string edited = insert_state->text;
-    edited.insert(edited.begin(), 'x');
-    auto escaped_state = client.ApplyKey(*large_buffer, edited, 1, "<Esc>", &error);
+    edited.insert(edit_offset, 1, 'x');
+    auto escaped_state = client.ApplyKey(*large_buffer, edited, edit_offset + 1, "<Esc>", &error);
     REQUIRE(escaped_state);
     CHECK(escaped_state->mode == "n");
-    CHECK(escaped_state->text.size() == 100001);
+    CHECK(escaped_state->text.size() == large_source.size() + 1);
 }
