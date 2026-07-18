@@ -627,6 +627,15 @@ bool EditorNotebook::HandleNvimNormalKey(wxStyledTextCtrl* editor, wxKeyEvent& e
     const int key = event.GetKeyCode();
     const int unicode = event.GetUnicodeKey();
     const bool control = event.ControlDown() || event.CmdDown();
+    int character = unicode == WXK_NONE ? key : unicode;
+    // wxGTK can report unshifted letters as uppercase key codes for key-down
+    // events. Normalize those while preserving shifted Neovim commands such
+    // as I, A, O, and G.
+    if (!event.ShiftDown() && character >= 'A' && character <= 'Z') {
+        character += 'a' - 'A';
+    }
+    if (event.ShiftDown() && character == '4') character = '$';
+    if (event.ShiftDown() && character == '6') character = '^';
 
     if (event.AltDown()) return false;
     if (control) {
@@ -644,7 +653,7 @@ bool EditorNotebook::HandleNvimNormalKey(wxStyledTextCtrl* editor, wxKeyEvent& e
     }
 
     const bool had_pending_g = nvim_pending_g_.erase(editor) != 0;
-    if (unicode == 'g') {
+    if (character == 'g') {
         if (had_pending_g) {
             editor->DocumentStart();
             ClampNvimCaret(editor);
@@ -654,7 +663,7 @@ bool EditorNotebook::HandleNvimNormalKey(wxStyledTextCtrl* editor, wxKeyEvent& e
         return true;
     }
 
-    switch (unicode) {
+    switch (character) {
         case 'h': {
             const int position = editor->GetCurrentPos();
             const int start = editor->PositionFromLine(editor->LineFromPosition(position));
@@ -727,7 +736,7 @@ bool EditorNotebook::HandleNvimNormalKey(wxStyledTextCtrl* editor, wxKeyEvent& e
     }
 
     // Normal mode must consume unmodified text keys so they cannot edit the document.
-    if (unicode != WXK_NONE) return true;
+    if (character != WXK_NONE) return true;
     return false;
 }
 
