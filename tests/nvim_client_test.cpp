@@ -4,7 +4,7 @@
 
 #include <wx/init.h>
 
-TEST_CASE("embedded Neovim supplies motions operators commands and visual selections") {
+TEST_CASE("embedded Neovim supplies motions operators and visual selections") {
     wxInitializer initializer;
     REQUIRE(initializer.IsOk());
     say_count::app::NvimClient client;
@@ -18,35 +18,52 @@ TEST_CASE("embedded Neovim supplies motions operators commands and visual select
     auto unchanged = client.ApplyKey(*buffer, "one two three\nlast line", 0, "u", &error);
     REQUIRE(unchanged);
     CHECK(unchanged->text == "one two three\nlast line");
-    auto state = client.ApplyKey(*buffer, unchanged->text, 0, "w", &error);
+
+    auto state = client.ApplyKey(*buffer, "one two three\nlast line", 0, "w", &error);
     REQUIRE(state);
     CHECK(state->caret == 4);
-    state = client.ApplyKey(*buffer, state->text, state->caret, "dw", &error);
+    CHECK(state->mode == "n");
+
+    state = client.ApplyKey(*buffer, state->text, state->caret, "d", &error);
+    REQUIRE(state);
+    state = client.ApplyKey(*buffer, state->text, state->caret, "w", &error);
     REQUIRE(state);
     CHECK(state->text == "one three\nlast line");
+
     state = client.ApplyKey(*buffer, state->text, state->caret, "v", &error);
     REQUIRE(state);
     REQUIRE(state->visual);
     state = client.ApplyKey(*buffer, state->text, state->caret, "e", &error);
     REQUIRE(state);
+    CHECK(state->visual);
     CHECK(state->selection_end > state->selection_start);
 
-    const auto command_buffer = client.CreateBuffer("alpha beta alpha", "command-test.rpy", &error);
+    const auto command_buffer = client.CreateBuffer(
+        "alpha beta alpha", "command-test.rpy", &error);
     REQUIRE(command_buffer);
-    auto command = client.ApplyKey(*command_buffer, "alpha beta alpha", 0,
-                                   ":%s/alpha/omega/g<CR>", &error);
-    REQUIRE(command);
-    CHECK(command->text == "omega beta omega");
+    auto command_state = client.ApplyKey(
+        *command_buffer, "alpha beta alpha", 0, ":%s/alpha/omega/g<CR>", &error);
+    REQUIRE(command_state);
+    CHECK(command_state->text == "omega beta omega");
 
-    const auto large_buffer = client.CreateBuffer(std::string(100000, 'a'), "large-test.rpy", &error);
+    const auto count_buffer = client.CreateBuffer(
+        "one two three four", "count-test.rpy", &error);
+    REQUIRE(count_buffer);
+    auto count_state = client.ApplyKey(
+        *count_buffer, "one two three four", 0, "2dw", &error);
+    REQUIRE(count_state);
+    CHECK(count_state->text == "three four");
+
+    const std::string large_source(100000, 'a');
+    const auto large_buffer = client.CreateBuffer(large_source, "large-test.rpy", &error);
     INFO(error);
     REQUIRE(large_buffer);
-    auto insert = client.ApplyKey(*large_buffer, std::string(100000, 'a'), 0, "i", &error);
-    REQUIRE(insert);
-    std::string edited = insert->text;
+    auto insert_state = client.ApplyKey(*large_buffer, large_source, 0, "i", &error);
+    REQUIRE(insert_state);
+    std::string edited = insert_state->text;
     edited.insert(edited.begin(), 'x');
-    auto escaped = client.ApplyKey(*large_buffer, edited, 1, "<Esc>", &error);
-    REQUIRE(escaped);
-    CHECK(escaped->mode == "n");
-    CHECK(escaped->text.size() == 100001);
+    auto escaped_state = client.ApplyKey(*large_buffer, edited, 1, "<Esc>", &error);
+    REQUIRE(escaped_state);
+    CHECK(escaped_state->mode == "n");
+    CHECK(escaped_state->text.size() == 100001);
 }

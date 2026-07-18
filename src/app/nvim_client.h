@@ -6,8 +6,8 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 class wxProcess;
 
@@ -32,12 +32,14 @@ public:
 
     NvimClient();
     ~NvimClient();
+
     NvimClient(const NvimClient&) = delete;
     NvimClient& operator=(const NvimClient&) = delete;
 
     bool Start(std::string* error = nullptr);
     void Stop();
     bool running() const;
+
     std::optional<std::int64_t> CreateBuffer(std::string_view text,
                                              std::string_view name,
                                              std::string* error = nullptr);
@@ -52,6 +54,7 @@ private:
     std::optional<Value> Call(std::string_view method,
                               const std::function<void(void*)>& pack_arguments,
                               std::string* error);
+    bool Notify(std::string_view method, const std::function<void(void*)>& pack_arguments);
     bool WriteMessage(const char* data, std::size_t size);
     bool ReadResponse(std::uint64_t request_id, Value* value, std::string* error);
     bool SetBufferText(std::int64_t buffer, std::string_view source, std::string* error);

@@ -625,7 +625,7 @@ void MainFrame::BuildMenus() {
     edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
     edit->AppendCheckItem(kToggleNvimMotions, "&Neovim Motions",
-                          "Use Neovim-style normal and insert modes in the editor");
+                          "Use an embedded Neovim engine for modal editing");
     edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
     edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
                  "Convert selected prose, or the entire active editor, to Ren'Py script");
@@ -1750,7 +1750,7 @@ void MainFrame::OnShowShortcuts(wxCommandEvent&) {
         "Ctrl+= / - / 0         Editor font size\n"
         "Ctrl+K                 This shortcut sheet\n"
         "Ctrl+Shift+F           Focus mode\n"
-        "Neovim mode            Esc normal · i/a/o insert · hjkl/wbe/0^$/gg/G move\n"
+        "Neovim mode            Real motions, counts, operators, visual mode, search, and commands\n"
         "Quotes, (, [           Auto-close or wrap selection\n"
         "Esc                    Close find";
     wxMessageBox(shortcuts, "Keyboard Shortcuts", wxOK | wxICON_INFORMATION, this);

@@ -140,9 +140,6 @@ private:
     bool EnsureNvimBuffer(wxStyledTextCtrl* editor, std::string* error);
     bool HandleNvimKey(wxStyledTextCtrl* editor, wxKeyEvent& event);
     void ApplyNvimState(wxStyledTextCtrl* editor, const app::NvimEditorState& state);
-    void SetNvimNormalMode(wxStyledTextCtrl* editor, bool normal);
-    bool HandleNvimNormalKey(wxStyledTextCtrl* editor, wxKeyEvent& event);
-    void ClampNvimCaret(wxStyledTextCtrl* editor);
     void NotifyNvimMode();
     void OnPageChanged(wxAuiNotebookEvent& event);
     void OnAnalysisTimer(wxTimerEvent& event);
@@ -181,8 +178,6 @@ private:
     std::unordered_map<wxStyledTextCtrl*, std::int64_t> nvim_buffers_;
     std::unordered_map<wxStyledTextCtrl*, std::string> nvim_modes_;
     std::string nvim_command_line_;
-    std::unordered_map<wxStyledTextCtrl*, bool> nvim_normal_modes_;
-    std::unordered_set<wxStyledTextCtrl*> nvim_pending_g_;
     bool count_menu_choices_ = false;
 };
 

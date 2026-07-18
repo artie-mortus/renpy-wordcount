@@ -5,7 +5,6 @@
 #include <cstring>
 #include <thread>
 #include <utility>
-#include <vector>
 
 #include <msgpack.h>
 #include <wx/filename.h>
@@ -21,10 +20,6 @@ constexpr long kRpcTimeoutMs = 5000;
 void PackString(msgpack_packer* packer, std::string_view value) {
     msgpack_pack_str(packer, value.size());
     msgpack_pack_str_body(packer, value.data(), value.size());
-}
-
-void PackInteger(msgpack_packer* packer, std::int64_t value) {
-    msgpack_pack_int64(packer, value);
 }
 
 std::vector<std::string> SplitLines(std::string_view source) {
@@ -137,13 +132,16 @@ NvimClient::Value CopyValue(const msgpack_object& object) {
         case MSGPACK_OBJECT_EXT: {
             value.type = NvimClient::Value::Type::Integer;
             std::uint64_t handle = 0;
-            for (std::uint32_t index = 0; index < object.via.ext.size; ++index)
-                handle = (handle << 8) | static_cast<unsigned char>(object.via.ext.ptr[index]);
+            for (std::uint32_t index = 0; index < object.via.ext.size; ++index) {
+                handle = (handle << 8) |
+                    static_cast<unsigned char>(object.via.ext.ptr[index]);
+            }
             value.integer = static_cast<std::int64_t>(handle);
             break;
         }
         case MSGPACK_OBJECT_FLOAT32:
-        case MSGPACK_OBJECT_FLOAT64: break;
+        case MSGPACK_OBJECT_FLOAT64:
+            break;
     }
     return value;
 }
@@ -157,6 +155,10 @@ std::string DescribeValue(const NvimClient::Value& value) {
     return "Neovim RPC error";
 }
 
+void PackInteger(msgpack_packer* packer, std::int64_t value) {
+    msgpack_pack_int64(packer, value);
+}
+
 }  // namespace
 
 NvimClient::NvimClient() = default;
@@ -167,7 +169,6 @@ bool NvimClient::Start(std::string* error) {
     Stop();
     process_ = std::make_unique<wxProcess>();
     process_->Redirect();
-
     wxString config_base;
     if (!wxGetEnv("XDG_CONFIG_HOME", &config_base) || config_base.empty())
         config_base = wxGetHomeDir() + wxFILE_SEP_PATH + ".config";
@@ -183,6 +184,7 @@ bool NvimClient::Start(std::string* error) {
     arguments.emplace_back("--cmd");
     arguments.emplace_back("let g:say_count = 1");
     std::vector<const char*> argv;
+    argv.reserve(arguments.size() + 1);
     for (const auto& argument : arguments) argv.push_back(argument.c_str());
     argv.push_back(nullptr);
     pid_ = wxExecute(argv.data(), wxEXEC_ASYNC, process_.get());
@@ -244,8 +246,9 @@ bool NvimClient::WriteMessage(const char* data, std::size_t size) {
         output->Write(data + written, chunk);
         const std::size_t count = output->LastWrite();
         if (count == 0) {
-            if (!running() || std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - started).count() >= kRpcTimeoutMs) return false;
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count();
+            if (!running() || elapsed >= kRpcTimeoutMs) return false;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
@@ -283,6 +286,21 @@ std::optional<NvimClient::Value> NvimClient::Call(
         return std::nullopt;
     }
     return value;
+}
+
+bool NvimClient::Notify(std::string_view method,
+                        const std::function<void(void*)>& pack_arguments) {
+    msgpack_sbuffer buffer;
+    msgpack_sbuffer_init(&buffer);
+    msgpack_packer packer;
+    msgpack_packer_init(&packer, &buffer, msgpack_sbuffer_write);
+    msgpack_pack_array(&packer, 3);
+    msgpack_pack_int(&packer, 2);
+    PackString(&packer, method);
+    pack_arguments(&packer);
+    const bool written = WriteMessage(buffer.data, buffer.size);
+    msgpack_sbuffer_destroy(&buffer);
+    return written;
 }
 
 bool NvimClient::ReadResponse(std::uint64_t request_id, Value* value, std::string* error) {
@@ -431,7 +449,8 @@ std::optional<NvimEditorState> NvimClient::ApplyKey(std::int64_t buffer,
                                                     std::size_t caret,
                                                     std::string_view key,
                                                     std::string* error) {
-    const bool source_changed = buffer_sources_.count(buffer) == 0 || buffer_sources_[buffer] != source;
+    const bool source_changed = buffer_sources_.count(buffer) == 0 ||
+                                buffer_sources_[buffer] != source;
     if (!SetBufferText(buffer, source, error)) return std::nullopt;
     if (!Call("nvim_set_current_buf", [buffer](void* raw) {
             auto* packer = static_cast<msgpack_packer*>(raw);
@@ -439,7 +458,8 @@ std::optional<NvimEditorState> NvimClient::ApplyKey(std::int64_t buffer,
             PackInteger(packer, buffer);
         }, error)) return std::nullopt;
     const std::string prior_mode = buffer_modes_.count(buffer) ? buffer_modes_[buffer] : "n";
-    const bool host_cursor_changed = buffer_carets_.count(buffer) == 0 || buffer_carets_[buffer] != caret;
+    const bool host_cursor_changed = buffer_carets_.count(buffer) == 0 ||
+                                     buffer_carets_[buffer] != caret;
     if ((source_changed || (prior_mode == "n" && host_cursor_changed)) &&
         !SetCursor(source, caret, error)) return std::nullopt;
     auto replaced = Call("nvim_replace_termcodes", [key](void* raw) {
@@ -476,11 +496,12 @@ std::optional<NvimEditorState> NvimClient::ReadState(std::int64_t buffer, std::s
     auto raw_mode = Call("nvim_get_mode", [](void* raw) {
         msgpack_pack_array(static_cast<msgpack_packer*>(raw), 0);
     }, error);
-    if (!raw_lines || !raw_cursor || !raw_mode || raw_lines->type != Value::Type::Array ||
-        raw_cursor->type != Value::Type::Array || raw_cursor->array.size() < 2 ||
-        raw_mode->type != Value::Type::Map) return std::nullopt;
+    if (!raw_lines || !raw_cursor || !raw_mode ||
+        raw_lines->type != Value::Type::Array || raw_cursor->type != Value::Type::Array ||
+        raw_cursor->array.size() < 2 || raw_mode->type != Value::Type::Map) return std::nullopt;
 
     std::vector<std::string> lines;
+    lines.reserve(raw_lines->array.size());
     for (const auto& line : raw_lines->array) {
         if (line.type != Value::Type::String) return std::nullopt;
         lines.push_back(line.string);
@@ -496,11 +517,13 @@ std::optional<NvimEditorState> NvimClient::ReadState(std::int64_t buffer, std::s
     const auto row = static_cast<std::size_t>(std::max<std::int64_t>(1, raw_cursor->array[0].integer));
     const auto column = static_cast<std::size_t>(std::max<std::int64_t>(0, raw_cursor->array[1].integer));
     state.caret = OffsetFromCursor(lines, row, column);
-    state.selection_start = state.selection_end = state.visual_anchor = state.caret;
+    state.selection_start = state.selection_end = state.caret;
+    state.visual_anchor = state.caret;
     state.mode = mode_value->string;
     state.visual = state.mode == "v" || state.mode == "V" || state.mode == std::string(1, '\x16');
     state.visual_line = state.mode == "V";
     state.visual_block = state.mode == std::string(1, '\x16');
+
     if (state.visual) {
         auto anchor = Call("nvim_eval", [](void* raw) {
             auto* packer = static_cast<msgpack_packer*>(raw);
@@ -511,21 +534,22 @@ std::optional<NvimEditorState> NvimClient::ReadState(std::int64_t buffer, std::s
             anchor->array[1].type == Value::Type::Integer && anchor->array[2].type == Value::Type::Integer) {
             const auto anchor_row = static_cast<std::size_t>(std::max<std::int64_t>(1, anchor->array[1].integer));
             const auto anchor_col = static_cast<std::size_t>(std::max<std::int64_t>(1, anchor->array[2].integer) - 1);
-            state.visual_anchor = OffsetFromCursor(lines, anchor_row, anchor_col);
+            const auto anchor_offset = OffsetFromCursor(lines, anchor_row, anchor_col);
+            state.visual_anchor = anchor_offset;
             if (state.visual_line) {
                 const auto first_row = std::min(row, anchor_row);
                 const auto last_row = std::max(row, anchor_row);
                 state.selection_start = OffsetFromCursor(lines, first_row, 0);
-                state.selection_end = last_row < lines.size() ? OffsetFromCursor(lines, last_row + 1, 0)
-                                                                : state.text.size();
+                state.selection_end = last_row < lines.size()
+                    ? OffsetFromCursor(lines, last_row + 1, 0)
+                    : state.text.size();
             } else {
-                state.selection_start = std::min(state.visual_anchor, state.caret);
-                state.selection_end = std::min(state.text.size(),
-                    std::max(state.visual_anchor, state.caret) + 1);
+                state.selection_start = std::min(anchor_offset, state.caret);
+                state.selection_end = std::min(state.text.size(), std::max(anchor_offset, state.caret) + 1);
             }
         }
     }
-    if (!state.mode.empty() && state.mode.front() == 'c') {
+    if (!state.mode.empty() && state.mode[0] == 'c') {
         auto command = Call("nvim_eval", [](void* raw) {
             auto* packer = static_cast<msgpack_packer*>(raw);
             msgpack_pack_array(packer, 1);

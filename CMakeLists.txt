@@ -11,9 +11,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
-
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MSGPACK REQUIRED IMPORTED_TARGET msgpack-c)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(SAY_COUNT_BUNDLED_WX "Build and statically link wxWidgets from source" OFF)
@@ -44,6 +41,9 @@ else()
     include(${wxWidgets_USE_FILE})
     set(SAY_COUNT_WX_LIBRARIES ${wxWidgets_LIBRARIES})
 endif()
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MSGPACK REQUIRED IMPORTED_TARGET msgpack-c)
 
 add_library(say_count_core STATIC
     src/core/count_expression.cpp
