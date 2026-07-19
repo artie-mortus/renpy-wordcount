@@ -406,9 +406,12 @@ void ChatConversionDialog::OnConversionReady(wxThreadEvent& event) {
         for (const auto& character : conversion_.document.characters)
             aliases_by_name[character.name] = character.alias;
         if (!mappings_initialized_) {
-            for (const auto& [name, alias] : aliases_by_name)
-                mappings_->AppendItem({wxVariant(wxString::FromUTF8(alias)),
-                                       wxVariant(wxString::FromUTF8(name))});
+            for (const auto& [name, alias] : aliases_by_name) {
+                wxVector<wxVariant> row;
+                row.push_back(wxVariant(wxString::FromUTF8(alias)));
+                row.push_back(wxVariant(wxString::FromUTF8(name)));
+                mappings_->AppendItem(row);
+            }
             mappings_initialized_ = true;
         }
     }
