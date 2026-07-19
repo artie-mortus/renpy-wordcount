@@ -51,6 +51,9 @@
 #include "ui/style.h"
 #include "ui/palette_dialog.h"
 #include "ui/git_dialog.h"
+#include "ui/welcome_dialog.h"
+#include "ui/story_element_dialog.h"
+#include "ui/writer_draft_dialog.h"
 #include "core/version.h"
 #include "core/indent.h"
 #include "core/navigator.h"
@@ -82,6 +85,8 @@ enum MenuId {
     kFindClose,
     kGoToLine,
     kToggleComment,
+    kInsertStoryElement,
+    kWriterDraft,
     kWriteManuscript,
     kConvertToChat,
     kConvertChatToDialogue,
@@ -151,6 +156,13 @@ public:
         Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) { Refresh(); event.Skip(); });
     }
 
+    void SetCommandLabel(const wxString& label) {
+        label_ = label;
+        const wxSize size = GetTextExtent(label_);
+        SetMinSize(FromDIP(wxSize(size.x + 30, 36)));
+        Refresh();
+    }
+
 private:
     void SendClick() {
         wxCommandEvent event(wxEVT_BUTTON, GetId());
@@ -188,6 +200,24 @@ private:
     bool hovered_ = false;
     bool pressed_ = false;
 };
+
+struct CommandCopy {
+    const char* label;
+    const char* help;
+};
+
+CommandCopy FriendlyCommandCopy(int id) {
+    switch (id) {
+        case kConnectProject: return {"Open a game...", "Open an existing Ren'Py game folder"};
+        case kShowDiagnostics: return {"Problems", "Show problems found in the writing"};
+        case kRunRenpyLint: return {"Check game for problems", "Run Ren'Py's complete project check"};
+        case kSnapshotNow: return {"Save a version now", "Store a version of every open script"};
+        case kManageSnapshots: return {"Version history...", "Preview and restore earlier local versions"};
+        case kWriteManuscript: return {"Make game script from writing...", "Review and turn natural writing into Ren'Py script"};
+        case kWriterDraft: return {"Writing draft...", "Write naturally in a persistent draft with a generated-script preview"};
+        default: return {"", ""};
+    }
+}
 
 class ScriptDropTarget final : public wxFileDropTarget {
 public:
@@ -269,10 +299,7 @@ MainFrame::MainFrame()
                                  std::to_string(analysis.dialogue_lines) + " dialogue lines \xc2\xb7 " +
                                  std::to_string(analysis.reading_minutes) + " min reading time";
         SetStatusText(wxString::FromUTF8(text));
-        if (cue_summary_) cue_summary_->SetLabel(wxString::FromUTF8(
-            std::to_string(analysis.total_words) + " WORDS   /   " +
-            std::to_string(analysis.dialogue_lines) + " CUES   /   " +
-            std::to_string(analysis.reading_minutes) + " MIN"));
+        RefreshCueSummary();
         if (workspace_name_ && notebook_) {
             if (project_) {
                 workspace_name_->SetLabel(wxFileName(wxString::FromUTF8(project_->root)).GetFullName());
@@ -397,6 +424,9 @@ MainFrame::MainFrame()
     });
     notebook_->SetDiagnosticsHandler([this](const std::vector<Diagnostic>& diagnostics) {
         diagnostics_->SetDiagnostics(diagnostics);
+        problem_count_ = diagnostics.size();
+        fixable_problem_count_ = count_basic_fixes(diagnostics);
+        RefreshCommandBarState();
     });
     diagnostics_->SetJumpHandler([this](const Diagnostic& diagnostic) {
         notebook_->SelectDiagnostic(diagnostic);
@@ -407,6 +437,12 @@ MainFrame::MainFrame()
     outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     style::ApplyWorkspaceTheme(this);
     BuildCommandBar();
+    notebook_->SetDocumentStateHandler([this](const DocumentState& state) {
+        current_document_dirty_ = state.dirty;
+        current_document_path_ = state.path;
+        RefreshCommandBarState();
+        RefreshCueSummary();
+    });
     if (auto* status = GetStatusBar()) {
         status->SetBackgroundColour(style::Colors().ink);
         status->SetForegroundColour(style::Colors().white);
@@ -437,7 +473,7 @@ MainFrame::MainFrame()
                          .BestSize(-1, 48).Hide());
     manager_.AddPane(find_results_, wxAuiPaneInfo().Bottom().Name("find-results").Caption("Find Results")
                          .BestSize(-1, 190).MinSize(300, 110).CloseButton(false).Hide());
-    manager_.AddPane(diagnostics_, wxAuiPaneInfo().Bottom().Name("diagnostics").Caption("Diagnostics")
+    manager_.AddPane(diagnostics_, wxAuiPaneInfo().Bottom().Name("diagnostics").Caption("Problems")
                          .BestSize(-1, 190).MinSize(320, 110).CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(speaker_stats_, wxAuiPaneInfo().Right().Name("speaker-statistics")
                          .Caption("Speaker Statistics").BestSize(340, 500).MinSize(260, 180)
@@ -485,6 +521,8 @@ MainFrame::MainFrame()
     Bind(wxEVT_CHAR_HOOK, &MainFrame::OnCharHook, this);
     Bind(wxEVT_MENU, &MainFrame::OnGoToLine, this, kGoToLine);
     Bind(wxEVT_MENU, &MainFrame::OnToggleComment, this, kToggleComment);
+    Bind(wxEVT_MENU, &MainFrame::OnInsertStoryElement, this, kInsertStoryElement);
+    Bind(wxEVT_MENU, &MainFrame::OnWriterDraft, this, kWriterDraft);
     Bind(wxEVT_MENU, &MainFrame::OnWriteManuscript, this, kWriteManuscript);
     Bind(wxEVT_MENU, &MainFrame::OnConvertChat, this, kConvertToChat, kConvertChatToDialogue);
     Bind(wxEVT_MENU, &MainFrame::OnInstallChatRuntime, this, kInstallChatRuntime);
@@ -526,6 +564,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_END_PROCESS, &MainFrame::OnRenpyEnded, this);
     Bind(wxEVT_TIMER, &MainFrame::OnSnapshotTimer, this, snapshot_timer_.GetId());
     RestoreWorkspace();
+    CallAfter([this] { ShowWelcomeIfNeeded(); });
     snapshot_timer_.Start(10 * 60 * 1000);
     coverage_timer_.Start(750);
 }
@@ -544,6 +583,43 @@ MainFrame::~MainFrame() {
 
 bool MainFrame::OpenInitialFiles(const std::vector<wxString>& paths) {
     return !paths.empty() && notebook_->OpenFiles(paths);
+}
+
+void MainFrame::ShowWelcomeIfNeeded() {
+    if (!notebook_ || editor_settings_.onboarding_version >= 1 || project_ ||
+        notebook_->HasMeaningfulContent()) return;
+    WelcomeDialog dialog(this, recent_projects_);
+    const int result = dialog.ShowModal();
+    editor_settings_.onboarding_version = 1;
+    settings_.SaveEditor(editor_settings_);
+    if (result != wxID_OK) return;
+    wxCommandEvent command;
+    switch (dialog.action()) {
+        case WelcomeAction::NewStory: StartNewStory(); break;
+        case WelcomeAction::OpenGame: OnConnectProject(command); break;
+        case WelcomeAction::OpenScript: OnOpen(command); break;
+        case WelcomeAction::RecentGame:
+            if (!dialog.selected_game().empty()) ConnectProjectFolder(dialog.selected_game());
+            break;
+        case WelcomeAction::None: break;
+    }
+}
+
+void MainFrame::StartNewStory() {
+    const auto plan = ShowNewStoryDialog(this);
+    if (!plan) return;
+    wxString preview = "Create this story?\n\n" + wxString::FromUTF8(plan->root) + "\n\nFiles:";
+    for (const auto& file : plan->files) preview += "\n• " + wxString::FromUTF8(file.relative_path);
+    if (wxMessageBox(preview, "Create New Story", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES)
+        return;
+    const auto result = apply_project_creation(*plan);
+    if (!result.success) {
+        wxMessageBox(wxString::FromUTF8(result.error), "Story was not created", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    if (ConnectProjectFolder(wxString::FromUTF8(result.root))) {
+        SetStatusText("Story created — start by replacing the opening line");
+    }
 }
 
 void MainFrame::BuildCommandBar() {
@@ -578,10 +654,7 @@ void MainFrame::BuildCommandBar() {
                                         initial_name.empty() ? "Loose script" : initial_name);
     workspace_name_->SetFont(style::BodyFont(10, wxFONTWEIGHT_BOLD));
     workspace_name_->SetForegroundColour(colors.white);
-    cue_summary_ = new wxStaticText(command_bar_, wxID_ANY, wxString::FromUTF8(
-        std::to_string(analysis_.total_words) + " WORDS   /   " +
-        std::to_string(analysis_.dialogue_lines) + " CUES   /   " +
-        std::to_string(analysis_.reading_minutes) + " MIN"));
+    cue_summary_ = new wxStaticText(command_bar_, wxID_ANY, wxEmptyString);
     cue_summary_->SetFont(style::UtilityFont(8));
     cue_summary_->SetForegroundColour(wxColour("#AAB5C3"));
     context->Add(workspace_name_);
@@ -594,21 +667,64 @@ void MainFrame::BuildCommandBar() {
         layout->Add(button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
         return button;
     };
-    auto* open = make_action("Open script");
-    auto* save = make_action("Save");
-    auto* manuscript = make_action("Convert prose");
-    auto* production = make_action("Production");
-    auto* git = make_action("Git");
-    auto* run = make_action("Run project", true);
+    open_game_button_ = make_action("Open a game");
+    save_button_ = make_action("Save");
+    write_button_ = make_action("Write naturally");
+    history_button_ = make_action("Version history");
+    problems_button_ = make_action("Problems");
+    run_button_ = make_action("Preview game", true);
     layout->AddSpacer(8);
 
-    open->Bind(wxEVT_BUTTON, &MainFrame::OnOpen, this);
-    save->Bind(wxEVT_BUTTON, &MainFrame::OnSave, this);
-    manuscript->Bind(wxEVT_BUTTON, &MainFrame::OnWriteManuscript, this);
-    production->Bind(wxEVT_BUTTON, &MainFrame::OnShowProduction, this);
-    git->Bind(wxEVT_BUTTON, &MainFrame::OnGitRepository, this);
-    run->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
+    open_game_button_->Bind(wxEVT_BUTTON, &MainFrame::OnConnectProject, this);
+    save_button_->Bind(wxEVT_BUTTON, &MainFrame::OnSave, this);
+    write_button_->Bind(wxEVT_BUTTON, &MainFrame::OnWriterDraft, this);
+    history_button_->Bind(wxEVT_BUTTON, &MainFrame::OnManageSnapshots, this);
+    problems_button_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        if (fixable_problem_count_ > 0) {
+            OnFixBasicErrors();
+        } else {
+            manager_.GetPane("diagnostics").Show(true);
+            if (GetMenuBar()) GetMenuBar()->Check(kShowDiagnostics, true);
+            manager_.Update();
+        }
+    });
+    run_button_->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
     command_bar_->SetSizer(layout);
+    RefreshCommandBarState();
+    RefreshCueSummary();
+}
+
+void MainFrame::RefreshCommandBarState() {
+    if (!command_bar_) return;
+    const bool has_game = project_.has_value();
+    if (open_game_button_) open_game_button_->Show(!has_game);
+    if (history_button_) history_button_->Show(has_game || !current_document_path_.empty());
+    if (problems_button_) {
+        problems_button_->Show(problem_count_ > 0);
+        auto* button = static_cast<CommandButton*>(problems_button_);
+        button->SetCommandLabel(fixable_problem_count_ > 0
+            ? "Fix " + std::to_string(fixable_problem_count_)
+            : "Review " + std::to_string(problem_count_));
+    }
+    if (write_button_) write_button_->Show(problem_count_ == 0);
+    if (run_button_) {
+        run_button_->Show(has_game);
+        run_button_->Enable(has_game && renpy_sdk_.has_value() && !renpy_process_);
+    }
+    if (save_button_) save_button_->Enable(current_document_dirty_ || current_document_path_.empty());
+    command_bar_->Layout();
+}
+
+void MainFrame::RefreshCueSummary() {
+    if (!cue_summary_) return;
+    wxString state;
+    if (current_document_dirty_) state = "UNSAVED CHANGES";
+    else if (!last_saved_time_.empty()) state = "SAVED LOCALLY " + last_saved_time_;
+    else if (!current_document_path_.empty()) state = "SAVED LOCALLY";
+    else state = "NOT SAVED YET";
+    cue_summary_->SetLabel(wxString::FromUTF8(std::to_string(analysis_.total_words) + " WORDS") +
+                           "   /   " + state);
+    command_bar_->Layout();
 }
 
 void MainFrame::BuildMenus() {
@@ -620,12 +736,15 @@ void MainFrame::BuildMenus() {
     file->Append(wxID_SAVEAS, "Save &As...\tCtrl+Shift+S", "Save the current script under a new name");
     file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
     file->AppendSeparator();
-    file->Append(kConnectProject, "Connect Project &Folder...", "Open every Ren'Py script in a project");
+    const auto open_game = FriendlyCommandCopy(kConnectProject);
+    file->Append(kConnectProject, open_game.label, open_game.help);
     recent_projects_menu_ = new wxMenu();
     file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
     file->Append(kReviewConflicts, "Review External &Conflicts...");
-    file->Append(kSnapshotNow, "&Snapshot Now", "Store a backup of every open script");
-    file->Append(kManageSnapshots, "Manage Snapshots...", "Preview, compare, and restore snapshots");
+    const auto save_version = FriendlyCommandCopy(kSnapshotNow);
+    const auto version_history = FriendlyCommandCopy(kManageSnapshots);
+    file->Append(kSnapshotNow, save_version.label, save_version.help);
+    file->Append(kManageSnapshots, version_history.label, version_history.help);
     file->Append(kGitRepository, "Git &Repository...", "Clone, sync, commit, and push with any Git remote");
     file->Append(kImportProject, "Import Say Count Project...", "Import a browser-app project bundle");
     RebuildRecentProjectsMenu();
@@ -649,11 +768,19 @@ void MainFrame::BuildMenus() {
     edit->AppendSeparator();
     edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
     edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
+    auto* insert = new wxMenu();
+    insert->Append(kInsertStoryElement, "Character, dialogue, choice, or direction...",
+                   "Build a story element and preview the generated script");
+    insert->Append(kShowAssets, "Image or audio from this game...",
+                   "Browse project assets and insert an image, scene, music, or sound instruction");
+    edit->AppendSubMenu(insert, "&Insert Into Story");
     edit->AppendCheckItem(kToggleNvimMotions, "&Vim Motions (Built-in)",
                           "Use built-in modal editing without an external process");
     edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
-    edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
-                 "Convert selected prose, or the entire active editor, to Ren'Py script");
+    const auto natural_writing = FriendlyCommandCopy(kWriteManuscript);
+    edit->Append(kWriterDraft, FriendlyCommandCopy(kWriterDraft).label,
+                 FriendlyCommandCopy(kWriterDraft).help);
+    edit->Append(kWriteManuscript, natural_writing.label, natural_writing.help);
     edit->Append(kConvertToChat, "Turn Writing Into a &Chat Scene...",
                  "Turn the selected writing (or the whole tab) into a phone/messenger scene");
     edit->Append(kConvertChatToDialogue, "Turn Chat Scene Back Into &Dialogue...",
@@ -671,7 +798,7 @@ void MainFrame::BuildMenus() {
     view->AppendSeparator();
     view->AppendCheckItem(kShowOutline, "Outline panel");
     view->AppendCheckItem(kShowSpeakerStats, "Speaker statistics panel");
-    view->AppendCheckItem(kShowDiagnostics, "Diagnostics panel");
+    view->AppendCheckItem(kShowDiagnostics, FriendlyCommandCopy(kShowDiagnostics).label);
     view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");
     view->Append(kShowProduction, "&Production Desk...", "Show prose and production tools");
     view->AppendSeparator();
@@ -698,7 +825,7 @@ void MainFrame::BuildMenus() {
     renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
     renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
     renpy_menu_->Append(kRuntimePresets, "Runtime State Presets...");
-    renpy_menu_->Append(kRunRenpyLint, "Run Official Lint");
+    renpy_menu_->Append(kRunRenpyLint, FriendlyCommandCopy(kRunRenpyLint).label);
     renpy_menu_->Append(kGenerateTranslations, "Generate Translations...");
     renpy_menu_->Append(kExportDialogue, "Export Dialogue...");
     renpy_menu_->Append(kShowAssets, "Browse Project Assets...");
@@ -764,6 +891,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     const wxFileName root(wxString::FromUTF8(project_->root));
     SetTitle("Say Count — " + root.GetFullName());
     if (workspace_name_) workspace_name_->SetLabel(root.GetFullName());
+    RefreshCommandBarState();
     SetStatusText(wxString::FromUTF8("Connected " + project_->root + " — " +
         std::to_string(project_->scripts.size()) + " script" +
         (project_->scripts.size() == 1 ? "" : "s")));
@@ -911,7 +1039,12 @@ bool MainFrame::TakeSnapshot(bool automatic, std::string label) {
                                      wxOK | wxICON_ERROR, this);
         return false;
     }
-    if (!automatic) SetStatusText(result.created ? "Snapshot stored" : "No changes since the last snapshot");
+    if (result.created) {
+        last_history_time_ = wxDateTime::Now().Format("%H:%M");
+        if (!current_document_dirty_) RefreshCueSummary();
+    }
+    if (!automatic) SetStatusText(result.created ? "Version saved to local history"
+                                                  : "No changes since the last saved version");
     return true;
 }
 
@@ -1094,6 +1227,7 @@ void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
         item->SetItemLabel(renpy_sdk_ ? "SDK: " + wxString::FromUTF8(
             renpy_sdk_->version.empty() ? "detected" : renpy_sdk_->version) : "SDK: not found");
     SetStatusText(renpy_sdk_ ? "Ren'Py SDK configured" : "Ren'Py SDK not found");
+    RefreshCommandBarState();
 }
 
 bool MainFrame::LaunchRenpy(const std::vector<wxString>& arguments,
@@ -1143,6 +1277,7 @@ bool MainFrame::LaunchRenpy(const std::vector<wxString>& arguments,
     renpy_completion_ = std::move(completion);
     renpy_output_timer_.Start(100);
     SetStatusText("Ren'Py running");
+    RefreshCommandBarState();
     return true;
 }
 
@@ -1219,6 +1354,7 @@ void MainFrame::OnRenpyEnded(wxProcessEvent& event) {
     AppendRenpyLog(wxString::Format("Process exited with code %d.\n", code));
     renpy_pid_ = 0;
     renpy_process_.reset();
+    RefreshCommandBarState();
     auto completion = std::move(renpy_completion_);
     std::string output = std::move(renpy_operation_output_);
     SetStatusText(code == 0 ? "Ren'Py exited" : "Ren'Py failed — see launch log");
@@ -1443,6 +1579,18 @@ void MainFrame::OnFixBasicErrors() {
         SetStatusText("No automatic repairs are available");
         return;
     }
+    const wxString preview = wxString::FromUTF8(
+        "Fix " + std::to_string(fixed.total_fixes()) + " problem" +
+        (fixed.total_fixes() == 1 ? "" : "s") + " in " +
+        std::to_string(fixed.changed_files) + " file" +
+        (fixed.changed_files == 1 ? "" : "s") + "?\n\n" +
+        std::to_string(fixed.indentation_fixes) + " indentation\n" +
+        std::to_string(fixed.quote_fixes) + " unfinished quote\n" +
+        std::to_string(fixed.colon_fixes) + " missing colon\n" +
+        std::to_string(fixed.empty_block_fixes) + " empty section\n\n" +
+        "A local version will be saved first. The edit can also be undone.");
+    if (wxMessageBox(preview, "Review Automatic Fixes",
+                     wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES) return;
     const std::size_t active = notebook_->CurrentFileIndex();
     if (!TakeSnapshot(false, "Before fixing basic diagnostics")) return;
     if (!notebook_->RestoreProjectScripts(fixed.scripts)) return;
@@ -1772,6 +1920,33 @@ void MainFrame::OnToggleComment(wxCommandEvent&) {
     notebook_->ToggleComments();
 }
 
+void MainFrame::OnInsertStoryElement(wxCommandEvent&) {
+    StoryElementDialog dialog(this, notebook_->CurrentIndentation());
+    if (dialog.ShowModal() != wxID_OK || dialog.generated_text().empty()) return;
+    notebook_->InsertStoryElement(dialog.generated_text());
+    SetStatusText("Inserted story element — undo is available");
+}
+
+void MainFrame::OnWriterDraft(wxCommandEvent&) {
+    if (notebook_->CurrentFilePath().empty()) {
+        if (!notebook_->SaveCurrent()) return;
+        last_saved_time_ = wxDateTime::Now().Format("%H:%M");
+        RefreshCueSummary();
+    }
+    const std::string path = notebook_->CurrentFilePath().ToStdString(wxConvUTF8);
+    WriterDraftDialog dialog(this, path, notebook_->CurrentText());
+    if (dialog.ShowModal() != wxID_OK || dialog.generated_script().empty()) return;
+    const wxString warning =
+        "Replace the current game script with the generated preview?\n\n"
+        "The natural-writing draft is already saved separately. A local version of the current script "
+        "will be saved first, and Undo remains available.";
+    if (wxMessageBox(warning, "Update Game Script",
+                     wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES) return;
+    if (!TakeSnapshot(false, "Before updating script from writing draft")) return;
+    if (!notebook_->ReplaceCurrentDocument(dialog.generated_script())) return;
+    SetStatusText("Game script updated from writing draft — changes are unsaved and Undo is available");
+}
+
 void MainFrame::OnShowShortcuts(wxCommandEvent&) {
     const wxString shortcuts =
         "Ctrl+F                 Find and replace\n"
@@ -1943,29 +2118,34 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"New script", "Ctrl+N · File", wxID_NEW}, {"Open scripts", "Ctrl+O · File", wxID_OPEN},
         {"Quick Open", "Ctrl+P · Navigation", kQuickOpen}, {"Save", "Ctrl+S · File", wxID_SAVE},
         {"Save As", "Ctrl+Shift+S · File", wxID_SAVEAS}, {"Close tab", "Ctrl+W · File", wxID_CLOSE},
-        {"Connect project folder", "Project", kConnectProject}, {"Snapshot now", "Project", kSnapshotNow},
-        {"Manage snapshots", "Project", kManageSnapshots}, {"Review external conflicts", "Project", kReviewConflicts},
+        {FriendlyCommandCopy(kConnectProject).label, "Game", kConnectProject},
+        {FriendlyCommandCopy(kSnapshotNow).label, "Local history · Game", kSnapshotNow},
+        {FriendlyCommandCopy(kManageSnapshots).label, "Local history · Game", kManageSnapshots},
+        {"Review external conflicts", "Project", kReviewConflicts},
         {"Git repository", "Clone, sync, commit, and push · Project", kGitRepository},
         {"Import Say Count project", "File", kImportProject}, {"Export complete project", "File", kExportProject},
         {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
         {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},
         {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
+        {"Insert into story", "Character, dialogue, choice, scene, audio, or jump · Writing", kInsertStoryElement},
+        {FriendlyCommandCopy(kWriterDraft).label, "Persistent natural-writing source · Writing", kWriterDraft},
         {"Toggle built-in Vim motions", "Normal/insert modes · Edit", kToggleNvimMotions},
-        {"Convert prose to Ren'Py", "Edit", kWriteManuscript},
+        {FriendlyCommandCopy(kWriteManuscript).label, "Writing", kWriteManuscript},
         {"Turn writing into a chat scene", "Edit", kConvertToChat},
         {"Turn chat scene back into dialogue", "Edit", kConvertChatToDialogue},
         {"Install/update chat app files", "Edit", kInstallChatRuntime},
         {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
         {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
         {"Toggle outline", "View", kShowOutline}, {"Toggle speaker statistics", "View", kShowSpeakerStats},
-        {"Toggle diagnostics", "View", kShowDiagnostics}, {"Route details", "View", kShowRoutes},
+        {"Toggle problems", "View", kShowDiagnostics}, {"Route details", "View", kShowRoutes},
         {"Production Desk", "View", kShowProduction}, {"Increase editor font", "Ctrl+= · View", kFontIncrease},
         {"Decrease editor font", "Ctrl+- · View", kFontDecrease}, {"Reset editor font", "Ctrl+0 · View", kFontReset},
         {"Use system theme", "View", kThemeSystem}, {"Use light theme", "View", kThemeLight},
         {"Use dark theme", "View", kThemeDark},
         {"Run project", "F6 · Ren'Py", kRunRenpy}, {"Run from caret", "F7 · Ren'Py", kWarpRenpy},
         {"Interactive Director", "Ren'Py", kDirectorRenpy}, {"Runtime state presets", "Ren'Py", kRuntimePresets},
-        {"Run official lint", "Ren'Py", kRunRenpyLint}, {"Generate translations", "Ren'Py", kGenerateTranslations},
+        {FriendlyCommandCopy(kRunRenpyLint).label, "Ren'Py", kRunRenpyLint},
+        {"Generate translations", "Ren'Py", kGenerateTranslations},
         {"Export dialogue", "Ren'Py", kExportDialogue}, {"Browse project assets", "Ren'Py", kShowAssets},
         {"Label coverage", "Ren'Py", kShowCoverage}, {"Stop running project", "Shift+F6 · Ren'Py", kStopRenpy},
         {"Show launch log", "Ren'Py", kShowRenpyLog}, {"Configure Ren'Py SDK", "Ren'Py", kConfigureRenpy},
@@ -2173,10 +2353,18 @@ void MainFrame::OnOpen(wxCommandEvent&) {
 }
 
 void MainFrame::OnSave(wxCommandEvent&) {
-    if (notebook_->SaveCurrent()) TakeSnapshot(false, "Manual save");
+    if (!notebook_->SaveCurrent()) return;
+    last_saved_time_ = wxDateTime::Now().Format("%H:%M");
+    RefreshCueSummary();
+    TakeSnapshot(false, "Manual save");
 }
 
-void MainFrame::OnSaveAs(wxCommandEvent&) { notebook_->SaveCurrentAs(); }
+void MainFrame::OnSaveAs(wxCommandEvent&) {
+    if (!notebook_->SaveCurrentAs()) return;
+    last_saved_time_ = wxDateTime::Now().Format("%H:%M");
+    RefreshCueSummary();
+    TakeSnapshot(false, "Manual save");
+}
 
 void MainFrame::OnExport(wxCommandEvent& event) {
     wxString filename, wildcard, contents;

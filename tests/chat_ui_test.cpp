@@ -4,13 +4,19 @@
 #include "ui/chat_conversion_dialog.h"
 #include "ui/editor_notebook.h"
 #include "ui/guide_dialog.h"
+#include "ui/welcome_dialog.h"
+#include "ui/story_element_dialog.h"
+#include "ui/writer_draft_dialog.h"
+#include "app/settings.h"
 
 #include <chrono>
 #include <thread>
+#include <filesystem>
 
 #include <wx/app.h>
 #include <wx/button.h>
 #include <wx/checkbox.h>
+#include <wx/choice.h>
 #include <wx/clipbrd.h>
 #include <wx/frame.h>
 #include <wx/html/htmlwin.h>
@@ -20,6 +26,7 @@
 #include <wx/stattext.h>
 #include <wx/stc/stc.h>
 #include <wx/textctrl.h>
+#include <wx/utils.h>
 
 namespace {
 
@@ -131,6 +138,93 @@ TEST_CASE("writing guide shows a visible fallback when content cannot render") {
     dialog.ShowModal();
     CHECK(fallback_shown);
     CHECK(found_message);
+}
+
+TEST_CASE("welcome dialog exposes keyboard-accessible writer-first actions") {
+    say_count::ui::WelcomeDialog dialog(nullptr, {});
+    auto* start = Named<wxButton>(dialog, "Start a new story");
+    auto* game = Named<wxButton>(dialog, "Open a game");
+    auto* script = Named<wxButton>(dialog, "Open a script");
+    REQUIRE(start);
+    REQUIRE(game);
+    REQUIRE(script);
+    CHECK(start->AcceptsFocusFromKeyboard());
+    CHECK(game->AcceptsFocusFromKeyboard());
+    CHECK(script->AcceptsFocusFromKeyboard());
+}
+
+TEST_CASE("onboarding setting defaults safely and persists") {
+    namespace fs = std::filesystem;
+    const fs::path data = fs::temp_directory_path() / "say-count-onboarding-settings-test";
+    fs::remove_all(data);
+    wxString previous;
+    const bool had_previous = wxGetEnv("XDG_DATA_HOME", &previous);
+    wxSetEnv("XDG_DATA_HOME", wxString::FromUTF8(data.string()));
+    {
+        say_count::app::Settings settings;
+        auto editor = settings.LoadEditor();
+        CHECK(editor.onboarding_version == 0);
+        editor.onboarding_version = 1;
+        REQUIRE(settings.SaveEditor(editor));
+        CHECK(settings.LoadEditor().onboarding_version == 1);
+    }
+    if (had_previous) wxSetEnv("XDG_DATA_HOME", previous); else wxUnsetEnv("XDG_DATA_HOME");
+    fs::remove_all(data);
+}
+
+TEST_CASE("story element builder exposes an accessible preview-first flow") {
+    say_count::ui::StoryElementDialog dialog(nullptr, "    ");
+    auto* type = Named<wxChoice>(dialog, "Story element type");
+    auto* primary = Named<wxTextCtrl>(dialog, "Story element primary field");
+    auto* preview = Named<wxTextCtrl>(dialog, "Story element preview");
+    auto* insert = Named<wxButton>(dialog, "Insert into story");
+    REQUIRE(type);
+    REQUIRE(primary);
+    REQUIRE(preview);
+    REQUIRE(insert);
+    CHECK(type->AcceptsFocusFromKeyboard());
+    CHECK(primary->AcceptsFocusFromKeyboard());
+    CHECK(preview->IsEditable() == false);
+    CHECK_FALSE(insert->IsEnabled());
+}
+
+TEST_CASE("story element insertion reuses current indentation as one edit") {
+    wxFrame frame(nullptr, wxID_ANY, "story insertion test");
+    say_count::app::EditorSettings settings;
+    say_count::ui::EditorNotebook notebook(&frame, settings, [](const wxString&, const say_count::ScriptAnalysis&) {});
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(notebook.GetPage(0));
+    REQUIRE(editor);
+    editor->SetText("label start:\n    ");
+    editor->GotoPos(editor->GetTextLength());
+    const auto built = say_count::build_story_element({say_count::StoryElementKind::Dialogue,
+        "e", "Hello", {}, notebook.CurrentIndentation().ToStdString(wxConvUTF8)});
+    REQUIRE(built.valid);
+    notebook.InsertStoryElement(built.text);
+    CHECK(editor->GetText() == "label start:\n    e \"Hello\"\n");
+    editor->Undo();
+    CHECK(editor->GetText() == "label start:\n    ");
+}
+
+TEST_CASE("writing draft keeps natural writing separate from generated script") {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "say-count-writer-dialog-test";
+    fs::remove_all(root); fs::create_directories(root);
+    const std::string path = (root / "scene.rpy").string();
+    say_count::ui::WriterDraftDialog dialog(nullptr, path, "label start:\n    pass\n");
+    auto* writing = Named<wxTextCtrl>(dialog, "Natural writing draft");
+    auto* preview = Named<wxTextCtrl>(dialog, "Generated game script");
+    auto* save = Named<wxButton>(dialog, "Save writing draft");
+    auto* update = Named<wxButton>(dialog, "Update game script");
+    REQUIRE(writing);
+    REQUIRE(preview);
+    REQUIRE(save);
+    REQUIRE(update);
+    writing->SetValue("Eileen: Hello");
+    CHECK(preview->GetValue().Contains("Character(\"Eileen\")"));
+    CHECK(save->IsEnabled());
+    CHECK(update->IsEnabled());
+    CHECK(dialog.script_differs());
+    fs::remove_all(root);
 }
 
 TEST_CASE("reverse preview requires loss acknowledgement and copy uses preview text") {

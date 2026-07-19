@@ -61,6 +61,9 @@ add_library(say_count_core STATIC
     src/core/diagnostics.cpp
     src/core/editor_commands.cpp
     src/core/project.cpp
+    src/core/project_creation.cpp
+    src/core/script_builder.cpp
+    src/core/writer_draft.cpp
     src/core/project_bundle.cpp
     src/core/rename.cpp
     src/core/renpy.cpp
@@ -101,6 +104,9 @@ add_executable(say-count
     src/ui/editor_notebook.cpp
     src/ui/style.cpp
     src/ui/guide_dialog.cpp
+    src/ui/welcome_dialog.cpp
+    src/ui/story_element_dialog.cpp
+    src/ui/writer_draft_dialog.cpp
     src/ui/palette_dialog.cpp
     src/ui/diagnostics_panel.cpp
     src/ui/conflict_dialog.cpp
@@ -180,6 +186,9 @@ if(BUILD_TESTING)
         tests/diagnostics_test.cpp
         tests/editor_commands_test.cpp
         tests/project_test.cpp
+        tests/project_creation_test.cpp
+        tests/script_builder_test.cpp
+        tests/writer_draft_test.cpp
         tests/project_bundle_test.cpp
         tests/rename_test.cpp
         tests/renpy_test.cpp
@@ -211,8 +220,12 @@ if(BUILD_TESTING)
 
     add_executable(say-count-chat-ui-tests
         tests/chat_ui_test.cpp
+        src/app/settings.cpp
         src/ui/chat_conversion_dialog.cpp
         src/ui/guide_dialog.cpp
+        src/ui/welcome_dialog.cpp
+        src/ui/story_element_dialog.cpp
+        src/ui/writer_draft_dialog.cpp
         src/ui/editor_notebook.cpp
         src/ui/style.cpp)
     target_link_libraries(say-count-chat-ui-tests PRIVATE

@@ -32,6 +32,7 @@ class wxStaticText;
 class wxDataViewListCtrl;
 class wxDataViewEvent;
 class wxMenu;
+class wxControl;
 
 namespace say_count::ui {
 
@@ -55,6 +56,8 @@ public:
 private:
     void BuildMenus();
     void BuildCommandBar();
+    void RefreshCommandBarState();
+    void RefreshCueSummary();
     void BuildFindBar();
     void BuildFindResults();
     void BuildFocusPill();
@@ -68,6 +71,8 @@ private:
     bool TakeSnapshot(bool automatic, std::string label = {});
     void RestoreWindow();
     void RestoreWorkspace();
+    void ShowWelcomeIfNeeded();
+    void StartNewStory();
     void SaveWorkspace();
     void OnQuickOpen(wxCommandEvent& event);
     void OnCommandPalette(wxCommandEvent& event);
@@ -95,6 +100,8 @@ private:
     void OnGoToLine(wxCommandEvent& event);
     void OnToggleComment(wxCommandEvent& event);
     void OnWriteManuscript(wxCommandEvent& event);
+    void OnWriterDraft(wxCommandEvent& event);
+    void OnInsertStoryElement(wxCommandEvent& event);
     void OnConfigureOfflineProseAi(wxCommandEvent& event);
     void OnShowShortcuts(wxCommandEvent& event);
     void OnShowManuscriptGuide(wxCommandEvent& event);
@@ -162,6 +169,12 @@ private:
     wxPanel* command_bar_ = nullptr;
     wxStaticText* workspace_name_ = nullptr;
     wxStaticText* cue_summary_ = nullptr;
+    wxControl* open_game_button_ = nullptr;
+    wxControl* save_button_ = nullptr;
+    wxControl* write_button_ = nullptr;
+    wxControl* history_button_ = nullptr;
+    wxControl* problems_button_ = nullptr;
+    wxControl* run_button_ = nullptr;
     wxTextCtrl* find_input_ = nullptr;
     wxTextCtrl* replace_input_ = nullptr;
     wxCheckBox* find_case_ = nullptr;
@@ -181,6 +194,12 @@ private:
     app::EditorSettings editor_settings_;
     wxRect normal_geometry_;
     ScriptAnalysis analysis_;
+    bool current_document_dirty_ = false;
+    wxString current_document_path_;
+    wxString last_saved_time_;
+    wxString last_history_time_;
+    std::size_t problem_count_ = 0;
+    std::size_t fixable_problem_count_ = 0;
     bool focus_mode_ = false;
     bool nvim_command_active_ = false;
     wxString focus_perspective_;

@@ -35,6 +35,12 @@ struct FindStatus {
     std::size_t total = 0;
 };
 
+struct DocumentState {
+    wxString path;
+    wxString name;
+    bool dirty = false;
+};
+
 enum class ExternalFileResult { NotOpen, Unchanged, Reloaded, Dirty, Missing, Failed };
 enum class ManuscriptConversionScope { None, AlreadyRenpy, Document, Selection };
 struct ManuscriptEditorPreview {
@@ -63,6 +69,7 @@ public:
     using AnalysisHandler = std::function<void(const wxString&, const ScriptAnalysis&)>;
     using FindStatusHandler = std::function<void(const FindStatus&)>;
     using DiagnosticsHandler = std::function<void(const std::vector<Diagnostic>&)>;
+    using DocumentStateHandler = std::function<void(const DocumentState&)>;
     using NvimModeHandler = std::function<void(bool enabled, const std::string& mode,
                                                 const std::string& command_line)>;
 
@@ -98,13 +105,18 @@ public:
     void SetCountMenuChoices(bool enabled);
     wxString CurrentFilePath() const;
     wxString CurrentFileName() const;
+    std::string CurrentText() const;
+    bool HasMeaningfulContent() const;
     std::size_t CurrentLine() const;
+    wxString CurrentIndentation() const;
     bool SaveAll();
     bool OpenAndJump(const wxString& path, std::size_t line);
     void InsertAtCaret(std::string_view text);
+    void InsertStoryElement(std::string_view text);
     std::optional<ManuscriptEditorPreview> PrepareManuscriptConversion() const;
     std::optional<TextReplacementPreview> PrepareTextReplacement() const;
     bool ApplyTextReplacement(const TextReplacementPreview& preview, std::string_view replacement);
+    bool ReplaceCurrentDocument(std::string_view replacement);
     bool PrepareOfflineAiConversion(ManuscriptEditorPreview* preview,
                                     std::string_view rewritten_manuscript) const;
     bool ApplyManuscriptConversion(const ManuscriptEditorPreview& preview,
@@ -113,6 +125,7 @@ public:
     void ClearFind();
     void SetFindStatusHandler(FindStatusHandler handler);
     void SetDiagnosticsHandler(DiagnosticsHandler handler);
+    void SetDocumentStateHandler(DocumentStateHandler handler);
     void SelectDiagnostic(const Diagnostic& diagnostic);
     void ToggleComments();
     ExternalFileUpdate ReloadExternalFile(const wxString& path);
@@ -158,6 +171,7 @@ private:
     void RefreshDiagnostics();
     void ApplyDiagnostics();
     void ApplyCommandResult(wxStyledTextCtrl* editor, const EditorCommandResult& result);
+    void NotifyDocumentState();
 
     unsigned int next_untitled_number_ = 1;
     app::EditorSettings settings_;
@@ -176,6 +190,7 @@ private:
     FindStatusHandler find_status_handler_;
     std::vector<Diagnostic> diagnostics_;
     DiagnosticsHandler diagnostics_handler_;
+    DocumentStateHandler document_state_handler_;
     NvimModeHandler nvim_mode_handler_;
     std::unordered_map<wxStyledTextCtrl*, VimEmulator> vim_emulators_;
     std::unordered_map<wxStyledTextCtrl*, std::string> nvim_modes_;

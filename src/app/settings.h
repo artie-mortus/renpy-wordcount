@@ -25,6 +25,7 @@ struct EditorSettings {
     bool offline_prose_ai = false;
     wxString offline_ai_runner_path;
     wxString offline_ai_model_path;
+    int onboarding_version = 0;
 };
 
 class Settings final {

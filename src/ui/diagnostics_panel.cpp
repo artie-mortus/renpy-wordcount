@@ -19,6 +19,18 @@ const char* severity_name(DiagnosticSeverity severity) {
     return "Warning";
 }
 
+wxString friendly_message(const Diagnostic& diagnostic) {
+    if (diagnostic.type == "indentation") return "This line is not aligned with the writing around it.";
+    if (diagnostic.type == "quote") return "This spoken line has an unfinished quotation mark.";
+    if (diagnostic.type == "syntax") return "Ren'Py cannot tell where this instruction ends.";
+    if (diagnostic.type == "empty-block") return "This section needs something to happen inside it.";
+    if (diagnostic.type == "missing-label") return "This sends the story to a scene that does not exist.";
+    if (diagnostic.type == "duplicate-label") return "Two scenes use the same name.";
+    if (diagnostic.type == "speaker") return "This character has not been introduced to the game.";
+    if (diagnostic.type == "length") return "This line may be difficult to read in one dialogue box.";
+    return wxString::FromUTF8(diagnostic.message);
+}
+
 }  // namespace
 
 DiagnosticsPanel::DiagnosticsPanel(wxWindow* parent) : wxPanel(parent) {
@@ -53,7 +65,9 @@ DiagnosticsPanel::DiagnosticsPanel(wxWindow* parent) : wxPanel(parent) {
                             wxDATAVIEW_COL_RESIZABLE | wxDATAVIEW_COL_SORTABLE);
     list_->AppendTextColumn("Line", wxDATAVIEW_CELL_INERT, 60, wxALIGN_RIGHT,
                             wxDATAVIEW_COL_RESIZABLE | wxDATAVIEW_COL_SORTABLE);
-    list_->AppendTextColumn("Message", wxDATAVIEW_CELL_INERT, 620, wxALIGN_LEFT,
+    list_->AppendTextColumn("What needs attention", wxDATAVIEW_CELL_INERT, 420, wxALIGN_LEFT,
+                            wxDATAVIEW_COL_RESIZABLE);
+    list_->AppendTextColumn("Technical details", wxDATAVIEW_CELL_INERT, 300, wxALIGN_LEFT,
                             wxDATAVIEW_COL_RESIZABLE);
     list_->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &DiagnosticsPanel::OnActivated, this);
     layout->Add(list_, 1, wxEXPAND);
@@ -67,13 +81,13 @@ void DiagnosticsPanel::SetDiagnostics(const std::vector<Diagnostic>& diagnostics
         fix_summary_->SetLabel("No problems found");
         fix_button_->SetLabel("No errors to fix");
     } else if (fixable == 0) {
-        fix_summary_->SetLabel("These diagnostics need review");
+        fix_summary_->SetLabel("These problems need review");
         fix_button_->SetLabel("No automatic fixes");
     } else {
         fix_summary_->SetLabel(wxString::FromUTF8(
             std::to_string(fixable) + " automatic repair" + (fixable == 1 ? "" : "s") +
             " available"));
-        fix_button_->SetLabel("Fix basic errors");
+        fix_button_->SetLabel("Review automatic fixes...");
     }
     fix_button_->Enable(fixable > 0);
     list_->DeleteAllItems();
@@ -83,6 +97,7 @@ void DiagnosticsPanel::SetDiagnostics(const std::vector<Diagnostic>& diagnostics
         row.push_back(wxVariant(severity_name(diagnostic.severity)));
         row.push_back(wxVariant(wxString::FromUTF8(diagnostic.file)));
         row.push_back(wxVariant(std::to_string(diagnostic.line_number)));
+        row.push_back(wxVariant(friendly_message(diagnostic)));
         row.push_back(wxVariant(wxString::FromUTF8(diagnostic.message)));
         list_->AppendItem(row, static_cast<wxUIntPtr>(index + 1));
     }

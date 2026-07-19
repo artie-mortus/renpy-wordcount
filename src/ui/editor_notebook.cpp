@@ -76,6 +76,7 @@ void EditorNotebook::NewTab() {
     RefreshCompletionDocument(editor);
     editor->SetFocus();
     AnalyzeActive();
+    NotifyDocumentState();
 }
 
 wxString EditorNotebook::FilePath(wxStyledTextCtrl* editor) const {
@@ -86,6 +87,7 @@ void EditorNotebook::SetFilePath(wxStyledTextCtrl* editor, const wxString& path)
     editor->SetProperty(kFilePathProperty, path);
     editor->SetName(wxFileName(path).GetFullName());
     UpdateTabLabel(editor);
+    NotifyDocumentState();
 }
 
 bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_existing) {
@@ -799,6 +801,19 @@ void EditorNotebook::SetDiagnosticsHandler(DiagnosticsHandler handler) {
     RefreshDiagnostics();
 }
 
+void EditorNotebook::SetDocumentStateHandler(DocumentStateHandler handler) {
+    document_state_handler_ = std::move(handler);
+    NotifyDocumentState();
+}
+
+void EditorNotebook::NotifyDocumentState() {
+    if (!document_state_handler_) return;
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
+    if (!editor) return document_state_handler_({});
+    document_state_handler_({FilePath(editor), editor->GetName(), editor->GetModify()});
+}
+
 void EditorNotebook::RefreshDiagnostics() {
     diagnostics_ = diagnose_project(ProjectScripts());
     ApplyDiagnostics();
@@ -972,10 +987,39 @@ wxString EditorNotebook::CurrentFileName() const {
     return editor ? editor->GetName() : wxString{};
 }
 
+std::string EditorNotebook::CurrentText() const {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
+    return editor ? editor->GetText().ToStdString(wxConvUTF8) : std::string{};
+}
+
+bool EditorNotebook::HasMeaningfulContent() const {
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        auto* editor = EditorAt(index);
+        if (!editor) continue;
+        if (!FilePath(editor).empty() || !editor->GetText().Strip(wxString::both).empty()) return true;
+    }
+    return false;
+}
+
 std::size_t EditorNotebook::CurrentLine() const {
     const int selection = GetSelection();
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
     return editor ? static_cast<std::size_t>(editor->LineFromPosition(editor->GetCurrentPos()) + 1) : 0;
+}
+
+wxString EditorNotebook::CurrentIndentation() const {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
+    if (!editor) return {};
+    const int line = editor->LineFromPosition(editor->GetCurrentPos());
+    const wxString text = editor->GetLine(line);
+    wxString indentation;
+    for (const wxUniChar character : text) {
+        if (character != ' ' && character != '\t') break;
+        indentation += character;
+    }
+    return indentation;
 }
 
 bool EditorNotebook::SaveAll() {
@@ -1042,6 +1086,24 @@ void EditorNotebook::InsertAtCaret(std::string_view text) {
     editor->SetFocus();
 }
 
+void EditorNotebook::InsertStoryElement(std::string_view text) {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
+    if (!editor) return;
+    std::string insertion(text);
+    if (editor->GetSelectionStart() == editor->GetSelectionEnd()) {
+        const int caret = editor->GetCurrentPos();
+        const int line_start = editor->PositionFromLine(editor->LineFromPosition(caret));
+        const wxString before = editor->GetTextRange(line_start, caret);
+        if (before.Strip(wxString::both).empty()) {
+            editor->SetSelection(line_start, caret);
+        } else {
+            insertion.insert(insertion.begin(), '\n');
+        }
+    }
+    InsertAtCaret(insertion);
+}
+
 std::optional<ManuscriptEditorPreview> EditorNotebook::PrepareManuscriptConversion() const {
     const int page = GetSelection();
     auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));
@@ -1099,6 +1161,18 @@ bool EditorNotebook::ApplyTextReplacement(const TextReplacementPreview& preview,
     editor->SetSelection(caret, caret);
     editor->EnsureCaretVisible();
     editor->SetFocus();
+    return true;
+}
+
+bool EditorNotebook::ReplaceCurrentDocument(std::string_view replacement) {
+    const int page = GetSelection();
+    auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));
+    if (!editor) return false;
+    editor->BeginUndoAction();
+    editor->SetTargetStart(0); editor->SetTargetEnd(editor->GetTextLength());
+    editor->ReplaceTarget(wxString::FromUTF8(replacement.data(), replacement.size()));
+    editor->EndUndoAction();
+    editor->GotoPos(0); editor->SetFocus();
     return true;
 }
 
@@ -1336,6 +1410,7 @@ void EditorNotebook::OnPageChanged(wxAuiNotebookEvent& event) {
     AnalyzeActive();
     if (!find_query_.empty()) RefreshFindHighlights();
     NotifyNvimMode();
+    NotifyDocumentState();
     event.Skip();
 }
 
@@ -1403,6 +1478,7 @@ bool EditorNotebook::SaveEditor(wxStyledTextCtrl* editor, const wxString& path) 
     }
     SetFilePath(editor, wxFileName(path).GetAbsolutePath());
     editor->SetSavePoint();
+    NotifyDocumentState();
     return true;
 }
 
@@ -1440,6 +1516,7 @@ void EditorNotebook::UpdateTabLabel(wxStyledTextCtrl* editor) {
 void EditorNotebook::OnSavePointChanged(wxStyledTextEvent& event) {
     if (auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject())) {
         UpdateTabLabel(editor);
+        if (GetPageIndex(editor) == GetSelection()) NotifyDocumentState();
     }
     event.Skip();
 }

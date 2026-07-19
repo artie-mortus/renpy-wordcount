@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Say Count Noncoder Usability Implementation Plan</title>
+  <style>
+    :root{--ink:#17243a;--muted:#526178;--paper:#fcfbf8;--card:#fff;--line:#d9dee6;--cue:#c99732;--mint:#dff1e8;--plum:#7c446b;--p1:#a33b24;--p2:#996500;--p3:#286445;--code:#eef1f5}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1100px;margin:auto;padding:48px 24px 80px}h1{font-size:clamp(2rem,5vw,4rem);line-height:1.03;max-width:850px;margin:.25rem 0 1rem}h2{margin-top:3rem;border-bottom:2px solid var(--ink);padding-bottom:.4rem}h3{margin:.25rem 0 .5rem}.eyebrow,.tag{font-weight:750;letter-spacing:.08em;text-transform:uppercase;font-size:.76rem}.eyebrow{color:var(--plum)}.lede{font-size:1.2rem;max-width:850px;color:var(--muted)}.meta,.card,.decision{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0}.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));border-left:5px solid var(--cue)}.meta p{margin:.25rem 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.grid .card{margin:0}.tag{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--code)}.p1{color:var(--p1)}.p2{color:var(--p2)}.p3{color:var(--p3)}.defer{color:var(--plum)}table{border-collapse:collapse;width:100%;background:white}th,td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}th{background:#eef1f5}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--code);border-radius:6px}code{padding:.1em .35em}pre{padding:16px;overflow:auto}li+li{margin-top:.45rem}.phase{border-left:5px solid var(--cue)}.unknown{border-left:5px solid var(--plum)}.good{background:var(--mint)}.wire{white-space:pre-wrap}.small{font-size:.9rem;color:var(--muted)}@media(max-width:700px){main{padding:28px 14px}table{font-size:.88rem;display:block;overflow:auto}}
+  </style>
+</head>
+<body><main>
+  <p class="eyebrow">Product and implementation plan</p>
+  <h1>Make Say Count feel like a writing app that quietly produces Ren’Py</h1>
+  <p class="lede">A phased plan for welcoming nontechnical writers, reducing visible complexity, teaching through actions, and preserving the editor’s advanced capabilities and safety guarantees.</p>
+
+  <section class="meta">
+    <p><strong>Repository</strong><br>say-count-native</p><p><strong>Branch</strong><br>master</p><p><strong>Commit</strong><br>7273f74</p><p><strong>Generated</strong><br>2026-07-18 (US/Central)</p><p><strong>Scope</strong><br>Plan only; no app implementation</p>
+  </section>
+
+  <h2>Executive summary</h2>
+  <div class="decision good"><strong>Recommended direction:</strong> keep Ren’Py code as the durable source of truth today, but place a friendly welcome experience, contextual actions, natural-writing conversion, guided fixes, and visual insertion tools in front of it. Preserve technical commands under menus and command search.</div>
+  <p>The current application has excellent expert breadth but exposes six permanent toolbar actions, Ren’Py terminology, raw code on the empty screen, and project concepts before a new writer has formed a mental model. Most required foundations already exist: manuscript conversion with preview and undo, diagnostics and repairs, project discovery, workspace restoration, snapshots, an asset insertion pattern, and extensive core tests.</p>
+  <p>The main architectural constraint is that prose conversion is one-way. A cosmetic “Writing / Code” toggle would imply lossless round trips that the app cannot provide for arbitrary Python, conditions, menus, transforms, and definitions. Phase 2 should instead offer <strong>Write naturally → Review → Make game script</strong>. A persistent dual-view writer model is a separate Phase 5 investment.</p>
+
+  <h2>Product principles and target flow</h2>
+  <div class="grid">
+    <div class="card"><h3>Use writer language first</h3><p>Say “Open a game,” “Problems,” and “Version history.” Reveal “project folder,” “diagnostics,” and Git terms only where precision is necessary.</p></div>
+    <div class="card"><h3>Progressive disclosure</h3><p>The primary surface shows the next useful action. Expert commands, shortcuts, pane names, and stable IDs remain available.</p></div>
+    <div class="card"><h3>Preview meaningful changes</h3><p>Project creation, prose conversion, repairs, and generated snippets must preview or preflight their effects and remain undoable or recoverable.</p></div>
+    <div class="card"><h3>Never overstate safety</h3><p>Distinguish “saved to file” from app-local version history and from off-device backup or Git synchronization.</p></div>
+  </div>
+  <pre class="wire">First launch / empty workspace
+┌──────────────────────────────────────────────────────────────┐
+│ Say Count                                  Help · Advanced   │
+│                                                              │
+│ What would you like to write?                                │
+│ [ Start a new story ]  [ Open a game ]  [ Open a script ]   │
+│                                                              │
+│ Continue writing                                             │
+│ Recent game cards, only when available                       │
+│                                                              │
+│ Your first scene  ○ Open/create  ○ Character  ○ Dialogue     │
+└──────────────────────────────────────────────────────────────┘
+
+Editing
+┌──────────────────────────────────────────────────────────────┐
+│ Story name · Saved locally 2:14 PM    [Fix 3] [Preview game] │
+├──────────────────────────────────────────────────────────────┤
+│ editor / natural-writing draft                               │
+└──────────────────────────────────────────────────────────────┘</pre>
+
+  <h2>Audit findings</h2>
+  <div class="card"><span class="tag p1">P1</span><h3>Startup has no true home state</h3><p><code>EditorNotebook</code> always creates <code>scene-1.rpy</code> before <code>MainFrame::RestoreWorkspace()</code>. The editor overlay in <code>src/ui/editor_notebook.cpp</code> is static text with a raw Ren’Py example, not actionable onboarding.</p><p><strong>Recommendation:</strong> create a separate <code>WelcomePanel</code> and explicitly resolve restored-workspace-versus-welcome lifecycle. Do not simulate a full welcome screen inside Scintilla.</p></div>
+  <div class="card"><span class="tag p1">P1</span><h3>Primary actions and labels are hardcoded in multiple places</h3><p><code>BuildCommandBar()</code>, <code>BuildMenus()</code>, and <code>OnCommandPalette()</code> duplicate labels. The command bar permanently shows Open, Save, Convert, Production, Git, and Run.</p><p><strong>Recommendation:</strong> centralize user-visible command metadata, retain stable IDs, and add <code>RefreshCommandBarState()</code>. Keep AUI pane <code>.Name()</code> values stable so saved layouts continue to restore.</p></div>
+  <div class="card"><span class="tag p1">P1</span><h3>“Start a new story” needs real project creation</h3><p><code>src/core/project.cpp</code> discovers existing folders only. A loose script is not necessarily a playable Ren’Py game.</p><p><strong>Recommendation:</strong> add a pure, tested project-creation service with validation, collision preflight, explicit templates, and recoverable writes. Never overwrite existing files silently.</p></div>
+  <div class="card"><span class="tag p2">P2</span><h3>Natural writing is mature but not a persistent mode</h3><p><code>src/core/manuscript.*</code> and <code>ManuscriptReviewDialog</code> already provide conservative conversion, uncertainty review, character reuse, and undo. Choices and the proposed stage-direction syntax require explicit parser support and tests before the UI promises them.</p></div>
+  <div class="card"><span class="tag p2">P2</span><h3>Problems can be friendlier</h3><p>Diagnostics already have typed ranges, jump navigation, and a snapshot-protected bulk repair. Messages can expose syntax jargon; per-row repairs lack stable fix IDs.</p><p><strong>Recommendation:</strong> map diagnostic types to a plain primary explanation, optional technical detail, and stable action metadata. Never dispatch a repair by matching English copy.</p></div>
+  <div class="card"><span class="tag p2">P2</span><h3>Safety exists but is mostly invisible</h3><p>Atomic save, dirty tab markers, ten-minute automatic snapshots, pre-mutation snapshots, and restore already exist. <code>MainFrame</code> receives no document dirty/save callback, and “Snapshots” reads as technical.</p><p><strong>Recommendation:</strong> add document-state events and display accurate “Unsaved changes,” “Saved locally,” and “Version saved” states. Relabel only the UI; keep storage formats/types stable.</p></div>
+
+  <h2>Recommended implementation phases</h2>
+  <section class="card phase"><span class="tag p1">Phase 1 · P1</span><h3>Plain-language shell and contextual hierarchy</h3>
+    <ul><li>Create one command metadata source for menu, command palette, and primary labels/descriptions.</li><li>Use “Open a game,” “Problems,” “Check game for problems,” and “Version history” on beginner-facing surfaces. Keep accurate Git terminology inside setup and errors; “Back up &amp; sync” must not imply automatic cloud backup.</li><li>Store command-bar controls as members and refresh them for: no project, loose script, connected project, dirty/saved, fixable problems, Ren’Py unavailable/configured/running.</li><li>Add an <code>EditorNotebook</code> document-state callback. Unify Save and Save As completion so status/history promises are consistent.</li><li>Do not rename internal AUI pane identifiers or command IDs.</li></ul>
+    <p><strong>Likely files:</strong> <code>src/ui/main_frame.{h,cpp}</code>, <code>src/ui/editor_notebook.{h,cpp}</code>, <code>src/ui/snapshot_dialog.cpp</code>, possibly new <code>src/ui/commands.{h,cpp}</code>.</p>
+    <p><strong>Acceptance:</strong> at 820×560 and 200% scaling, the primary bar does not overflow; keyboard focus is visible; Save status distinguishes disk save from local history; all advanced commands remain reachable.</p>
+  </section>
+
+  <section class="card phase"><span class="tag p1">Phase 2 · P1</span><h3>Welcome, onboarding, and safe project creation</h3>
+    <ul><li>Add <code>WelcomePanel</code> with Start a new story, Open a game, Open a script, and recent games.</li><li>Change startup sequencing: restore valid workspace first; show welcome only when there is no usable restored content. Avoid startup flash and disposable <code>scene-1.rpy</code>.</li><li>Add a versioned onboarding state with backward-compatible missing-key defaults. Derive checklist milestones from real events where possible.</li><li>Add <code>core/project_creation.*</code> and <code>NewProjectDialog</code>. Separate pure planning/preflight from filesystem application; define rollback/collision behavior.</li><li>Offer “Start new writing” as a natural-language draft that explicitly becomes Ren’Py through the existing review flow. Do not label it a reversible mode.</li></ul>
+    <p><strong>Likely files:</strong> new <code>src/ui/welcome_panel.*</code>, <code>src/ui/new_project_dialog.*</code>, <code>src/core/project_creation.*</code>; changes to <code>main_frame</code>, <code>editor_notebook</code>, <code>app/settings</code>, CMake, and tests.</p>
+    <p><strong>Acceptance:</strong> restored users never lose or bypass their workspace; project creation never overwrites; first-time users can create/open, write dialogue, review conversion, save, and preview using keyboard-only navigation.</p>
+  </section>
+
+  <section class="card phase"><span class="tag p2">Phase 3 · P2</span><h3>Guided problems and contextual repair</h3>
+    <ul><li>Add plain explanations and optional “Technical details.”</li><li>Introduce stable diagnostic/fix IDs and targeted core repair functions.</li><li>Surface “Fix N problems” only when actionable; show preview, cancel, apply, undo, and snapshot protection.</li><li>Keep ambiguous diagnostics advisory; do not broaden auto-fix heuristics merely to increase the count.</li></ul>
+    <p><strong>Likely files:</strong> <code>src/core/diagnostics.*</code>, <code>src/ui/diagnostics_panel.*</code>, <code>main_frame</code>, diagnostic tests.</p>
+  </section>
+
+  <section class="card phase"><span class="tag p2">Phase 4 · P2</span><h3>Visual Insert tools</h3>
+    <ul><li>Add an Insert menu/button for character, dialogue, choice, background/scene, music/sound, and jump.</li><li>Reuse <code>AssetPanel</code>’s typed insertion-handler pattern.</li><li>Put generation and validation in <code>core/script_builder.*</code>; UI dialogs only gather fields and preview output.</li><li>Validate escaping, caret indentation/context, duplicate aliases/labels, and jump targets. Definitions may need insertion into a known definitions file instead of at the caret.</li></ul>
+    <p><strong>Acceptance:</strong> every insertion is previewable and one-step undoable; generated code parses; invalid context gives a plain next action.</p>
+  </section>
+
+  <section class="card phase"><span class="tag defer">Phase 5 · Defer pending design</span><h3>Persistent writer-first document model</h3>
+    <p>Only build a Writing/Code dual view after deciding how manuscript source, generated script, manual code edits, unsupported constructs, workspace restoration, export, and conflicts coexist. This likely requires an AST or source map plus explicit unsupported-code representation.</p>
+    <p><strong>Do not:</strong> auto-convert on every keystroke/save, store natural prose as temporarily invalid <code>.rpy</code> without a clear contract, or imply lossless round trips.</p>
+  </section>
+
+  <h2>Task backlog</h2>
+  <table><thead><tr><th>Priority</th><th>Task</th><th>Risk</th><th>Primary verification</th></tr></thead><tbody>
+    <tr><td>P1</td><td>Centralize command metadata and contextual bar state</td><td>Label drift; focus order; scaling overflow</td><td>State matrix UI tests + manual 820×560/200%</td></tr>
+    <tr><td>P1</td><td>Add save/dirty/history status events</td><td>Misleading backup claims; Save As inconsistency</td><td>Save failure/success, snapshot creation, exact copy tests</td></tr>
+    <tr><td>P1</td><td>Add welcome lifecycle</td><td>Competes with workspace restore; unsaved-tab loss</td><td>Fresh/empty/restored/recent-project startup tests</td></tr>
+    <tr><td>P1</td><td>Add transactional project creation</td><td>Overwrite or partial project</td><td>Collision, invalid path, rollback, valid discovery tests</td></tr>
+    <tr><td>P1</td><td>Add versioned onboarding persistence</td><td>Hand-written JSON compatibility</td><td>Missing/old/new key round-trip tests</td></tr>
+    <tr><td>P2</td><td>Friendly diagnostic presentation and stable fix IDs</td><td>Repair coupled to copy; ambiguous mutation</td><td>Mapping, targeted fix, preview/cancel/apply/undo tests</td></tr>
+    <tr><td>P2</td><td>Add typed script builders</td><td>Indentation, escaping, definitions placement</td><td>Pure generator/parser tests + one-step undo UI tests</td></tr>
+    <tr><td>Defer</td><td>True Writing/Code round-trip model</td><td>High data-loss and expectation risk</td><td>Design decision record and round-trip corpus first</td></tr>
+  </tbody></table>
+
+  <h2>Test and verification strategy</h2>
+  <p>The current build registers 224 tests. Core coverage is broad, but the only dedicated wx UI target is <code>say-count-chat-ui-tests</code>; it does not instantiate <code>MainFrame</code>. Add <code>say-count-main-ui-tests</code> or isolate new components/state reducers so they can be tested without the whole frame.</p>
+  <ul><li><strong>Automated UI:</strong> welcome actions/copy/focus order; restored workspace precedence; contextual command states; onboarding persistence; save/history indicators; dialog cancel/apply behavior.</li><li><strong>Core:</strong> project creation preflight/apply/rollback; settings backward compatibility; diagnostic action IDs; builder escaping/indentation; manuscript choice/stage-direction extensions.</li><li><strong>Manual accessibility:</strong> keyboard-only flow, focus restoration after state changes, screen-reader names/roles/status announcements, 200% scaling, light/dark/system/high-contrast behavior, and no color-only meaning.</li><li><strong>Regression:</strong> workspace restore, dirty prompts, external conflicts, snapshots, manuscript preview/undo, project discovery, command shortcuts, and AUI layout restoration.</li></ul>
+  <pre>cmake --build build -j2 --target say-count
+ctest --test-dir build --output-on-failure
+install -m 755 build/say-count /home/artemis/.local/bin/say-count
+sha256sum build/say-count /home/artemis/.local/bin/say-count</pre>
+  <p class="small">Per <code>AGENTS.md</code>, implementation handoffs are incomplete until the verified build is installed for the application launcher and both SHA-256 hashes match. Do not install when build or required tests fail.</p>
+
+  <h2>Decisions required before implementation</h2>
+  <div class="card unknown"><ul><li>Does “Start a new story” create a complete Ren’Py project, a Say Count writing draft, or offer both?</li><li>Should project creation call an installed Ren’Py SDK’s canonical generator or own a minimal versioned template?</li><li>Is welcome shown only on first launch, whenever the workspace is empty, or as a reusable Home page?</li><li>Where do natural-writing drafts live: <code>.txt</code>/<code>.md</code>, a dedicated format, or project sidecars?</li><li>Which checklist milestones are useful without feeling like mandatory setup?</li><li>Which beginner-facing Git promise is truthful across repositories with no remote or credentials?</li></ul></div>
+
+  <h2>Do not change yet</h2>
+  <ul><li>Do not change <code>workspace.dat</code> positional format without an explicit version/migration.</li><li>Do not remove technical menus or shortcuts; simplify the primary surface.</li><li>Do not rename stable AUI pane names used in saved layouts.</li><li>Do not bypass manuscript review, Undo, snapshot protection, external conflict handling, or dirty-close prompts.</li><li>Do not mix wxWidgets concerns into core conversion/project-generation modules.</li><li>Do not call app-local history “cloud backup.”</li></ul>
+
+  <h2>Suggested approval boundary</h2>
+  <p>Approve and implement <strong>Phase 1 only</strong> first. It offers immediate noncoder value with low data-model risk and produces the document-state/command-state seams needed by the welcome experience. Review its screenshots and keyboard flow before beginning Phase 2.</p>
+</main></body></html>

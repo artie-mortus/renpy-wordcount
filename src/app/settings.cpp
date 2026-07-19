@@ -143,6 +143,8 @@ EditorSettings Settings::LoadEditor() const {
         result.offline_ai_runner_path = wxString::FromUTF8(*path);
     if (const auto path = ReadString(*contents, "offlineAiModelPath"))
         result.offline_ai_model_path = wxString::FromUTF8(*path);
+    if (const auto version = ReadInt(*contents, "onboardingVersion"))
+        result.onboarding_version = std::max(0, *version);
     return result;
 }
 
@@ -194,7 +196,8 @@ bool Settings::Write(const std::optional<WindowSettings>& window, const EditorSe
            << "    \"offlineAiRunnerPath\": \""
            << JsonEscape(editor.offline_ai_runner_path.ToStdString(wxConvUTF8)) << "\",\n"
            << "    \"offlineAiModelPath\": \""
-           << JsonEscape(editor.offline_ai_model_path.ToStdString(wxConvUTF8)) << "\"\n"
+           << JsonEscape(editor.offline_ai_model_path.ToStdString(wxConvUTF8)) << "\",\n"
+           << "    \"onboardingVersion\": " << editor.onboarding_version << "\n"
            << "  },\n"
            << "  \"recentProjects\": [";
     for (std::size_t index = 0; index < recent_projects.size(); ++index) {

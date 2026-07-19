@@ -34,12 +34,12 @@ wxString SnapshotName(const SnapshotMetadata& snapshot) {
 
 SnapshotDialog::SnapshotDialog(wxWindow* parent, SnapshotStore& store,
                                const std::vector<NamedScript>& current)
-    : wxDialog(parent, wxID_ANY, "Snapshots", wxDefaultPosition, wxSize(820, 600),
+    : wxDialog(parent, wxID_ANY, "Version History", wxDefaultPosition, wxSize(820, 600),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
       store_(store), current_(current), snapshots_(store.List()) {
     auto* layout = new wxBoxSizer(wxVERTICAL);
     layout->Add(new wxStaticText(this, wxID_ANY,
-        "Select a snapshot to preview how it differs from the current editor state."),
+        "Select a saved version to preview how it differs from your current writing."),
         0, wxEXPAND | wxALL, 10);
     list_ = new wxListBox(this, wxID_ANY);
     for (const auto& snapshot : snapshots_) list_->Append(SnapshotName(snapshot));
@@ -48,7 +48,7 @@ SnapshotDialog::SnapshotDialog(wxWindow* parent, SnapshotStore& store,
                               wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
     layout->Add(preview_, 1, wxEXPAND | wxALL, 10);
     auto* actions = new wxStdDialogButtonSizer();
-    auto* restore = new wxButton(this, wxID_OK, "Restore Selected...");
+    auto* restore = new wxButton(this, wxID_OK, "Restore selected version...");
     actions->AddButton(restore);
     actions->AddButton(new wxButton(this, wxID_CANCEL, "Close"));
     actions->Realize();
@@ -59,7 +59,7 @@ SnapshotDialog::SnapshotDialog(wxWindow* parent, SnapshotStore& store,
         ShowSelection();
         restore->Enable(selected_id_.has_value());
     });
-    if (snapshots_.empty()) preview_->SetValue("No snapshots have been stored yet.");
+    if (snapshots_.empty()) preview_->SetValue("No earlier versions have been saved yet.");
     else { list_->SetSelection(0); ShowSelection(); restore->Enable(true); }
     CentreOnParent();
 }
