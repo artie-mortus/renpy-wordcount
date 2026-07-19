@@ -10,17 +10,35 @@ This contract targets `robo-barbie/chat_program` commit
 | `ChatCharacter(name)` | Yes | Yes | Display name becomes the manuscript speaker |
 | `icon=` | Yes | Yes | Reported as metadata loss |
 | `name_color=` | Yes | Yes | Reported as metadata loss |
-| `is_player=` | Yes | Yes | Reported as metadata loss |
+| `is_player=` | Yes | Yes | Manuscript: emitted as `[I am Name]`; Ren'Py say output: metadata loss |
 | Chat say statement | Yes | Yes | Becomes `Name: text` or an ordinary Ren'Py say statement |
-| `c=` channel | Yes | Yes | Inherited until changed; explicit changes are reported as losses |
-| `ot=` alias | Yes | Yes | Reported as metadata loss |
-| `ot=[...]` aliases | Yes | Yes | Order is preserved and reported as metadata loss |
-| `fastmode=` finite non-negative number | Yes | Yes | Reported as metadata loss |
-| `menu:` choice branches | Yes | Yes | Branch order and contents are preserved |
+| `c=` channel | Yes | Yes | Manuscript: emitted as `[in channel]` on change; Ren'Py say output: loss |
+| `ot=` alias | Yes | Yes | Manuscript: emitted as `[Name is typing]`; Ren'Py say output: loss |
+| `ot=[...]` aliases | Yes | Yes | Manuscript: `[A and B are typing]`, order preserved; Ren'Py say output: loss |
+| `fastmode=` finite non-negative number | Yes | Yes | Manuscript: `[fast]`/`[fast N]`/`[normal speed]` on change; Ren'Py say output: loss |
+| `menu:` choice branches | Yes | Yes | Manuscript: `Choice:` block with `- option` lines; branch order and contents preserved |
 | `auto_send=False` | Yes | Yes | Reported as metadata loss in regular dialogue |
 | Ordinary Ren'Py narration | Yes | Yes | Preserved as narration |
 | Unknown say arguments | Yes | Yes | Preserved verbatim with a warning |
 | Other Ren'Py/Python lines | Passthrough | Passthrough | Never executed; preserved verbatim |
+
+## Prose stage directions (forward conversion)
+
+Natural-language directives on their own line convert to chat arguments:
+
+| Prose | Emitted |
+|---|---|
+| `[in #room]`, `[to Name]`, `[channel X]`, `[room X]`, `[chat with X]`, `[switch to X]`, `[#room]` | `c="..."` on the next message; inherited afterwards |
+| `[Name is typing]`, `[A and B are typing]`, `[A, B are typing]` | `ot=` on the next message; unknown names create a `ChatCharacter` |
+| `[fast]` (0.1), `[very fast]` (0.05), `[quickly]` (0.1), `[fast N]` | `fastmode=N` on following messages until reset |
+| `[normal speed]`, `[normal]`, `[normal pace]` | stops emitting `fastmode` |
+| `[I am Name]`, `[player is Name]`, `[you are Name]` | `is_player=True` on that generated character |
+| Speaker written `Me:` or `I:` | that character gets `is_player=True` automatically |
+| `Choice:` / `Choices:` / `Menu:` / `Options:` header, then `- option` (or `*` / `>`) lines; indented lines under an option are its branch | `menu:` block with quoted options and branch contents |
+
+Unrecognized `[...]` lines stay in the scene as narration and produce a
+warning. Nested `Choice:` blocks inside a branch are not structurally
+converted (warned, kept as narration).
 
 ## Deliberate limits
 

@@ -20,6 +20,7 @@ class wxStaticText;
 class wxTextCtrl;
 class wxButton;
 class wxDataViewListCtrl;
+class wxHtmlWindow;
 
 namespace say_count::ui {
 
@@ -46,6 +47,7 @@ private:
 
     void RequestConversion();
     ChatConversion Convert(const ConversionRequest& request) const;
+    std::string BuildVisualHtml() const;
     void WorkerLoop();
     void OnConversionReady(wxThreadEvent& event);
 
@@ -54,7 +56,9 @@ private:
     std::map<std::string, std::string> existing_characters_;
     ChatConversion conversion_;
     wxTextCtrl* channel_ = nullptr;
+    wxStaticText* channel_label_ = nullptr;
     wxRadioBox* app_style_ = nullptr;
+    wxHtmlWindow* visual_ = nullptr;
     wxCheckBox* wrap_bridge_ = nullptr;
     wxCheckBox* chat_narration_ = nullptr;
     wxTextCtrl* narrator_alias_ = nullptr;

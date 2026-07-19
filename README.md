@@ -7,36 +7,44 @@ caret/scroll positions, active tab, connected project, and dock layout. Use
 `Ctrl+P` to search project files, labels, and characters, or `Ctrl+Shift+P` to
 search application commands.
 
-## Chat format conversion
+## Chat scenes (prose ↔ messenger)
 
-Use **Edit → Convert to Chat Format…** to turn selected prose/dialogue (or the
-whole active tab) into syntax for
+Use **Edit → Turn Writing Into a Chat Scene…** to turn selected prose/dialogue
+(or the whole active tab) into syntax for
 [`robo-barbie/chat_program`](https://github.com/robo-barbie/chat_program).
-Choose a default channel, review the generated `ChatCharacter` definitions and
-messages, then replace the source as one undoable edit. Use **Convert Chat to
-Dialogue…** for the reverse direction, either as readable `Name: text`
-manuscript or ordinary Ren'Py say statements. The preview reports chat-only
-channel, typing, timing, and choice metadata that regular dialogue cannot keep.
+Everything can be written as natural language: `Me:` marks the player,
+screenplay-style stage directions handle chat mechanics (`[in #ops]`,
+`[Robo is typing]`, `[fast]`, `[normal speed]`, `[I am Eileen]`), and a
+`Choice:` line followed by `- option` lines (with indented follow-up) becomes a
+player-reply menu — the converter writes all of the code. Pick
+a look (Discord-style channels or Kik-style messenger), check the
+**What players will see** preview tab — the raw generated code is on the
+**Script code** tab — and click **Use this** to replace the source as one
+undoable edit. By default the output is a complete scene that opens the chat
+app and returns to normal VN dialogue at the end; narrator handling and
+character short-code mapping live under **Advanced options**. Use
+**Turn Chat Scene Back Into Dialogue…** for the reverse direction, either as
+readable `Name: text` manuscript or ordinary Ren'Py say statements; the preview
+lists chat-only channel, typing, timing, and choice metadata that regular
+dialogue cannot keep. The in-app walkthrough is at
+**Help → Chat Format Guide…**.
 
-For a connected Ren'Py project, **Edit → Install/Update Chat Runtime…** installs
-the pinned, licensed upstream runtime under `game/vendor/chat_program`. Existing
-files that differ are treated as local customizations and are never overwritten.
-When the runtime itself is customized, Say Count can export the pinned upgrade
-beside the project for manual comparison; it does not place a second active
-runtime inside `game/`.
+For a connected Ren'Py project, **Edit → Install/Update Chat App Files…**
+installs the pinned, licensed upstream runtime under `game/vendor/chat_program`
+(Say Count also offers this automatically after a conversion when the runtime
+is missing). Existing files that differ are treated as local customizations and
+are never overwritten. When the runtime itself is customized, Say Count can
+export the pinned upgrade beside the project for manual comparison; it does not
+place a second active runtime inside `game/`.
 Say Count does not edit `screens.rpy`; projects using chat-specific choice-screen
 behavior should apply the upstream screen customization manually.
 
 Use `call say_count_chat_begin("#general")` to enter the installed chat screen
 and `call say_count_chat_end` to hide it and resume normal VN dialogue. See the
-complete transition example in `resources/chat_program/INTEGRATION.md`.
-
-Two presentation skins render the same scenes: Discord-style channels (the
-upstream screen) and a Kik-style messenger with chat bubbles and a thread
-list. The conversion dialog asks which app style a scene targets and can wrap
-the output in the matching `say_count_chat_begin(..., skin="kik")` /
-`say_count_chat_end` calls. The project default lives in
-`game/say_count_chat_config.rpy` (`say_count_chat_skin`).
+complete transition example in `resources/chat_program/INTEGRATION.md`. The
+skin argument (`say_count_chat_begin(..., skin="kik")`) selects the messenger
+look per scene; the project default lives in `game/say_count_chat_config.rpy`
+(`say_count_chat_skin`).
 
 ## Build
 

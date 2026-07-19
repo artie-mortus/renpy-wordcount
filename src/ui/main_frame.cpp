@@ -654,12 +654,12 @@ void MainFrame::BuildMenus() {
     edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
     edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
                  "Convert selected prose, or the entire active editor, to Ren'Py script");
-    edit->Append(kConvertToChat, "Convert to &Chat Format...",
-                 "Convert selected prose/dialogue, or the active editor, to chat_program syntax");
-    edit->Append(kConvertChatToDialogue, "Convert Chat to &Dialogue...",
-                 "Convert selected chat_program syntax, or the active editor, to regular dialogue");
-    edit->Append(kInstallChatRuntime, "Install/Update Chat &Runtime...",
-                 "Install the pinned chat_program runtime without overwriting local changes");
+    edit->Append(kConvertToChat, "Turn Writing Into a &Chat Scene...",
+                 "Turn the selected writing (or the whole tab) into a phone/messenger scene");
+    edit->Append(kConvertChatToDialogue, "Turn Chat Scene Back Into &Dialogue...",
+                 "Turn a chat scene (selected, or the whole tab) back into normal writing");
+    edit->Append(kInstallChatRuntime, "Install/Update Chat &App Files...",
+                 "Add the chat app to your game project; your own files are never overwritten");
     edit->Append(kConfigureOfflineProseAi, "Configure &Offline Prose AI...",
                  "Optionally improve prose interpretation with a network-blocked local model");
     edit->Append(kFixIndents, "Fix &Indents...", "Preview and repair indentation in the active file");
@@ -1952,9 +1952,9 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
         {"Toggle built-in Vim motions", "Normal/insert modes · Edit", kToggleNvimMotions},
         {"Convert prose to Ren'Py", "Edit", kWriteManuscript},
-        {"Convert to Chat Format", "Edit", kConvertToChat},
-        {"Convert Chat to Dialogue", "Edit", kConvertChatToDialogue},
-        {"Install/Update Chat Runtime", "Edit", kInstallChatRuntime},
+        {"Turn writing into a chat scene", "Edit", kConvertToChat},
+        {"Turn chat scene back into dialogue", "Edit", kConvertChatToDialogue},
+        {"Install/update chat app files", "Edit", kInstallChatRuntime},
         {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
         {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
         {"Toggle outline", "View", kShowOutline}, {"Toggle speaker statistics", "View", kShowSpeakerStats},
@@ -2065,6 +2065,19 @@ void MainFrame::OnConvertChat(wxCommandEvent& event) {
     }
     SetStatusText(wxString::Format("Converted %zu messages · %zu metadata losses · Undo restores it",
                                   conversion.messages, conversion.losses.size()));
+    if (to_chat && project_) {
+        std::error_code probe;
+        const auto runtime = std::filesystem::path(project_->scripts_root) /
+            "vendor" / "chat_program" / "chat_program.rpy";
+        if (!std::filesystem::exists(runtime, probe) &&
+            wxMessageBox("Your chat scene is in the script, but the chat app itself is not "
+                         "installed in this project yet, so the scene cannot play in the game.\n\n"
+                         "Install the chat app files now? Your writing will not be touched.",
+                         "Install the chat app?", wxYES_NO | wxICON_QUESTION, this) == wxYES) {
+            wxCommandEvent install;
+            OnInstallChatRuntime(install);
+        }
+    }
 }
 
 void MainFrame::OnInstallChatRuntime(wxCommandEvent&) {

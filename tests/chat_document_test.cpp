@@ -68,8 +68,9 @@ TEST_CASE("manuscript converts to chat and chat returns readable dialogue with l
         "default e = ChatCharacter(\"Eileen\")\n"
         "label start:\n"
         "    e \"Hello.\" (c=\"#side\", ot=mc, fastmode=0.1)\n");
-    CHECK(dialogue.text == "label start:\nEileen: Hello.\n");
-    CHECK(dialogue.losses.size() == 3);
+    CHECK(dialogue.text ==
+          "label start:\n[in #side]\n[mc is typing]\n[fast]\nEileen: Hello.\n");
+    CHECK(dialogue.losses.empty());
 }
 
 TEST_CASE("chat parser rejects oversized input and preserves unsupported code") {
@@ -134,12 +135,12 @@ TEST_CASE("narration becomes chat only with an explicit narrator selection") {
     CHECK(chat.text.find("system \"Rain fell.\"") != std::string::npos);
 }
 
-TEST_CASE("reverse conversion reports player icon and color metadata") {
+TEST_CASE("reverse conversion reports icon and color metadata but keeps the player") {
     const auto converted = convert_chat_to_manuscript(
         "default mc = ChatCharacter(\"Player\", icon=\"p.png\", name_color=\"#abc\", is_player=True)\n"
         "mc \"Hi.\"\n");
-    CHECK(converted.text == "Player: Hi.\n");
-    CHECK(converted.losses.size() == 3);
+    CHECK(converted.text == "[I am Player]\nPlayer: Hi.\n");
+    CHECK(converted.losses.size() == 2);
 }
 
 TEST_CASE("chat choices preserve auto_send and branch messages") {
@@ -255,6 +256,64 @@ TEST_CASE("conversion can wrap scenes in bridge calls for an app style") {
 
     const auto plain = convert_manuscript_to_chat("Eileen: hey.\n");
     CHECK(plain.text.find("say_count_chat_begin") == std::string::npos);
+}
+
+TEST_CASE("stage directions convert to chat arguments without writing code") {
+    const auto chat = convert_manuscript_to_chat(
+        "[I am Mel]\n"
+        "Mel: hey\n"
+        "[in #ops]\n"
+        "[Robo is typing]\n"
+        "[fast]\n"
+        "Robo: on my way\n"
+        "Robo: two minutes\n"
+        "[normal speed]\n"
+        "Mel: ok\n", "#general");
+    CHECK(chat.messages == 4);
+    CHECK(chat.text.find("default mel = ChatCharacter(\"Mel\", is_player=True)") != std::string::npos);
+    CHECK(chat.text.find("c=\"#ops\"") != std::string::npos);
+    CHECK(chat.text.find("ot=robo") != std::string::npos);
+    CHECK(chat.text.find("fastmode=0.1") != std::string::npos);
+    CHECK(chat.text.find("mel \"ok\"\n") != std::string::npos);
+}
+
+TEST_CASE("a speaker named Me becomes the player automatically") {
+    const auto chat = convert_manuscript_to_chat("Me: hi\nRobo: hey\n");
+    CHECK(chat.text.find("is_player=True") != std::string::npos);
+}
+
+TEST_CASE("natural choice blocks become chat menus with branches") {
+    const auto chat = convert_manuscript_to_chat(
+        "Robo: you coming?\n"
+        "Choice:\n"
+        "- Sounds good\n"
+        "    Robo: nice\n"
+        "- No way\n", "#general");
+    CHECK(chat.choices == 2);
+    CHECK(chat.messages == 2);
+    CHECK(chat.text.find("menu:") != std::string::npos);
+    CHECK(chat.text.find("\"Sounds good\":") != std::string::npos);
+    CHECK(chat.text.find("robo \"nice\"") != std::string::npos);
+    CHECK(chat.text.find("\"No way\":") != std::string::npos);
+}
+
+TEST_CASE("unrecognized stage directions become narration with a warning") {
+    const auto chat = convert_manuscript_to_chat("[dramatic pause]\nRobo: hi\n");
+    CHECK_FALSE(chat.document.diagnostics.empty());
+    CHECK(chat.messages == 1);
+    CHECK(chat.narration == 1);
+}
+
+TEST_CASE("stage directions and choices survive a full round trip") {
+    const auto chat = convert_manuscript_to_chat(
+        "[in #ops]\nRobo: go\nChoice:\n- ok\n", "#general");
+    const auto back = convert_chat_to_manuscript(chat.text);
+    CHECK(back.losses.empty());
+    CHECK(back.text.find("[in #ops]") != std::string::npos);
+    CHECK(back.text.find("Choice:\n- ok") != std::string::npos);
+    const auto again = convert_manuscript_to_chat(back.text, "#general");
+    CHECK(again.choices == 1);
+    CHECK(again.text.find("c=\"#ops\"") != std::string::npos);
 }
 
 TEST_CASE("labels comments and blank lines survive chat to dialogue") {
