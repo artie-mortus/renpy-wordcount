@@ -9,6 +9,7 @@ file(COPY "${SOURCE}/tests/fixtures/chat_program/runtime_project/game/"
 file(COPY
     "${SOURCE}/resources/chat_program/chat_program.rpy"
     "${SOURCE}/resources/chat_program/say_count_chat_bridge.rpy"
+    "${SOURCE}/resources/chat_program/say_count_chat_kik.rpy"
     "${SOURCE}/resources/chat_program/LICENSE.txt"
     "${SOURCE}/resources/chat_program/NOTICE"
     DESTINATION "${WORK}/game/vendor/chat_program")

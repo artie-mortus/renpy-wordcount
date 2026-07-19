@@ -5,11 +5,11 @@
   "api": 1,
   "files": {
     "chat_program.rpy": "1976a6e342fa7b6c1ac7def51d40909ef2e27aee9bd266b11d34dbc9d0b144a1",
-    "say_count_chat_bridge.rpy": "1f2586f704a9d47bfa54963a070d78a319f06ee9f80caf8061ead0a9b5f3bea7",
+    "say_count_chat_bridge.rpy": "58f792f950fe6da118d8ebb54aeca814851137cc28d55c87e6d2721e9a6db89c",
     "LICENSE.txt": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e",
     "NOTICE": "7e6b05ba5a0d9a9ba074eef1975a5d7cb4a4061681e2404f1fdd6b7cb32a48ac",
-    "INTEGRATION.md": "bb2a65195733f197f9dcef2b3908a4c5355fdc0c5851a44480144545263feecf",
-    "say_count_chat_config.rpy": "54281a1dcf1b6106ca6495320a259c80cf2a075e3e014d9ddc780074292e205b",
+    "INTEGRATION.md": "3bdf5daceb39b5d9913f789796513c9dc169f52a37f4a48f5fd4c6e0a3436079",
+    "say_count_chat_config.rpy": "a225e2a6c0c2e67367346cca8f25e03f70bbebe00b07ebca1ec1fdd24b49d977",
     "audio/ping.mp3": "9d556325aaf2386ee7a06e5fe5a6e72caf9da3d8a9f8f3eb2ba13a4a38a960dd",
     "audio/ping_other.mp3": "c54d088fa2709e6b3c9ce87594a9187d0d5338d3a8c683271f9c4353a8ee8c91",
     "images/chat ui/button_pause_hover.png": "4b1d20042272d44af2bf55a14d4fa72410aab337c41ec1458cfaadb9b11c4913",
@@ -22,6 +22,7 @@
     "images/chat ui/button_speed_1_idle.png": "31b3b2ef656e721bbe23f52c0d94612b858f35cb7f54d3ec9f003c800c6eca3b",
     "images/chat ui/button_speed_2_hover.png": "fa0f76c50cb191bd361792e32f5364a1777b6ffbb4cdbc330be95591c01daadd",
     "images/chat ui/button_speed_2_idle.png": "4970c0940a40c3f5bd60b25d6c95a8586dd4c54b0b2efb1da68d24acf7737281",
-    "images/chat ui/chat_window.png": "316c4d6acb3342638450836fb58cdfbb99ef9f08a179fd6cb02bca2dff246f4a"
+    "images/chat ui/chat_window.png": "316c4d6acb3342638450836fb58cdfbb99ef9f08a179fd6cb02bca2dff246f4a",
+    "say_count_chat_kik.rpy": "cf7c8d49a11b1fb1bed55bdd9343c2ebb80cc29a4b720758ba7d988c891ad4fa"
   }
 }

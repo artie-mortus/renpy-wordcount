@@ -6,6 +6,7 @@
 - Production Desk includes prose analysis, voice tracking/exports, translation gaps, continuity notes, and accessibility findings.
 - Fix Indents provides a confirmed preview and snapshot before applying tab/four-space normalization.
 - Chat Format converts prose/dialogue to and from chat_program syntax (pinned upstream 85ee08d), installs the runtime without overwriting local edits, bridges in/out of the chat screen via say_count_chat_begin/end, and ships an in-app Chat Format Guide under Help.
+- Chat scenes render through two vendored skins — Discord-style channels or a Kik-style bubble messenger (say_count_chat_kik.rpy); the conversion dialog asks per scene and can wrap output in skin-aware bridge calls.
 - Release 1.0.0 builds optimized and stripped; the bundled-wx option produces a 16 MiB binary with wxWidgets linked statically.
 - Linux installation includes the executable, desktop entry, SVG icon, Ren'Py MIME registration, command-line `.rpy` opening, and uninstall target.
 - AppImage staging is locally verified; the packaging script and tagged/manual GitHub workflow use linuxdeploy and appimagetool.

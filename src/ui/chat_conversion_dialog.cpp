@@ -10,6 +10,7 @@
 #include <wx/clipbrd.h>
 #include <wx/dataview.h>
 #include <wx/html/htmlwin.h>
+#include <wx/radiobox.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
@@ -87,6 +88,25 @@ current channel; add arguments only where something changes:</p>
 <tt>auto_send=False</tt> for choices the player must confirm.</p>
 
 <hr>
+<h2>App styles: Discord or Kik</h2>
+<p>The conversion dialog asks which app the scene should look like. Both styles
+use identical syntax and the same message engine; only the installed screen
+changes.</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<b>Discord-style channels</b> shows a server sidebar with <tt>#channel</tt>
+tabs and flat, avatar-led messages.<br><br>
+<b>Kik-style messenger</b> shows a portrait phone with chat bubbles: the
+player's messages align right, contacts align left with avatar and name, and a
+thread list replaces the channel sidebar. Name channels after contacts
+(<tt>c="Eileen"</tt>) so each reads as a direct-message thread.
+</td></tr></table>
+<p>Tick <b>Wrap scene in say_count_chat_begin/end calls</b> to emit a
+self-contained scene that opens the chosen app and returns to normal VN
+dialogue at the end. Leave it off when converting a fragment for a scene that
+already has bridge calls. A project-wide default lives in
+<tt>say_count_chat_config.rpy</tt> (<tt>say_count_chat_skin</tt>).</p>
+
+<hr>
 <h2>Entering and leaving the chat app</h2>
 <p>Mix chat and normal VN scenes in one script with the bundled bridge labels:</p>
 <table width="100%" cellpadding="10" bgcolor="#17243A"><tr><td><font color="#FFFFFF"><tt>
@@ -142,7 +162,8 @@ void ShowChatGuide(wxWindow* parent) {
 ChatConversion ChatConversionDialog::Convert(const ConversionRequest& request) const {
     ChatConversion conversion = to_chat_
         ? convert_manuscript_to_chat(source_, request.channel, existing_characters_,
-            request.chat_narration ? request.narrator_alias : std::string{}, "Narrator")
+            request.chat_narration ? request.narrator_alias : std::string{}, "Narrator",
+            request.bridge_skin)
         : convert_chat_to_manuscript(source_, request.ordinary_renpy);
     if (!to_chat_) return conversion;
 
@@ -172,7 +193,8 @@ ChatConversion ChatConversionDialog::Convert(const ConversionRequest& request) c
         }
     };
     remap(remap, &conversion.document.events);
-    conversion.text = format_chat_program(conversion.document);
+    conversion.text = format_chat_program(conversion.document, "chat_scene", true,
+                                          request.bridge_skin);
     return conversion;
 }
 
@@ -189,6 +211,11 @@ ChatConversionDialog::ChatConversionDialog(wxWindow* parent, std::string_view so
     heading->SetFont(style::BodyFont(14, wxFONTWEIGHT_BOLD));
     layout->Add(heading, 0, wxALL, 16);
     if (to_chat_) {
+        const wxString styles[] = {"Discord-style channels", "Kik-style messenger"};
+        app_style_ = new wxRadioBox(this, wxID_ANY, "App style", wxDefaultPosition,
+                                    wxDefaultSize, 2, styles, 2, wxRA_SPECIFY_COLS);
+        app_style_->SetName("Chat app style");
+        layout->Add(app_style_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
         auto* row = new wxBoxSizer(wxHORIZONTAL);
         row->Add(new wxStaticText(this, wxID_ANY, "Default channel"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
         channel_ = new wxTextCtrl(this, wxID_ANY, "#general");
@@ -196,6 +223,29 @@ ChatConversionDialog::ChatConversionDialog(wxWindow* parent, std::string_view so
         row->Add(channel_, 1);
         layout->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
         channel_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RequestConversion(); });
+        app_style_->Bind(wxEVT_RADIOBOX, [this](wxCommandEvent&) {
+            // A channel reads as a contact/thread name in the messenger style;
+            // only swap the value if the user has not customized it.
+            const bool kik = app_style_->GetSelection() == 1;
+            if (kik && channel_->GetValue() == "#general") {
+                std::string contact = "dms";
+                for (const auto& character : conversion_.document.characters) {
+                    if (character.is_player) continue;
+                    contact = character.name;
+                    break;
+                }
+                channel_->ChangeValue(wxString::FromUTF8(contact));
+            } else if (!kik && (channel_->GetValue() == "dms" ||
+                                channel_->GetValue().Find('#') == wxNOT_FOUND)) {
+                channel_->ChangeValue("#general");
+            }
+            RequestConversion();
+        });
+        wrap_bridge_ = new wxCheckBox(this, wxID_ANY,
+            "Wrap scene in say_count_chat_begin/end calls for the chosen app style");
+        wrap_bridge_->SetName("Wrap in chat bridge calls");
+        layout->Add(wrap_bridge_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+        wrap_bridge_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { RequestConversion(); });
         auto* narration_row = new wxBoxSizer(wxHORIZONTAL);
         chat_narration_ = new wxCheckBox(this, wxID_ANY, "Send narration as chat messages using alias");
         chat_narration_->SetName("Send narration as chat messages");
@@ -305,6 +355,8 @@ void ChatConversionDialog::RequestConversion() {
     request.chat_narration = chat_narration_ && chat_narration_->GetValue();
     request.narrator_alias = narrator_alias_
         ? narrator_alias_->GetValue().ToStdString(wxConvUTF8) : std::string{};
+    if (wrap_bridge_ && wrap_bridge_->GetValue())
+        request.bridge_skin = app_style_ && app_style_->GetSelection() == 1 ? "kik" : "discord";
     request.ordinary_renpy = ordinary_renpy_ && ordinary_renpy_->GetValue();
     request.alias_overrides = alias_overrides_;
     {

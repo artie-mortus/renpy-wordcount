@@ -13,6 +13,7 @@
 #include <wx/clipbrd.h>
 #include <wx/frame.h>
 #include <wx/init.h>
+#include <wx/radiobox.h>
 #include <wx/stc/stc.h>
 #include <wx/textctrl.h>
 
@@ -45,12 +46,18 @@ TEST_CASE("chat conversion dialog exposes keyboard-accessible forward controls")
     say_count::ui::ChatConversionDialog dialog(nullptr, "Robo: Hello", true,
                                                 {{"r", "Robo"}});
     auto* channel = Named<wxTextCtrl>(dialog, "Default chat channel");
+    auto* app_style = Named<wxRadioBox>(dialog, "Chat app style");
+    auto* wrap = Named<wxCheckBox>(dialog, "Wrap in chat bridge calls");
     auto* narration = Named<wxCheckBox>(dialog, "Send narration as chat messages");
     auto* preview = Named<wxTextCtrl>(dialog, "Chat conversion preview");
     auto* copy = Named<wxButton>(dialog, "Copy chat conversion result");
     auto* replace = Named<wxButton>(dialog, "Replace source with chat conversion");
     auto* cancel = Named<wxButton>(dialog, "Cancel chat conversion");
     REQUIRE(channel);
+    REQUIRE(app_style);
+    REQUIRE(wrap);
+    CHECK(app_style->GetCount() == 2);
+    CHECK_FALSE(wrap->GetValue());
     REQUIRE(narration);
     REQUIRE(preview);
     REQUIRE(copy);

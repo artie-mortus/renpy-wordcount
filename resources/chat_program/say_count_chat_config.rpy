@@ -16,3 +16,9 @@ init 1 python:
             store.channels_new_message[channel] = False
         if channel not in store.channels_last_sender:
             store.channels_last_sender[channel] = None
+
+# Presentation skin used when say_count_chat_begin is called without an
+# explicit skin argument: "discord" (channel sidebar) or "kik" (messenger
+# bubbles). Individual scenes can override it, for example
+# call say_count_chat_begin("Eileen", skin="kik").
+default say_count_chat_skin = "discord"

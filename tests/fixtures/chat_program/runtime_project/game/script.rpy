@@ -17,6 +17,14 @@ label chat_demo:
     "This is normal visual-novel dialogue again."
     return
 
+label kik_demo:
+    call say_count_chat_begin("Robo", skin="kik")
+    r "hey, you up?"
+    mc "yeah what's up"
+    call say_count_chat_end
+    "Back to normal visual-novel dialogue."
+    return
+
 label chat_runtime_test_target:
     $ chat_speed = 100
     call say_count_chat_begin("#general")
@@ -25,6 +33,13 @@ label chat_runtime_test_target:
     $ assert len(channels["#general"]) == 1 and channels["#general"][0]["message"] == "Hello!"
     call say_count_chat_end
     $ assert renpy.get_screen("chat_messages_view") is None
+    call say_count_chat_begin("Robo", skin="kik", clear=True)
+    $ assert renpy.get_screen("say_count_kik_view") is not None
+    $ assert renpy.get_screen("chat_messages_view") is None
+    $ r("kik bubble", c="Robo", fastmode=0)
+    $ assert say_count_kik_is_player("Player") and not say_count_kik_is_player("Robo")
+    call say_count_chat_end
+    $ assert renpy.get_screen("say_count_kik_view") is None
     "Normal VN gameplay restored."
     $ last_window = "#side"
     $ r("Side channel", c="#side", fastmode=0)

@@ -27,6 +27,22 @@ keep the current history. The optional channel argument selects the starting
 channel. `say_count_chat_end` hides the chat screen and restores Ren'Py's
 automatic dialogue-window behavior.
 
+## Presentation skins
+
+Two vendored skins render the same message engine:
+
+- `discord` (default): the upstream `chat_messages_view` screen with a channel
+  sidebar.
+- `kik`: `say_count_kik_view` in `say_count_chat_kik.rpy`, a portrait phone
+  with left/right chat bubbles and a tap-to-open thread list. Name channels
+  after contacts (`c="Eileen"`) so they read as direct-message threads.
+  Messages from any `ChatCharacter(..., is_player=True)` align right.
+
+Select per scene with `call say_count_chat_begin("Eileen", skin="kik")`, or set
+the project default in `say_count_chat_config.rpy` via `say_count_chat_skin`.
+The Kik skin uses solid-color placeholder art; adjust its style constants by
+editing a copy of the styles in your own files rather than the vendored screen.
+
 The upstream framework also customizes Ren'Py's `choice` screen to implement
 chat-specific player auto-send behavior. Say Count does not replace
 `screens.rpy`. Copy/adapt the `choice` screen from the pinned upstream project

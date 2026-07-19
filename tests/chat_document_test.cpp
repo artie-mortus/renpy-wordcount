@@ -241,6 +241,22 @@ TEST_CASE("unknown choice and positional say arguments are preserved") {
           "        r \"On it.\" (c=\"#ops\", urgent)\n");
 }
 
+TEST_CASE("conversion can wrap scenes in bridge calls for an app style") {
+    const auto kik = convert_manuscript_to_chat(
+        "Eileen: hey, you up?\n", "Eileen", {}, {}, {}, "kik");
+    const auto begin = kik.text.find("    call say_count_chat_begin(\"Eileen\", skin=\"kik\")");
+    const auto message = kik.text.find("    eileen \"hey, you up?\"");
+    const auto end = kik.text.find("    call say_count_chat_end");
+    REQUIRE(begin != std::string::npos);
+    REQUIRE(message != std::string::npos);
+    REQUIRE(end != std::string::npos);
+    CHECK(begin < message);
+    CHECK(message < end);
+
+    const auto plain = convert_manuscript_to_chat("Eileen: hey.\n");
+    CHECK(plain.text.find("say_count_chat_begin") == std::string::npos);
+}
+
 TEST_CASE("labels comments and blank lines survive chat to dialogue") {
     const auto dialogue = convert_chat_to_manuscript(
         "default e = ChatCharacter(\"Eileen\")\n"

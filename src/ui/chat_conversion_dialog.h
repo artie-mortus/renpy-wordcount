@@ -15,6 +15,7 @@
 #include "core/chat_document.h"
 
 class wxCheckBox;
+class wxRadioBox;
 class wxStaticText;
 class wxTextCtrl;
 class wxButton;
@@ -37,6 +38,7 @@ private:
         std::uint64_t generation = 0;
         std::string channel;
         std::string narrator_alias;
+        std::string bridge_skin;
         bool chat_narration = false;
         bool ordinary_renpy = false;
         std::map<std::string, std::string> alias_overrides;
@@ -52,6 +54,8 @@ private:
     std::map<std::string, std::string> existing_characters_;
     ChatConversion conversion_;
     wxTextCtrl* channel_ = nullptr;
+    wxRadioBox* app_style_ = nullptr;
+    wxCheckBox* wrap_bridge_ = nullptr;
     wxCheckBox* chat_narration_ = nullptr;
     wxTextCtrl* narrator_alias_ = nullptr;
     wxCheckBox* ordinary_renpy_ = nullptr;

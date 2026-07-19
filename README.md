@@ -31,6 +31,13 @@ Use `call say_count_chat_begin("#general")` to enter the installed chat screen
 and `call say_count_chat_end` to hide it and resume normal VN dialogue. See the
 complete transition example in `resources/chat_program/INTEGRATION.md`.
 
+Two presentation skins render the same scenes: Discord-style channels (the
+upstream screen) and a Kik-style messenger with chat bubbles and a thread
+list. The conversion dialog asks which app style a scene targets and can wrap
+the output in the matching `say_count_chat_begin(..., skin="kik")` /
+`say_count_chat_end` calls. The project default lives in
+`game/say_count_chat_config.rpy` (`say_count_chat_skin`).
+
 ## Build
 
 Install CMake, a C++17 compiler, Git, wxWidgets 3.2 or newer with the `core`,

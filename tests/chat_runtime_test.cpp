@@ -29,6 +29,7 @@ void Write(const std::filesystem::path& path, const std::string& text) {
 void CreateResources(const std::filesystem::path& path) {
     Write(path / "chat_program.rpy", "# runtime\n");
     Write(path / "say_count_chat_bridge.rpy", "# transition bridge\n");
+    Write(path / "say_count_chat_kik.rpy", "# kik skin\n");
     Write(path / "LICENSE.txt", "license\n");
     Write(path / "NOTICE", "notice\n");
     Write(path / "INTEGRATION.md", "instructions\n");
@@ -50,12 +51,12 @@ TEST_CASE("chat runtime installs cleanly and repeat inspection is identical") {
     CHECK_FALSE(clean.has_modified_files());
     const auto installed = say_count::install_chat_runtime(clean);
     CHECK(installed.error.empty());
-    CHECK(installed.installed == 8);
+    CHECK(installed.installed == 9);
     CHECK(std::filesystem::exists(game / "images/chat ui/control.png"));
     const auto repeat = say_count::inspect_chat_runtime(resources.string(), game.string());
     CHECK_FALSE(repeat.has_new_files());
     CHECK_FALSE(repeat.has_modified_files());
-    CHECK(say_count::install_chat_runtime(repeat).identical == 8);
+    CHECK(say_count::install_chat_runtime(repeat).identical == 9);
 }
 
 TEST_CASE("chat runtime never overwrites project-owned configuration") {
@@ -69,7 +70,7 @@ TEST_CASE("chat runtime never overwrites project-owned configuration") {
     Write(configuration, "# writer customization\n");
     const auto inspection = say_count::inspect_chat_runtime(resources.string(), game.string());
     CHECK_FALSE(inspection.has_modified_files());
-    CHECK(say_count::install_chat_runtime(inspection).identical == 8);
+    CHECK(say_count::install_chat_runtime(inspection).identical == 9);
     std::ifstream input(configuration);
     std::string contents((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
     CHECK(contents == "# writer customization\n");
@@ -87,7 +88,7 @@ TEST_CASE("chat runtime can export a pinned upgrade outside a customized game") 
     const auto side_by_side = say_count::inspect_chat_runtime(
         resources.string(), export_root.string());
     REQUIRE_FALSE(side_by_side.has_modified_files());
-    CHECK(say_count::install_chat_runtime(side_by_side).installed == 8);
+    CHECK(say_count::install_chat_runtime(side_by_side).installed == 9);
     CHECK(std::filesystem::exists(export_root / "vendor/chat_program/chat_program.rpy"));
     CHECK_FALSE(std::filesystem::exists(game / "vendor/chat_program-pinned"));
     std::ifstream original(game / "vendor/chat_program/chat_program.rpy");

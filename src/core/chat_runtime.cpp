@@ -44,6 +44,7 @@ ChatRuntimeInspection inspect_chat_runtime(std::string resource_directory,
     std::vector<Resource> resources{
         {"chat_program.rpy", "chat_program.rpy", false},
         {"say_count_chat_bridge.rpy", "say_count_chat_bridge.rpy", false},
+        {"say_count_chat_kik.rpy", "say_count_chat_kik.rpy", false},
         {"LICENSE.txt", "LICENSE.txt", false}, {"NOTICE", "NOTICE", false},
         {"INTEGRATION.md", "INTEGRATION.md", false}, {"manifest.json", "manifest.json", false},
         {"say_count_chat_config.rpy", "say_count_chat_config.rpy", true}};

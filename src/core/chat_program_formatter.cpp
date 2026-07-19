@@ -93,7 +93,7 @@ void FormatEvents(const std::vector<ChatEvent>& events, std::size_t indent,
 }  // namespace
 
 std::string format_chat_program(const ChatDocument& document, std::string_view label,
-                                bool include_definitions) {
+                                bool include_definitions, std::string_view bridge_skin) {
     std::ostringstream output;
     if (include_definitions) {
         for (const auto& character : document.characters) {
@@ -108,8 +108,16 @@ std::string format_chat_program(const ChatDocument& document, std::string_view l
         if (!document.characters.empty()) output << '\n';
     }
     if (!label.empty()) output << "label " << label << ":\n";
+    const std::string pad(label.empty() ? 0 : 4, ' ');
+    if (!bridge_skin.empty()) {
+        output << pad << "call say_count_chat_begin(";
+        if (!document.default_channel.empty())
+            output << '"' << Escape(document.default_channel) << "\", ";
+        output << "skin=\"" << Escape(bridge_skin) << "\")\n";
+    }
     std::string last_channel = document.default_channel;
     FormatEvents(document.events, label.empty() ? 0 : 4, &last_channel, &output);
+    if (!bridge_skin.empty()) output << pad << "call say_count_chat_end\n";
     return output.str();
 }
 

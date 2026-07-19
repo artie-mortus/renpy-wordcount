@@ -1,6 +1,8 @@
 # Say Count bridge for entering and leaving chat_program scenes.
 # This file is vendored and may be updated independently of project settings.
 
+default say_count_chat_active_skin = "discord"
+
 init 2 python:
     def say_count_select_chat_channel(channel):
         if not isinstance(channel, str) or not channel:
@@ -15,7 +17,7 @@ init 2 python:
         if channel not in store.channels_last_sender:
             store.channels_last_sender[channel] = None
 
-label say_count_chat_begin(channel=None, clear=True):
+label say_count_chat_begin(channel=None, clear=True, skin=None):
     if channel is not None:
         $ say_count_chat_initial_channel = channel
     if clear:
@@ -23,10 +25,15 @@ label say_count_chat_begin(channel=None, clear=True):
     elif channel is not None:
         $ say_count_select_chat_channel(channel)
     window hide
-    show screen chat_messages_view
+    $ say_count_chat_active_skin = skin or getattr(store, "say_count_chat_skin", "discord")
+    if say_count_chat_active_skin == "kik":
+        show screen say_count_kik_view
+    else:
+        show screen chat_messages_view
     return
 
 label say_count_chat_end:
     hide screen chat_messages_view
+    hide screen say_count_kik_view
     window auto
     return
