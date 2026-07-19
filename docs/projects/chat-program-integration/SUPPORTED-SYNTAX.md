@@ -37,8 +37,9 @@ Natural-language directives on their own line convert to chat arguments:
 | `Choice:` / `Choices:` / `Menu:` / `Options:` header, then `- option` (or `*` / `>`) lines; indented lines under an option are its branch | `menu:` block with quoted options and branch contents |
 
 Unrecognized `[...]` lines stay in the scene as narration and produce a
-warning. Nested `Choice:` blocks inside a branch are not structurally
-converted (warned, kept as narration).
+warning. Stage directions and further `Choice:` blocks work inside a choice
+branch; state (channel, pacing) is shared with the surrounding scene. Blank
+lines inside a branch are allowed as paragraph breaks.
 
 ## Deliberate limits
 

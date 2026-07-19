@@ -509,11 +509,15 @@ std::string ChatConversionDialog::BuildVisualHtml() const {
     for (const auto& character : conversion_.document.characters)
         characters[character.alias] = &character;
     std::string body;
+    std::string last_channel = conversion_.document.default_channel;
     const auto append = [&](const auto& self, const std::vector<ChatEvent>& events) -> void {
         for (const auto& event : events) {
-            if (event.channel_explicit && !event.channel.empty())
+            if (!event.channel.empty() &&
+                (event.channel_explicit || event.channel != last_channel)) {
                 body += "<tr><td colspan=2 align=center><font size=2 color=\"#76546E\">— " +
                         HtmlEscape(event.channel) + " —</font></td></tr>";
+                last_channel = event.channel;
+            }
             switch (event.kind) {
                 case ChatEventKind::Message: {
                     if (!event.other_typers.empty()) {

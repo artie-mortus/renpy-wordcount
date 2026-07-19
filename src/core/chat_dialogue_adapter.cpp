@@ -373,29 +373,16 @@ void RenderManuscript(const ChatDocument& document, const std::vector<ChatEvent>
     }
 }
 
-}  // namespace
-
-ChatConversion convert_manuscript_to_chat(
-    std::string_view manuscript, std::string_view default_channel,
-    const std::map<std::string, std::string>& existing_characters,
-    std::string_view narrator_alias, std::string_view narrator_name,
-    std::string_view bridge_skin) {
-    ChatConversion result;
-    result.document.default_channel = std::string(default_channel);
-
-    ConversionState state;
-    state.channel = std::string(default_channel);
-    state.use_narrator = !narrator_alias.empty() && valid_chat_alias(narrator_alias);
-    state.narrator_alias = std::string(narrator_alias);
-    if (!narrator_alias.empty() && !state.use_narrator)
-        result.document.diagnostics.push_back({{}, "Narrator alias must be a Ren'Py identifier.", false});
-
-    NaturalChatBuilder builder(&result, existing_characters, std::string(default_channel));
-    const auto lines = SplitLines(manuscript);
+// Converts a block of natural-language lines — prose, stage directions, and
+// Choice: blocks — into chat events. Recurses into choice branches so every
+// prose form works inside a branch as well as at the top level.
+void ConvertNaturalLines(const std::vector<std::string>& lines,
+                         NaturalChatBuilder* builder, ConversionState* state,
+                         ChatConversion* result, std::vector<ChatEvent>* out) {
     std::string segment;
     const auto flush = [&]() {
-        auto events = builder.ConvertSegment(segment, &state);
-        for (auto& event : events) result.document.events.push_back(std::move(event));
+        auto events = builder->ConvertSegment(segment, state);
+        for (auto& event : events) out->push_back(std::move(event));
         segment.clear();
     };
 
@@ -404,16 +391,16 @@ ChatConversion convert_manuscript_to_chat(
         if (const auto directive = ParseDirective(trimmed)) {
             flush();
             switch (directive->kind) {
-                case DirectiveKind::Channel: state.channel = directive->value; break;
-                case DirectiveKind::Typing: state.pending_typer_names = directive->names; break;
-                case DirectiveKind::Fast: state.fast_mode = directive->fast_mode; break;
-                case DirectiveKind::NormalSpeed: state.fast_mode = -1.0; break;
-                case DirectiveKind::Player: state.player_name = directive->value; break;
+                case DirectiveKind::Channel: state->channel = directive->value; break;
+                case DirectiveKind::Typing: state->pending_typer_names = directive->names; break;
+                case DirectiveKind::Fast: state->fast_mode = directive->fast_mode; break;
+                case DirectiveKind::NormalSpeed: state->fast_mode = -1.0; break;
+                case DirectiveKind::Player: state->player_name = directive->value; break;
             }
             continue;
         }
         if (!trimmed.empty() && trimmed.front() == '[' && trimmed.back() == ']') {
-            result.document.diagnostics.push_back({{index + 1, 0},
+            result->document.diagnostics.push_back({{index + 1, 0},
                 "Stage direction " + trimmed + " was not understood; kept as narration.", false});
         }
         if (IsChoiceHeader(trimmed)) {
@@ -437,35 +424,63 @@ ChatConversion convert_manuscript_to_chat(
                 choice.text = OptionText(option_trimmed);
                 choice.menu_start = first_option;
                 first_option = false;
-                std::string branch;
+                std::vector<std::string> branch;
                 std::size_t branch_indent = std::string::npos;
                 while (index + 1 < lines.size()) {
                     const std::string& child = lines[index + 1];
                     const std::string child_trimmed = Trim(child);
-                    if (child_trimmed.empty()) break;
+                    if (child_trimmed.empty()) {
+                        // Keep the blank line when the branch continues below it.
+                        std::size_t probe = index + 2;
+                        while (probe < lines.size() && Trim(lines[probe]).empty()) ++probe;
+                        if (probe >= lines.size() || IndentOf(lines[probe]) <= option_indent ||
+                            IsOptionLine(Trim(lines[probe])))
+                            break;
+                        branch.push_back(std::string());
+                        ++index;
+                        continue;
+                    }
                     if (IndentOf(child) <= option_indent) break;
-                    if (IsChoiceHeader(child_trimmed))
-                        result.document.diagnostics.push_back({{index + 2, 0},
-                            "Choices inside a choice branch are not supported in prose form; "
-                            "the line was kept as narration.", false});
                     branch_indent = std::min(branch_indent, IndentOf(child));
-                    branch += child + '\n';
+                    branch.push_back(child);
                     ++index;
                 }
                 if (!branch.empty()) {
-                    std::string dedented;
-                    for (const auto& child : SplitLines(branch))
-                        dedented += (child.size() > branch_indent ? child.substr(branch_indent)
-                                                                  : Trim(child)) + '\n';
-                    choice.children = builder.ConvertSegment(dedented, &state);
+                    std::vector<std::string> dedented;
+                    for (const auto& child : branch)
+                        dedented.push_back(child.size() > branch_indent
+                                               ? child.substr(branch_indent) : Trim(child));
+                    ConvertNaturalLines(dedented, builder, state, result, &choice.children);
                 }
-                result.document.events.push_back(std::move(choice));
+                out->push_back(std::move(choice));
             }
             continue;
         }
         segment += lines[index] + '\n';
     }
     flush();
+}
+
+}  // namespace
+
+ChatConversion convert_manuscript_to_chat(
+    std::string_view manuscript, std::string_view default_channel,
+    const std::map<std::string, std::string>& existing_characters,
+    std::string_view narrator_alias, std::string_view narrator_name,
+    std::string_view bridge_skin) {
+    ChatConversion result;
+    result.document.default_channel = std::string(default_channel);
+
+    ConversionState state;
+    state.channel = std::string(default_channel);
+    state.use_narrator = !narrator_alias.empty() && valid_chat_alias(narrator_alias);
+    state.narrator_alias = std::string(narrator_alias);
+    if (!narrator_alias.empty() && !state.use_narrator)
+        result.document.diagnostics.push_back({{}, "Narrator alias must be a Ren'Py identifier.", false});
+
+    NaturalChatBuilder builder(&result, existing_characters, std::string(default_channel));
+    ConvertNaturalLines(SplitLines(manuscript), &builder, &state, &result,
+                        &result.document.events);
 
     // Mark the player character so messenger skins can align their bubbles.
     bool player_marked = false;

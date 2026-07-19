@@ -297,6 +297,44 @@ TEST_CASE("natural choice blocks become chat menus with branches") {
     CHECK(chat.text.find("\"No way\":") != std::string::npos);
 }
 
+TEST_CASE("stage directions and nested choices work inside a branch") {
+    const auto chat = convert_manuscript_to_chat(
+        "Robo: you coming?\n"
+        "Choice:\n"
+        "- Sounds good\n"
+        "    [in #ops]\n"
+        "    [Mel is typing]\n"
+        "    Mel: finally\n"
+        "    Choice:\n"
+        "    - Bring snacks\n"
+        "        Mel: yes\n"
+        "- No way\n", "#general");
+    CHECK(chat.choices == 3);
+    CHECK(chat.text.find("c=\"#ops\"") != std::string::npos);
+    CHECK(chat.text.find("ot=mel") != std::string::npos);
+    CHECK(chat.text.find("\"Bring snacks\":") != std::string::npos);
+    CHECK(chat.text.find("mel \"yes\"") != std::string::npos);
+    const auto back = convert_chat_to_manuscript(chat.text);
+    CHECK(back.text.find("[in #ops]") != std::string::npos);
+    CHECK(back.text.find("[Mel is typing]") != std::string::npos);
+    CHECK(back.text.find("- Bring snacks") != std::string::npos);
+    const auto again = convert_manuscript_to_chat(back.text, "#general");
+    CHECK(again.choices == 3);
+}
+
+TEST_CASE("blank lines inside a choice branch do not end the branch") {
+    const auto chat = convert_manuscript_to_chat(
+        "Choice:\n"
+        "- Sounds good\n"
+        "    Robo: first\n"
+        "\n"
+        "    Robo: second\n", "#general");
+    REQUIRE(chat.choices == 1);
+    CHECK(chat.messages == 2);
+    CHECK(chat.text.find("robo \"first\"") != std::string::npos);
+    CHECK(chat.text.find("robo \"second\"") != std::string::npos);
+}
+
 TEST_CASE("unrecognized stage directions become narration with a warning") {
     const auto chat = convert_manuscript_to_chat("[dramatic pause]\nRobo: hi\n");
     CHECK_FALSE(chat.document.diagnostics.empty());
