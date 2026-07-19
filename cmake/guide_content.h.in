@@ -1,0 +1,13 @@
+#pragma once
+
+namespace say_count::ui::guide_content {
+
+inline constexpr char kProse[] = R"SAY_COUNT_PROSE(
+@PROSE_GUIDE_HTML@
+)SAY_COUNT_PROSE";
+
+inline constexpr char kChat[] = R"SAY_COUNT_CHAT(
+@CHAT_GUIDE_HTML@
+)SAY_COUNT_CHAT";
+
+}  // namespace say_count::ui::guide_content

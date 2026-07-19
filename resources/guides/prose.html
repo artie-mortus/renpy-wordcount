@@ -1,0 +1,111 @@
+<html><body bgcolor="#FCFBF8" text="#17243A">
+<font face="DejaVu Sans">
+<font color="#76546E" size="2"><b>MANUSCRIPT → REN'PY</b></font>
+<h1>Write in the script editor. Convert when ready.</h1>
+<p>Type prose directly in the normal script tab, then click <b>Convert prose</b> in the top toolbar. A review ledger shows exactly what will change before the conversion makes one undoable edit.</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<b>Whole tab:</b> With nothing selected, the button converts the entire active tab and adds character definitions plus <tt>label start:</tt>.<br><br>
+<b>Selection:</b> Select part of the tab first to convert only that prose. The result is indented for the current Ren'Py label and assumes its character aliases are already defined.
+</td></tr></table>
+<p><b>Safe around existing code:</b> Recognizable Ren'Py lines are copied unchanged while nearby prose is converted. A code-only tab is left byte-for-byte intact. You can still select a smaller passage when you want tighter control.</p>
+<p>The review ledger marks clear manuscript syntax as <b>PROSE</b>, existing script as <b>REN'PY</b>, and ordinary ambiguous sentences as <b>REVIEW</b>. Review lines remain unchanged unless you explicitly include them.</p>
+<p>The converter turns each non-empty prose line into one Ren'Py statement. You can mix every format on this page in the same conversion.</p>
+
+<hr>
+<h2>Dialogue</h2>
+<p><b>Name and a colon</b> is the clearest form:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr>
+<td width="48%"><font size="2" color="#4C5A6D">WRITE</font><br><tt>Eileen: We should go.</tt></td>
+<td><font size="2" color="#4C5A6D">BECOMES</font><br><tt>eileen "We should go."</tt></td>
+</tr></table>
+
+<p><b>Book-style attribution</b> works before or after the quote:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<tt>Eileen said, "We should go."</tt><br>
+<tt>“Not yet,” Lucy whispered.</tt><br>
+<tt>“Wait.” Eileen grabbed his sleeve.</tt><br>
+<tt>Eileen looked away. “I can’t.”</tt><br>
+<tt>“Why?” asked Lucy.</tt>
+</td></tr></table>
+<p>Speech attributions and action beats preserve the spoken words and keep the action as narration. Common verbs such as <tt>said, asked, whispered, shouted, replied, hissed, snapped, sighed, warned</tt>, and more are recognized.</p>
+
+<p>Present-tense tags and more conversational phrasing work too: <tt>Eileen says with a grin, "Ready."</tt>, <tt>“Almost,” replies Lucy softly.</tt>, and interrupted quotations such as <tt>“I mean it,” Eileen insists. “Today.”</tt>.</p>
+
+<p>Quotation marks may be straight double, curly double or single, guillemets (<tt>«like this»</tt>), German-style, or CJK corner brackets. You can also use <tt>Eileen — We should go.</tt> (an em dash, en dash, or spaced hyphen).</p>
+
+<p><b>Speaker on a separate line</b> also works when the following line is quoted:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>Eileen<br>“We should go.”</tt></td></tr></table>
+
+<p><b>Screenplay style</b> accepts an uppercase speaker cue followed by unquoted dialogue. An optional parenthetical mood is understood:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>EILEEN<br>(angrily)<br>We are leaving.</tt></td></tr></table>
+<p>A name followed by a colon on its own line also starts an unquoted dialogue block.</p>
+
+<h3>Sprite expressions and image attributes</h3>
+<p>Put attributes in square brackets after the speaker. They become Ren'Py say-statement image attributes:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr>
+<td width="48%"><tt>Eileen [happy]: We did it.</tt></td>
+<td><tt>eileen happy "We did it."</tt></td>
+</tr></table>
+<p>Use spaces or commas for multiple attributes: <tt>Lucy [winter, coat]: I'm freezing.</tt> becomes <tt>lucy winter coat "I'm freezing."</tt>. Attribute names ignore capitalization and are written lowercase. Invalid tags remain narration instead of becoming executable code.</p>
+<p><b>You can also write the mood naturally.</b> Clear cues such as <tt>Eileen said happily</tt>, <tt>Lucy whispered nervously</tt>, or <tt>Eileen looked angry</tt> infer the common attributes <tt>happy</tt>, <tt>nervous</tt>, and <tt>angry</tt>. Supported common moods include happy, angry, sad, nervous, surprised, and embarrassed. Use a bracket tag when your project uses a custom sprite name or when you want an exact override.</p>
+<p>When conversion creates a character that uses expressions, its definition receives a matching image tag, such as <tt>Character("Eileen", image="eileen")</tt>, so Ren'Py can apply those sprite attributes.</p>
+
+<h3>Action beats and pronouns</h3>
+<p>Names can appear after introductory phrases or as possessives: <tt>“No.” With a sigh, Eileen turned.</tt> and <tt>Eileen's hand tightened. “Go.”</tt> are recognized. Adverbs around speech tags also work.</p>
+<p><tt>She</tt>, <tt>he</tt>, and <tt>they</tt> resolve only to the most recently explicit speaker. The converter never guesses a character's gender. Without a recent speaker, the line stays narration for review.</p>
+
+<hr>
+<h2>Narration</h2>
+<p>Any ordinary line without a recognized speaker is marked <b>REVIEW</b>. Include it in the review window to make it narrator text:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr>
+<td width="48%"><tt>Rain tapped against the glass.</tt></td>
+<td><tt>"Rain tapped against the glass."</tt></td>
+</tr></table>
+<p>You may wrap narration in straight or curly quotes. This is useful when narration contains a colon:</p>
+<p><tt>"The clock read: midnight."</tt></p>
+
+<hr>
+<h2>Scenes and labels</h2>
+<p>Start a line with two colons to create another label. Spaces and punctuation are normalized for Ren'Py:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr>
+<td width="48%"><tt>:: The Crossing</tt></td>
+<td><tt>label the_crossing:</tt></td>
+</tr></table>
+<p>Converting a whole tab creates <tt>label start:</tt>. A <tt>::</tt> heading starts each additional scene.</p>
+
+<hr>
+<h2>Characters</h2>
+<p>When converting a whole tab, the converter creates character definitions above the scene:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>define eileen = Character("Eileen")</tt></td></tr></table>
+<p>Speaker names become lowercase aliases with underscores. For example, <tt>Captain Vale</tt> becomes <tt>captain_vale</tt>. If two names produce the same alias, later aliases receive <tt>_2</tt>, <tt>_3</tt>, and so on.</p>
+<p>Existing characters are matched across every open project script by display name or alias, without regard to capitalization. For example, <tt>Eileen:</tt>, <tt>eileen:</tt>, and <tt>EILEEN:</tt> all reuse an existing <tt>e = Character("Eileen")</tt> definition.</p>
+<p>Matching uses full Unicode case folding, so names such as <tt>Élodie</tt>, <tt>ÉLODIE</tt>, and <tt>élodie</tt> resolve to the same character.</p>
+
+<hr>
+<h2>What conversion preserves</h2>
+<ul>
+<li>Blank lines are ignored, so use them freely for readability.</li>
+<li>Straight and curly outer quotation marks are removed.</li>
+<li>Quotes and backslashes inside dialogue are escaped.</li>
+<li>Opening square brackets are doubled so Ren'Py prints them literally.</li>
+<li>The final status reports converted prose, preserved code, reused characters, new characters, and lines still needing review.</li>
+</ul>
+
+<h2>Optional offline AI</h2>
+<p>Choose <b>Edit → Configure Offline Prose AI</b> to use a locally installed <tt>llama-cli</tt> runner and GGUF model. Say Count never downloads a model and never calls a cloud AI service.</p>
+<table width="100%" cellpadding="8" bgcolor="#E7F2EC"><tr><td>
+<b>LOCAL ONLY · NETWORK BLOCKED</b><br><br>
+Each model run is placed in a network-isolated sandbox. Only lines marked PROSE or REVIEW enter its prompt; recognized Ren'Py code is excluded before the process starts. The model's records are validated and passed through the safe converter, then shown in this review ledger before any edit occurs.
+</td></tr></table>
+<p>Turn the option off at any time to use only the built-in rule-based converter.</p>
+
+<h2>A complete example</h2>
+<table width="100%" cellpadding="10" bgcolor="#17243A"><tr><td><font color="#FFFFFF"><tt>
+Rain pressed silver lines against the window.<br><br>
+Eileen: We should go.<br><br>
+“Not yet,” Lucy whispered.<br><br>
+:: The Crossing<br><br>
+Lucy said, "The road is flooded."
+</tt></font></td></tr></table>
+<p><b>If the result is not what you expected, use Undo.</b> Make the speaker clearer with <tt>Name: dialogue</tt>, or wrap narration in straight quotes, then convert again.</p>
+</font></body></html>

@@ -13,6 +13,16 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+set(PROSE_GUIDE_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/resources/guides/prose.html)
+set(CHAT_GUIDE_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/resources/guides/chat.html)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${PROSE_GUIDE_SOURCE} ${CHAT_GUIDE_SOURCE})
+file(READ ${PROSE_GUIDE_SOURCE} PROSE_GUIDE_HTML)
+file(READ ${CHAT_GUIDE_SOURCE} CHAT_GUIDE_HTML)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated)
+configure_file(cmake/guide_content.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/guide_content.h @ONLY)
+
 option(SAY_COUNT_BUNDLED_WX "Build and statically link wxWidgets from source" OFF)
 if(SAY_COUNT_BUNDLED_WX)
     include(FetchContent)
@@ -90,6 +100,7 @@ add_executable(say-count
     src/app/offline_prose_runner.cpp
     src/ui/editor_notebook.cpp
     src/ui/style.cpp
+    src/ui/guide_dialog.cpp
     src/ui/palette_dialog.cpp
     src/ui/diagnostics_panel.cpp
     src/ui/conflict_dialog.cpp
@@ -111,6 +122,7 @@ add_executable(say-count
 )
 find_package(Threads REQUIRED)
 target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
+target_include_directories(say-count PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_compile_definitions(say-count PRIVATE
     SAY_COUNT_ICON_PATH="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/512x512/apps/say-count.png"
     SAY_COUNT_SOURCE_ICON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/say-count.png"
@@ -200,10 +212,13 @@ if(BUILD_TESTING)
     add_executable(say-count-chat-ui-tests
         tests/chat_ui_test.cpp
         src/ui/chat_conversion_dialog.cpp
+        src/ui/guide_dialog.cpp
         src/ui/editor_notebook.cpp
         src/ui/style.cpp)
     target_link_libraries(say-count-chat-ui-tests PRIVATE
         say_count_core Catch2::Catch2 ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
+    target_include_directories(say-count-chat-ui-tests PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/generated)
     add_test(NAME chat-conversion-ui COMMAND say-count-chat-ui-tests)
     set_tests_properties(chat-conversion-ui PROPERTIES TIMEOUT 20)
 

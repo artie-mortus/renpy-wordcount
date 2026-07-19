@@ -1,0 +1,164 @@
+<html><body bgcolor="#FCFBF8" text="#17243A">
+<font face="DejaVu Sans">
+<font color="#76546E" size="2"><b>CHAT FORMAT · SOCIAL-MEDIA SCENES</b></font>
+<h1>Write messenger scenes as prose. Play them as a chat app.</h1>
+<p>Say Count converts prose or ordinary dialogue into the
+<tt>chat_program</tt> framework's Ren'Py syntax, which renders scenes as a
+phone/messenger app inside your game. The reverse conversion turns
+supported chat scenes back into editable dialogue. No coding is needed for the
+normal workflow.</p>
+
+<h2>Quick start</h2>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<b>1.</b> Write the scene as plain text, one line per message:
+<tt>Robo: yo you seeing this??</tt> Use <tt>Me:</tt> for the player, and
+stage directions like <tt>[Robo is typing]</tt> or <tt>Choice:</tt> blocks for
+chat features (see below).<br>
+<b>2.</b> Select it and choose <b>Edit &rarr; Turn Writing Into a Chat
+Scene&hellip;</b><br>
+<b>3.</b> Pick a look (Discord or Kik) and check the <b>What players will
+see</b> preview tab. The exact code that will be inserted is on the
+<b>Script code</b> tab.<br>
+<b>4.</b> Click <b>Use this</b>. If the chat app is not installed in your
+project yet, Say Count offers to install it for you.<br>
+<b>5.</b> Changed your mind? <b>Undo</b> puts your original text back.
+</td></tr></table>
+<p>Narrator handling and character short codes live under
+<b>Advanced options</b> in the conversion window; the defaults work without
+touching them.</p>
+
+<h2>The three commands</h2>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<b>Edit &rarr; Turn Writing Into a Chat Scene&hellip;</b> converts the selection, or
+the whole active tab, into chat messages. Pick a look, check the preview, and
+click <b>Use this</b> — one undoable replacement.<br><br>
+<b>Edit &rarr; Turn Chat Scene Back Into Dialogue&hellip;</b> converts a chat scene
+back to plain writing (<tt>Name: text</tt>) or Ren'Py say statements. Chat-only
+details that cannot be kept are listed and must be acknowledged first.<br><br>
+<b>Edit &rarr; Install/Update Chat App Files&hellip;</b> copies the pinned
+<tt>chat_program</tt> runtime into <tt>game/vendor/chat_program</tt>. Say Count
+also offers this automatically after your first conversion. Locally modified
+files are never overwritten.
+</td></tr></table>
+<p>All three are also in the command palette (<tt>Ctrl+Shift+P</tt>).</p>
+
+<hr>
+<h2>Setup, once per project</h2>
+<p>Connect your project folder and convert a scene — Say Count will offer to
+install the chat app files for you. (You can also run
+<b>Install/Update Chat App Files</b> yourself at any time.) The installer adds
+the framework, license, and a project-owned
+<tt>game/say_count_chat_config.rpy</tt> that is yours to edit and is never
+overwritten afterward.</p>
+
+<h2>Writing a chat scene</h2>
+<p>Type the scene as prose, select it, and convert:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr>
+<td width="48%"><font size="2" color="#4C5A6D">WRITE</font><br>
+<tt>Robo: yo you seeing this??<br>Me: seeing what</tt></td>
+<td><font size="2" color="#4C5A6D">BECOMES</font><br>
+<tt>robo "yo you seeing this??"<br>me "seeing what"</tt></td>
+</tr></table>
+<p>Character definitions are generated when missing:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<tt>default robo = ChatCharacter("Robo", icon="images/robo.png")</tt><br>
+<tt>default me = ChatCharacter("[player_name]", is_player=True)</tt>
+</td></tr></table>
+
+<h2>Stage directions: chat features without code</h2>
+<p>Write square-bracket stage directions on their own line, like a screenplay.
+The converter turns them into the right code for you:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<tt>[in #announcements]</tt> or <tt>[to Eileen]</tt> &mdash; move the scene to
+another room or conversation thread.<br>
+<tt>[Robo is typing]</tt> or <tt>[Robo and Mel are typing]</tt> &mdash; show a
+typing indicator on the next message.<br>
+<tt>[fast]</tt>, <tt>[fast 0.25]</tt>, <tt>[normal speed]</tt> &mdash; speed up
+or restore message pacing.<br>
+<tt>[I am Eileen]</tt> &mdash; mark who the player is, so their bubbles align
+right in the messenger view. A speaker written as <tt>Me:</tt> becomes the
+player automatically.
+</td></tr></table>
+<p>A direction the converter does not understand stays in the scene as
+narration and is listed as a warning, so nothing disappears silently.</p>
+
+<h2>Player replies (choices)</h2>
+<p>Write a <tt>Choice:</tt> line, then one <tt>-</tt> line per reply. Indent
+lines under a reply to show what happens after the player picks it:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>
+Robo: you coming?<br>
+Choice:<br>
+- Sounds good<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Robo: nice<br>
+- No way
+</tt></td></tr></table>
+<p>Converting a chat scene back to writing produces these same stage directions
+and choice blocks, so a scene can go back and forth without losing its chat
+behavior.</p>
+
+<h2>Raw arguments (optional)</h2>
+<p>Writers who prefer code can still pass <tt>chat_program</tt> arguments
+directly; both forms can be mixed:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<tt>robo "check #announcements" (c="#announcements", ot=[me], fastmode=0.1)</tt>
+</td></tr></table>
+<p><tt>c=</tt> switches channel, <tt>ot=</tt> shows other characters typing, and
+<tt>fastmode=</tt> compresses message pacing. Menus support
+<tt>auto_send=False</tt> for choices the player must confirm.</p>
+
+<hr>
+<h2>App styles: Discord or Kik</h2>
+<p>The conversion dialog asks which app the scene should look like. Both styles
+use identical syntax and the same message engine; only the installed screen
+changes.</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<b>Discord-style channels</b> shows a server sidebar with <tt>#channel</tt>
+tabs and flat, avatar-led messages.<br><br>
+<b>Kik-style messenger</b> shows a portrait phone with chat bubbles: the
+player's messages align right, contacts align left with avatar and name, and a
+thread list replaces the channel sidebar. Name channels after contacts
+(<tt>c="Eileen"</tt>) so each reads as a direct-message thread.
+</td></tr></table>
+<p>The <b>Make a complete scene</b> checkbox (on by default) emits a
+self-contained scene that opens the chosen app and returns to normal VN
+dialogue at the end. Untick it when converting a fragment for a scene that
+already has <tt>say_count_chat_begin/end</tt> bridge calls. A project-wide
+default lives in <tt>say_count_chat_config.rpy</tt>
+(<tt>say_count_chat_skin</tt>).</p>
+
+<hr>
+<h2>Entering and leaving the chat app</h2>
+<p>Mix chat and normal VN scenes in one script with the bundled bridge labels:</p>
+<table width="100%" cellpadding="10" bgcolor="#17243A"><tr><td><font color="#FFFFFF"><tt>
+label chapter_one:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;e "Normal VN dialogue."<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;call say_count_chat_begin("#general")<br>
+&nbsp;&nbsp;&nbsp;&nbsp;robo "yo you seeing this??"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;me "seeing what"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;call say_count_chat_end<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene bg bedroom<br>
+&nbsp;&nbsp;&nbsp;&nbsp;e "Back to the regular visual novel."
+</tt></font></td></tr></table>
+<p><tt>say_count_chat_begin</tt> clears earlier messages by default; pass
+<tt>clear=False</tt> to keep history, as when the player reopens their phone.
+<tt>say_count_chat_end</tt> hides the chat screen and restores the normal
+dialogue window.</p>
+
+<hr>
+<h2>What the reverse conversion loses</h2>
+<p>Regular dialogue has no place for channels, other-typer lists,
+<tt>fastmode</tt>, player ownership, icons, name colors, or
+<tt>auto_send</tt>. The preview lists each loss; unrecognized code is preserved
+unchanged rather than guessed at.</p>
+
+<h2>Notes</h2>
+<ul>
+<li>Say Count never edits <tt>screens.rpy</tt>. Copy the upstream
+<tt>choice</tt> screen if you want chat-style auto-send replies.</li>
+<li>Keep project settings in <tt>say_count_chat_config.rpy</tt>; avoid editing
+the vendored runtime so upgrades stay automatic.</li>
+<li>See <tt>game/vendor/chat_program/INTEGRATION.md</tt> in your project for
+the full integration reference.</li>
+</ul>
+<p><b>If a conversion is not what you expected, use Undo.</b></p>
+</font></body></html>

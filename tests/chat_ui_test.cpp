@@ -3,6 +3,7 @@
 
 #include "ui/chat_conversion_dialog.h"
 #include "ui/editor_notebook.h"
+#include "ui/guide_dialog.h"
 
 #include <chrono>
 #include <thread>
@@ -14,7 +15,9 @@
 #include <wx/frame.h>
 #include <wx/html/htmlwin.h>
 #include <wx/init.h>
+#include <wx/panel.h>
 #include <wx/radiobox.h>
+#include <wx/stattext.h>
 #include <wx/stc/stc.h>
 #include <wx/textctrl.h>
 
@@ -39,6 +42,16 @@ bool WaitForText(wxTextCtrl* control) {
 template<typename T>
 T* Named(wxWindow& parent, const char* name) {
     return dynamic_cast<T*>(wxWindow::FindWindowByName(name, &parent));
+}
+
+wxString ShowAndReadGuide(say_count::ui::GuideDialog& dialog) {
+    wxString text;
+    wxTheApp->CallAfter([&dialog, &text] {
+        if (dialog.content_page()) text = dialog.content_page()->ToText();
+        dialog.EndModal(wxID_OK);
+    });
+    dialog.ShowModal();
+    return text;
 }
 
 }  // namespace
@@ -74,6 +87,50 @@ TEST_CASE("chat conversion dialog exposes keyboard-accessible forward controls")
     REQUIRE(WaitForText(preview));
     CHECK(preview->GetValue().Contains("r \"Hello\""));
     CHECK(dialog.conversion().messages == 1);
+}
+
+TEST_CASE("embedded writing guides render their UTF-8 resource content") {
+    SECTION("prose") {
+        say_count::ui::GuideDialog dialog(nullptr, say_count::ui::GuideKind::Prose);
+        REQUIRE(dialog.content_loaded());
+        REQUIRE(dialog.content_page());
+        const wxString text = ShowAndReadGuide(dialog);
+        CHECK(text.Contains("Write in the script editor"));
+        CHECK(text.Contains(wxString::FromUTF8("MANUSCRIPT → REN'PY")));
+    }
+
+    SECTION("chat") {
+        say_count::ui::GuideDialog dialog(nullptr, say_count::ui::GuideKind::Chat);
+        REQUIRE(dialog.content_loaded());
+        REQUIRE(dialog.content_page());
+        const wxString text = ShowAndReadGuide(dialog);
+        CHECK(text.Contains("Write messenger scenes as prose"));
+        CHECK(text.Contains(wxString::FromUTF8("CHAT FORMAT · SOCIAL-MEDIA SCENES")));
+    }
+}
+
+TEST_CASE("writing guide shows a visible fallback when content cannot render") {
+    say_count::ui::GuideDialog dialog(nullptr, "Unavailable Guide", "Unavailable guide content",
+                                      "<html><body></body></html>");
+    CHECK_FALSE(dialog.content_loaded());
+    CHECK(dialog.content_page() == nullptr);
+    bool fallback_shown = false;
+    bool found_message = false;
+    wxTheApp->CallAfter([&] {
+        auto* fallback = Named<wxPanel>(dialog, "Guide display error");
+        fallback_shown = fallback && fallback->IsShownOnScreen();
+        if (fallback) {
+            for (wxWindow* child : fallback->GetChildren()) {
+                auto* label = dynamic_cast<wxStaticText*>(child);
+                if (label && label->GetLabel().Contains("could not be displayed"))
+                    found_message = true;
+            }
+        }
+        dialog.EndModal(wxID_OK);
+    });
+    dialog.ShowModal();
+    CHECK(fallback_shown);
+    CHECK(found_message);
 }
 
 TEST_CASE("reverse preview requires loss acknowledgement and copy uses preview text") {
