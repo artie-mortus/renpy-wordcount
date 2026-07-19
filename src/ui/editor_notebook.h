@@ -46,6 +46,12 @@ struct ManuscriptEditorPreview {
     ManuscriptConversion safe_conversion;
     ManuscriptConversion inclusive_conversion;
 };
+struct TextReplacementPreview {
+    int start = 0;
+    int end = 0;
+    bool selection = false;
+    std::string source;
+};
 struct ExternalFileUpdate {
     ExternalFileResult result = ExternalFileResult::NotOpen;
     std::string local_content;
@@ -97,6 +103,8 @@ public:
     bool OpenAndJump(const wxString& path, std::size_t line);
     void InsertAtCaret(std::string_view text);
     std::optional<ManuscriptEditorPreview> PrepareManuscriptConversion() const;
+    std::optional<TextReplacementPreview> PrepareTextReplacement() const;
+    bool ApplyTextReplacement(const TextReplacementPreview& preview, std::string_view replacement);
     bool PrepareOfflineAiConversion(ManuscriptEditorPreview* preview,
                                     std::string_view rewritten_manuscript) const;
     bool ApplyManuscriptConversion(const ManuscriptEditorPreview& preview,

@@ -41,6 +41,7 @@
 #include "ui/snapshot_dialog.h"
 #include "ui/rename_dialog.h"
 #include "ui/manuscript_dialog.h"
+#include "ui/chat_conversion_dialog.h"
 #include "ui/runtime_preset_dialog.h"
 #include "ui/renpy_lint_panel.h"
 #include "ui/asset_panel.h"
@@ -54,6 +55,7 @@
 #include "core/indent.h"
 #include "core/navigator.h"
 #include "core/workspace.h"
+#include "core/chat_runtime.h"
 #include "app/offline_prose_runner.h"
 
 namespace say_count::ui {
@@ -81,9 +83,13 @@ enum MenuId {
     kGoToLine,
     kToggleComment,
     kWriteManuscript,
+    kConvertToChat,
+    kConvertChatToDialogue,
+    kInstallChatRuntime,
     kConfigureOfflineProseAi,
     kShortcutSheet,
     kManuscriptGuide,
+    kChatGuide,
     kFocusMode,
     kConnectProject,
     kRecentProjectFirst,
@@ -480,9 +486,12 @@ MainFrame::MainFrame()
     Bind(wxEVT_MENU, &MainFrame::OnGoToLine, this, kGoToLine);
     Bind(wxEVT_MENU, &MainFrame::OnToggleComment, this, kToggleComment);
     Bind(wxEVT_MENU, &MainFrame::OnWriteManuscript, this, kWriteManuscript);
+    Bind(wxEVT_MENU, &MainFrame::OnConvertChat, this, kConvertToChat, kConvertChatToDialogue);
+    Bind(wxEVT_MENU, &MainFrame::OnInstallChatRuntime, this, kInstallChatRuntime);
     Bind(wxEVT_MENU, &MainFrame::OnConfigureOfflineProseAi, this, kConfigureOfflineProseAi);
     Bind(wxEVT_MENU, &MainFrame::OnShowShortcuts, this, kShortcutSheet);
     Bind(wxEVT_MENU, &MainFrame::OnShowManuscriptGuide, this, kManuscriptGuide);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&) { ShowChatGuide(this); }, kChatGuide);
     Bind(wxEVT_MENU, &MainFrame::OnToggleFocus, this, kFocusMode);
     Bind(wxEVT_MENU, &MainFrame::OnTogglePane, this, kShowOutline, kShowDiagnostics);
     Bind(wxEVT_AUI_PANE_CLOSE, &MainFrame::OnPaneClose, this);
@@ -645,6 +654,12 @@ void MainFrame::BuildMenus() {
     edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
     edit->Append(kWriteManuscript, "Convert &Prose to Ren'Py",
                  "Convert selected prose, or the entire active editor, to Ren'Py script");
+    edit->Append(kConvertToChat, "Convert to &Chat Format...",
+                 "Convert selected prose/dialogue, or the active editor, to chat_program syntax");
+    edit->Append(kConvertChatToDialogue, "Convert Chat to &Dialogue...",
+                 "Convert selected chat_program syntax, or the active editor, to regular dialogue");
+    edit->Append(kInstallChatRuntime, "Install/Update Chat &Runtime...",
+                 "Install the pinned chat_program runtime without overwriting local changes");
     edit->Append(kConfigureOfflineProseAi, "Configure &Offline Prose AI...",
                  "Optionally improve prose interpretation with a network-blocked local model");
     edit->Append(kFixIndents, "Fix &Indents...", "Preview and repair indentation in the active file");
@@ -673,6 +688,8 @@ void MainFrame::BuildMenus() {
     auto* help = new wxMenu();
     help->Append(kManuscriptGuide, "Prose Writing &Guide...",
                  "Learn the supported manuscript formats and conversion rules");
+    help->Append(kChatGuide, "Chat &Format Guide...",
+                 "Write social-media chat scenes and mix them with regular VN dialogue");
     help->Append(kShortcutSheet, "Keyboard &Shortcuts\tCtrl+K");
     help->AppendSeparator();
     help->Append(wxID_ABOUT, "&About", "About Say Count");
@@ -1935,6 +1952,9 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
         {"Toggle built-in Vim motions", "Normal/insert modes · Edit", kToggleNvimMotions},
         {"Convert prose to Ren'Py", "Edit", kWriteManuscript},
+        {"Convert to Chat Format", "Edit", kConvertToChat},
+        {"Convert Chat to Dialogue", "Edit", kConvertChatToDialogue},
+        {"Install/Update Chat Runtime", "Edit", kInstallChatRuntime},
         {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
         {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
         {"Toggle outline", "View", kShowOutline}, {"Toggle speaker statistics", "View", kShowSpeakerStats},
@@ -1950,6 +1970,7 @@ void MainFrame::OnCommandPalette(wxCommandEvent&) {
         {"Label coverage", "Ren'Py", kShowCoverage}, {"Stop running project", "Shift+F6 · Ren'Py", kStopRenpy},
         {"Show launch log", "Ren'Py", kShowRenpyLog}, {"Configure Ren'Py SDK", "Ren'Py", kConfigureRenpy},
         {"Prose writing guide", "Help", kManuscriptGuide},
+        {"Chat format guide", "Help", kChatGuide},
         {"Keyboard shortcuts", "Ctrl+K · Help", kShortcutSheet}, {"About Say Count", "Help", wxID_ABOUT}
     };
     PaletteDialog dialog(this, "Command Palette", "Type an action", commands);
@@ -2024,6 +2045,97 @@ void MainFrame::OnWriteManuscript(wxCommandEvent&) {
         std::to_string(pending) + (pending == 1 ? " needs review" : " need review") +
         " · Undo restores it";
     SetStatusText(wxString::FromUTF8(summary));
+}
+
+void MainFrame::OnConvertChat(wxCommandEvent& event) {
+    auto preview = notebook_->PrepareTextReplacement();
+    if (!preview) {
+        wxMessageBox("Select text or type into the active editor first.", "Nothing to convert",
+                     wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+    const bool to_chat = event.GetId() == kConvertToChat;
+    const auto characters = analyze_project(notebook_->ProjectScripts()).character_names;
+    ChatConversionDialog dialog(this, preview->source, to_chat, characters);
+    if (dialog.ShowModal() != wxID_OK) return;
+    const auto& conversion = dialog.conversion();
+    if (!notebook_->ApplyTextReplacement(*preview, conversion.text)) {
+        SetStatusText("Chat conversion was not applied");
+        return;
+    }
+    SetStatusText(wxString::Format("Converted %zu messages · %zu metadata losses · Undo restores it",
+                                  conversion.messages, conversion.losses.size()));
+}
+
+void MainFrame::OnInstallChatRuntime(wxCommandEvent&) {
+    if (!project_) {
+        wxMessageBox("Connect a Ren'Py project folder before installing the chat runtime.",
+                     "Project required", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+    const wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
+    const auto user_install_resources =
+        std::filesystem::path(executable.GetPath().ToStdString(wxConvUTF8)) /
+        ".." / "share" / "say-count" / "chat_program";
+    std::string resource_directory = SAY_COUNT_CHAT_RESOURCE_PATH;
+    std::error_code probe;
+    if (std::filesystem::is_directory(user_install_resources, probe))
+        resource_directory = user_install_resources.lexically_normal().string();
+    else if (std::filesystem::is_directory(SAY_COUNT_CHAT_INSTALLED_PATH, probe))
+        resource_directory = SAY_COUNT_CHAT_INSTALLED_PATH;
+    auto inspection = inspect_chat_runtime(resource_directory, project_->scripts_root);
+    if (!inspection.error.empty()) {
+        wxMessageBox(wxString::FromUTF8(inspection.error), "Install failed",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    std::vector<std::string> changed;
+    std::vector<std::string> protected_files;
+    bool exported_upgrade = false;
+    for (const auto& file : inspection.files) {
+        if (file.state == ChatRuntimeFileState::Modified) protected_files.push_back(file.name);
+        else if (file.state == ChatRuntimeFileState::NewFile) changed.push_back(file.name);
+    }
+    if (!protected_files.empty()) {
+        std::string message = "These installed files contain local changes:\n\n";
+        for (const auto& name : protected_files) message += "• " + name + "\n";
+        message += "\nNothing will be overwritten. Export the pinned runtime beside the project "
+                   "instead? The export will not be loaded until you merge it manually.";
+        if (wxMessageBox(wxString::FromUTF8(message), "Local chat runtime protected",
+                         wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES) return;
+        const auto export_root = std::filesystem::path(project_->root) /
+            "say-count-chat-runtime-85ee08d";
+        inspection = inspect_chat_runtime(resource_directory, export_root.string());
+        exported_upgrade = true;
+        if (!inspection.error.empty() || inspection.has_modified_files()) {
+            wxMessageBox("The upgrade-export destination is unavailable or also customized.",
+                         "Install stopped", wxOK | wxICON_WARNING, this);
+            return;
+        }
+        changed.clear();
+        for (const auto& file : inspection.files)
+            if (file.state == ChatRuntimeFileState::NewFile) changed.push_back(file.name);
+    }
+    if (changed.empty()) {
+        SetStatusText("Pinned chat_program runtime is already installed and identical");
+        return;
+    }
+    std::string preview = "Install pinned chat_program commit 85ee08d into:\n" +
+        inspection.destination_directory + "\n\nNew files:\n";
+    for (const auto& name : changed) preview += "• " + name + "\n";
+    preview += "\nExisting files will not be overwritten.";
+    if (wxMessageBox(wxString::FromUTF8(preview), "Install Chat Runtime",
+                     wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES) return;
+    const auto installed = install_chat_runtime(inspection);
+    if (!installed.error.empty()) {
+        wxMessageBox(wxString::FromUTF8(installed.error), "Install failed",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    RefreshProjectDiscovery();
+    SetStatusText(exported_upgrade
+        ? "Exported protected chat runtime upgrade outside game; merge it manually"
+        : "Installed pinned chat_program runtime with license and provenance");
 }
 
 void MainFrame::OnConfigureOfflineProseAi(wxCommandEvent&) {

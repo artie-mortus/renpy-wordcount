@@ -1069,6 +1069,39 @@ std::optional<ManuscriptEditorPreview> EditorNotebook::PrepareManuscriptConversi
     return preview;
 }
 
+std::optional<TextReplacementPreview> EditorNotebook::PrepareTextReplacement() const {
+    const int page = GetSelection();
+    auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));
+    if (!editor) return std::nullopt;
+    const int selection_start = editor->GetSelectionStart();
+    const int selection_end = editor->GetSelectionEnd();
+    const bool selection = selection_start != selection_end;
+    const int start = selection ? selection_start : 0;
+    const int end = selection ? selection_end : editor->GetTextLength();
+    const std::string source = editor->GetTextRange(start, end).ToStdString(wxConvUTF8);
+    if (source.find_first_not_of(" \t\r\n\f\v") == std::string::npos) return std::nullopt;
+    return TextReplacementPreview{start, end, selection, source};
+}
+
+bool EditorNotebook::ApplyTextReplacement(const TextReplacementPreview& preview,
+                                          std::string_view replacement) {
+    const int page = GetSelection();
+    auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));
+    if (!editor || replacement.empty() ||
+        editor->GetTextRange(preview.start, preview.end).ToStdString(wxConvUTF8) != preview.source)
+        return false;
+    editor->BeginUndoAction();
+    editor->SetTargetStart(preview.start);
+    editor->SetTargetEnd(preview.end);
+    editor->ReplaceTarget(wxString::FromUTF8(replacement.data(), replacement.size()));
+    editor->EndUndoAction();
+    const int caret = preview.start + static_cast<int>(replacement.size());
+    editor->SetSelection(caret, caret);
+    editor->EnsureCaretVisible();
+    editor->SetFocus();
+    return true;
+}
+
 bool EditorNotebook::PrepareOfflineAiConversion(
     ManuscriptEditorPreview* preview, std::string_view rewritten_manuscript) const {
     if (!preview || rewritten_manuscript.empty()) return false;

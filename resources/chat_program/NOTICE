@@ -1,0 +1,12 @@
+chat_program runtime snapshot
+
+Upstream: https://github.com/robo-barbie/chat_program
+Revision: 85ee08dd3e09ebf4492159f350b3a70de530b0ef
+License: Unlicense (see LICENSE.txt)
+
+Say Count installs this reviewed upstream runtime without modifying it. The
+editor-side parser, formatter, conversion preview, and installer are separate
+Say Count components. The upstream choice-screen customization is not installed
+automatically because overwriting a project's screens.rpy would be destructive.
+`say_count_chat_bridge.rpy` is a Say Count compatibility file that provides
+non-destructive enter/exit labels around the unmodified upstream chat screen.

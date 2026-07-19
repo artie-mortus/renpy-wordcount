@@ -98,6 +98,8 @@ private:
     void OnConfigureOfflineProseAi(wxCommandEvent& event);
     void OnShowShortcuts(wxCommandEvent& event);
     void OnShowManuscriptGuide(wxCommandEvent& event);
+    void OnConvertChat(wxCommandEvent& event);
+    void OnInstallChatRuntime(wxCommandEvent& event);
     void OnToggleFocus(wxCommandEvent& event);
     void OnTogglePane(wxCommandEvent& event);
     void OnPaneClose(wxAuiManagerEvent& event);

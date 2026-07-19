@@ -62,6 +62,10 @@ add_library(say_count_core STATIC
     src/core/flow_layout.cpp
     src/core/prose.cpp
     src/core/manuscript.cpp
+    src/core/chat_program_parser.cpp
+    src/core/chat_program_formatter.cpp
+    src/core/chat_dialogue_adapter.cpp
+    src/core/chat_runtime.cpp
     src/core/offline_prose_ai.cpp
     src/core/voice.cpp
     src/core/translation.cpp
@@ -93,6 +97,7 @@ add_executable(say-count
     src/ui/main_frame.cpp
     src/ui/rename_dialog.cpp
     src/ui/manuscript_dialog.cpp
+    src/ui/chat_conversion_dialog.cpp
     src/ui/runtime_preset_dialog.cpp
     src/ui/renpy_lint_panel.cpp
     src/ui/asset_panel.cpp
@@ -108,7 +113,9 @@ find_package(Threads REQUIRED)
 target_link_libraries(say-count PRIVATE say_count_core ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
 target_compile_definitions(say-count PRIVATE
     SAY_COUNT_ICON_PATH="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/512x512/apps/say-count.png"
-    SAY_COUNT_SOURCE_ICON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/say-count.png")
+    SAY_COUNT_SOURCE_ICON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/say-count.png"
+    SAY_COUNT_CHAT_INSTALLED_PATH="${CMAKE_INSTALL_FULL_DATADIR}/say-count/chat_program"
+    SAY_COUNT_CHAT_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/chat_program")
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
     target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
@@ -125,6 +132,8 @@ foreach(icon_size IN ITEMS 48 128 256 512)
 endforeach()
 install(FILES resources/text-x-renpy.xml
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
+install(DIRECTORY resources/chat_program
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/say-count)
 
 configure_file(cmake/uninstall.cmake.in uninstall.cmake @ONLY)
 if(NOT TARGET uninstall)
@@ -134,6 +143,7 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    option(SAY_COUNT_GRAPHICAL_TESTS "Run graphical Ren'Py runtime smoke tests" OFF)
     include(FetchContent)
     # Offline fallback: pre-populate FETCHCONTENT_SOURCE_DIR_CATCH2 or the
     # FetchContent cache with Catch2 v3.8.1 before configuring.
@@ -169,6 +179,8 @@ if(BUILD_TESTING)
         tests/flow_layout_test.cpp
         tests/prose_test.cpp
         tests/manuscript_test.cpp
+        tests/chat_document_test.cpp
+        tests/chat_runtime_test.cpp
         tests/voice_test.cpp
         tests/translation_test.cpp
         tests/continuity_test.cpp
@@ -184,6 +196,16 @@ if(BUILD_TESTING)
         tests/vim_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
+
+    add_executable(say-count-chat-ui-tests
+        tests/chat_ui_test.cpp
+        src/ui/chat_conversion_dialog.cpp
+        src/ui/editor_notebook.cpp
+        src/ui/style.cpp)
+    target_link_libraries(say-count-chat-ui-tests PRIVATE
+        say_count_core Catch2::Catch2 ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
+    add_test(NAME chat-conversion-ui COMMAND say-count-chat-ui-tests)
+    set_tests_properties(chat-conversion-ui PROPERTIES TIMEOUT 20)
 
     add_executable(say-count-performance tests/performance_benchmark.cpp)
     target_link_libraries(say-count-performance PRIVATE say_count_core)
@@ -285,4 +307,17 @@ if(BUILD_TESTING)
             -DFIXTURE2=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/warning-support/gui.rpy
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/parity.cmake
     )
+
+    find_program(RENPY_TEST_EXECUTABLE NAMES renpy renpy.sh)
+    if(RENPY_TEST_EXECUTABLE)
+        add_test(
+            NAME chat-program-renpy-lint-compile
+            COMMAND ${CMAKE_COMMAND}
+                -DRENPY=${RENPY_TEST_EXECUTABLE}
+                -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}
+                -DWORK=${CMAKE_CURRENT_BINARY_DIR}/chat-program-renpy-project
+                -DRUN_GRAPHICAL_RUNTIME=${SAY_COUNT_GRAPHICAL_TESTS}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/chat_renpy.cmake)
+        set_tests_properties(chat-program-renpy-lint-compile PROPERTIES TIMEOUT 90)
+    endif()
 endif()

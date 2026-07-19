@@ -1,0 +1,4 @@
+Fixtures in this directory are adapted from robo-barbie/chat_program, released
+under the Unlicense. Upstream revision: 85ee08dd3e09ebf4492159f350b3a70de530b0ef.
+
+This is free and unencumbered software released into the public domain.

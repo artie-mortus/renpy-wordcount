@@ -1,0 +1,377 @@
+#include "ui/chat_conversion_dialog.h"
+
+#include "core/chat_dialogue_adapter.h"
+#include "core/chat_program_formatter.h"
+#include "core/chat_program_parser.h"
+
+#include <algorithm>
+#include <wx/button.h>
+#include <wx/checkbox.h>
+#include <wx/clipbrd.h>
+#include <wx/dataview.h>
+#include <wx/html/htmlwin.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/textctrl.h>
+#include <wx/thread.h>
+
+#include "ui/style.h"
+
+namespace say_count::ui {
+namespace {
+
+wxDEFINE_EVENT(kChatConversionReady, wxThreadEvent);
+
+class ChatGuideDialog final : public wxDialog {
+public:
+    explicit ChatGuideDialog(wxWindow* parent)
+        : wxDialog(parent, wxID_ANY, "Chat Format Guide", wxDefaultPosition, wxSize(820, 720),
+                   wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER) {
+        auto* layout = new wxBoxSizer(wxVERTICAL);
+        auto* page = new wxHtmlWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                      wxHW_SCROLLBAR_AUTO | wxBORDER_NONE);
+        page->SetBorders(18);
+        page->SetPage(R"HTML(
+<html><body bgcolor="#FCFBF8" text="#17243A">
+<font face="DejaVu Sans">
+<font color="#76546E" size="2"><b>CHAT FORMAT · SOCIAL-MEDIA SCENES</b></font>
+<h1>Write messenger scenes as prose. Play them as a chat app.</h1>
+<p>Say Count converts prose or ordinary dialogue into the
+<tt>chat_program</tt> framework's Ren'Py syntax, which renders scenes as a
+Discord-style messenger inside your game. The reverse conversion turns
+supported chat scenes back into editable dialogue.</p>
+
+<h2>The three commands</h2>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<b>Edit &rarr; Convert to Chat Format&hellip;</b> converts the selection, or the whole
+active tab, into chat messages. Pick the default channel, map speakers to
+aliases, and preview before one undoable replacement.<br><br>
+<b>Edit &rarr; Convert Chat to Dialogue&hellip;</b> converts a chat scene back to
+manuscript (<tt>Name: text</tt>) or ordinary Ren'Py say statements. Chat-only
+metadata is listed and must be acknowledged before replacing.<br><br>
+<b>Edit &rarr; Install/Update Chat Runtime&hellip;</b> copies the pinned
+<tt>chat_program</tt> runtime into <tt>game/vendor/chat_program</tt>. Locally
+modified files are never overwritten.
+</td></tr></table>
+<p>All three are also in the command palette (<tt>Ctrl+Shift+P</tt>).</p>
+
+<hr>
+<h2>Setup, once per project</h2>
+<p>Connect your project folder, then run <b>Install/Update Chat Runtime</b>.
+The installer adds the framework, license, and a project-owned
+<tt>game/say_count_chat_config.rpy</tt> that is yours to edit and is never
+overwritten afterward.</p>
+
+<h2>Writing a chat scene</h2>
+<p>Type the scene as prose, select it, and convert:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr>
+<td width="48%"><font size="2" color="#4C5A6D">WRITE</font><br>
+<tt>Robo: yo you seeing this??<br>Me: seeing what</tt></td>
+<td><font size="2" color="#4C5A6D">BECOMES</font><br>
+<tt>robo "yo you seeing this??"<br>me "seeing what"</tt></td>
+</tr></table>
+<p>Character definitions are generated when missing:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<tt>default robo = ChatCharacter("Robo", icon="images/robo.png")</tt><br>
+<tt>default me = ChatCharacter("[player_name]", is_player=True)</tt>
+</td></tr></table>
+
+<h2>Channels, typers, timing</h2>
+<p>Channels behave like servers or DMs in the chat screen. Messages inherit the
+current channel; add arguments only where something changes:</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
+<tt>robo "check #announcements" (c="#announcements", ot=[me], fastmode=0.1)</tt>
+</td></tr></table>
+<p><tt>c=</tt> switches channel, <tt>ot=</tt> shows other characters typing, and
+<tt>fastmode=</tt> compresses message pacing. Menus support
+<tt>auto_send=False</tt> for choices the player must confirm.</p>
+
+<hr>
+<h2>Entering and leaving the chat app</h2>
+<p>Mix chat and normal VN scenes in one script with the bundled bridge labels:</p>
+<table width="100%" cellpadding="10" bgcolor="#17243A"><tr><td><font color="#FFFFFF"><tt>
+label chapter_one:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;e "Normal VN dialogue."<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;call say_count_chat_begin("#general")<br>
+&nbsp;&nbsp;&nbsp;&nbsp;robo "yo you seeing this??"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;me "seeing what"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;call say_count_chat_end<br><br>
+&nbsp;&nbsp;&nbsp;&nbsp;scene bg bedroom<br>
+&nbsp;&nbsp;&nbsp;&nbsp;e "Back to the regular visual novel."
+</tt></font></td></tr></table>
+<p><tt>say_count_chat_begin</tt> clears earlier messages by default; pass
+<tt>clear=False</tt> to keep history, as when the player reopens their phone.
+<tt>say_count_chat_end</tt> hides the chat screen and restores the normal
+dialogue window.</p>
+
+<hr>
+<h2>What the reverse conversion loses</h2>
+<p>Regular dialogue has no place for channels, other-typer lists,
+<tt>fastmode</tt>, player ownership, icons, name colors, or
+<tt>auto_send</tt>. The preview lists each loss; unrecognized code is preserved
+unchanged rather than guessed at.</p>
+
+<h2>Notes</h2>
+<ul>
+<li>Say Count never edits <tt>screens.rpy</tt>. Copy the upstream
+<tt>choice</tt> screen if you want chat-style auto-send replies.</li>
+<li>Keep project settings in <tt>say_count_chat_config.rpy</tt>; avoid editing
+the vendored runtime so upgrades stay automatic.</li>
+<li>See <tt>game/vendor/chat_program/INTEGRATION.md</tt> in your project for
+the full integration reference.</li>
+</ul>
+<p><b>If a conversion is not what you expected, use Undo.</b></p>
+</font></body></html>
+)HTML");
+        layout->Add(page, 1, wxEXPAND);
+        auto* actions = new wxStdDialogButtonSizer();
+        actions->AddButton(new wxButton(this, wxID_OK, "Close guide"));
+        actions->Realize();
+        layout->Add(actions, 0, wxEXPAND | wxALL, 12);
+        SetSizer(layout);
+        CentreOnParent();
+    }
+};
+
+}  // namespace
+
+void ShowChatGuide(wxWindow* parent) {
+    ChatGuideDialog(parent).ShowModal();
+}
+
+ChatConversion ChatConversionDialog::Convert(const ConversionRequest& request) const {
+    ChatConversion conversion = to_chat_
+        ? convert_manuscript_to_chat(source_, request.channel, existing_characters_,
+            request.chat_narration ? request.narrator_alias : std::string{}, "Narrator")
+        : convert_chat_to_manuscript(source_, request.ordinary_renpy);
+    if (!to_chat_) return conversion;
+
+    std::map<std::string, std::string> aliases_by_name;
+    for (const auto& [alias, name] : existing_characters_) aliases_by_name[name] = alias;
+    for (const auto& character : conversion.document.characters)
+        aliases_by_name[character.name] = character.alias;
+    std::map<std::string, std::string> alias_changes;
+    for (const auto& [name, alias] : aliases_by_name) {
+        const auto override = request.alias_overrides.find(name);
+        if (override != request.alias_overrides.end() && !override->second.empty())
+            alias_changes[alias] = override->second;
+    }
+    for (auto& character : conversion.document.characters) {
+        const auto changed = alias_changes.find(character.alias);
+        if (changed != alias_changes.end()) character.alias = changed->second;
+    }
+    const auto remap = [&](const auto& self, std::vector<ChatEvent>* events) -> void {
+        for (auto& event : *events) {
+            const auto speaker = alias_changes.find(event.speaker);
+            if (speaker != alias_changes.end()) event.speaker = speaker->second;
+            for (auto& typer : event.other_typers) {
+                const auto changed = alias_changes.find(typer);
+                if (changed != alias_changes.end()) typer = changed->second;
+            }
+            self(self, &event.children);
+        }
+    };
+    remap(remap, &conversion.document.events);
+    conversion.text = format_chat_program(conversion.document);
+    return conversion;
+}
+
+ChatConversionDialog::ChatConversionDialog(wxWindow* parent, std::string_view source, bool to_chat,
+                                           std::map<std::string, std::string> existing_characters)
+    : wxDialog(parent, wxID_ANY, to_chat ? "Convert to Chat Format" : "Convert Chat to Dialogue",
+               wxDefaultPosition, wxSize(1040, 720), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+      source_(source), to_chat_(to_chat), existing_characters_(std::move(existing_characters)) {
+    Bind(kChatConversionReady, &ChatConversionDialog::OnConversionReady, this);
+    auto* layout = new wxBoxSizer(wxVERTICAL);
+    auto* heading = new wxStaticText(this, wxID_ANY,
+        to_chat ? "Preview prose/dialogue as chat_program Ren'Py"
+                : "Preview chat_program as regular dialogue");
+    heading->SetFont(style::BodyFont(14, wxFONTWEIGHT_BOLD));
+    layout->Add(heading, 0, wxALL, 16);
+    if (to_chat_) {
+        auto* row = new wxBoxSizer(wxHORIZONTAL);
+        row->Add(new wxStaticText(this, wxID_ANY, "Default channel"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        channel_ = new wxTextCtrl(this, wxID_ANY, "#general");
+        channel_->SetName("Default chat channel");
+        row->Add(channel_, 1);
+        layout->Add(row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+        channel_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RequestConversion(); });
+        auto* narration_row = new wxBoxSizer(wxHORIZONTAL);
+        chat_narration_ = new wxCheckBox(this, wxID_ANY, "Send narration as chat messages using alias");
+        chat_narration_->SetName("Send narration as chat messages");
+        narrator_alias_ = new wxTextCtrl(this, wxID_ANY, "narrator");
+        narrator_alias_->SetName("Narrator chat alias");
+        narration_row->Add(chat_narration_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+        narration_row->Add(narrator_alias_, 1);
+        layout->Add(narration_row, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+        chat_narration_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+            narrator_alias_->Enable(chat_narration_->GetValue());
+            RequestConversion();
+        });
+        narrator_alias_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RequestConversion(); });
+        narrator_alias_->Disable();
+        layout->Add(new wxStaticText(this, wxID_ANY,
+            "Character mapping (double-click an alias to change it)"),
+            0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+        mappings_ = new wxDataViewListCtrl(this, wxID_ANY, wxDefaultPosition, wxSize(-1, 130));
+        mappings_->SetName("Chat character mappings");
+        mappings_->AppendTextColumn("Alias", wxDATAVIEW_CELL_EDITABLE, 180);
+        mappings_->AppendTextColumn("Display name", wxDATAVIEW_CELL_INERT, 320);
+        layout->Add(mappings_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+        mappings_->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, [this](wxDataViewEvent& event) {
+            const int row = mappings_->ItemToRow(event.GetItem());
+            if (row == wxNOT_FOUND) return;
+            const std::string alias = mappings_->GetTextValue(row, 0).ToStdString(wxConvUTF8);
+            const std::string name = mappings_->GetTextValue(row, 1).ToStdString(wxConvUTF8);
+            if (!valid_chat_alias(alias)) {
+                wxBell();
+                const auto existing = std::find_if(existing_characters_.begin(), existing_characters_.end(),
+                    [&](const auto& entry) { return entry.second == name; });
+                std::string original = existing == existing_characters_.end() ? "character" : existing->first;
+                for (const auto& character : conversion_.document.characters)
+                    if (character.name == name) original = character.alias;
+                mappings_->SetTextValue(wxString::FromUTF8(original), row, 0);
+                return;
+            }
+            alias_overrides_[name] = alias;
+            RequestConversion();
+        });
+    } else {
+        ordinary_renpy_ = new wxCheckBox(this, wxID_ANY, "Output ordinary Ren'Py say statements");
+        ordinary_renpy_->SetName("Chat conversion output format");
+        layout->Add(ordinary_renpy_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+        ordinary_renpy_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { RequestConversion(); });
+    }
+    summary_ = new wxStaticText(this, wxID_ANY, wxEmptyString);
+    summary_->SetForegroundColour(style::Colors().ink_soft);
+    layout->Add(summary_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+    losses_ = new wxStaticText(this, wxID_ANY, wxEmptyString);
+    losses_->SetName("Chat metadata losses");
+    losses_->SetForegroundColour(style::Colors().plum);
+    losses_->Hide();
+    layout->Add(losses_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 16);
+    acknowledge_losses_ = new wxCheckBox(this, wxID_ANY,
+        "I understand that the listed chat-only metadata will be removed");
+    acknowledge_losses_->SetName("Acknowledge chat metadata loss");
+    acknowledge_losses_->Hide();
+    layout->Add(acknowledge_losses_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 16);
+    acknowledge_losses_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+        replace_->Enable(!conversion_.text.empty() &&
+                         (conversion_.losses.empty() || acknowledge_losses_->GetValue()));
+    });
+    preview_ = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+                              wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
+    preview_->SetName("Chat conversion preview");
+    layout->Add(preview_, 1, wxEXPAND | wxLEFT | wxRIGHT, 16);
+    auto* actions = new wxStdDialogButtonSizer();
+    copy_ = new wxButton(this, wxID_ANY, "Copy result");
+    copy_->SetName("Copy chat conversion result");
+    replace_ = new wxButton(this, wxID_OK, "Replace source");
+    replace_->SetName("Replace source with chat conversion");
+    actions->AddButton(copy_);
+    actions->AddButton(replace_);
+    auto* cancel = new wxButton(this, wxID_CANCEL, "Cancel");
+    cancel->SetName("Cancel chat conversion");
+    actions->AddButton(cancel);
+    actions->Realize();
+    layout->Add(actions, 0, wxEXPAND | wxALL, 16);
+    SetSizer(layout);
+    copy_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        if (wxTheClipboard->Open()) {
+            wxTheClipboard->SetData(new wxTextDataObject(wxString::FromUTF8(conversion_.text)));
+            wxTheClipboard->Close();
+        }
+    });
+    worker_ = std::thread(&ChatConversionDialog::WorkerLoop, this);
+    RequestConversion();
+    CentreOnParent();
+}
+
+ChatConversionDialog::~ChatConversionDialog() {
+    generation_.fetch_add(1, std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> lock(worker_mutex_);
+        stopping_ = true;
+        pending_request_.reset();
+    }
+    worker_wakeup_.notify_one();
+    if (worker_.joinable()) worker_.join();
+}
+
+void ChatConversionDialog::RequestConversion() {
+    ConversionRequest request;
+    request.generation = generation_.fetch_add(1, std::memory_order_relaxed) + 1;
+    request.channel = channel_ ? channel_->GetValue().ToStdString(wxConvUTF8) : std::string{};
+    request.chat_narration = chat_narration_ && chat_narration_->GetValue();
+    request.narrator_alias = narrator_alias_
+        ? narrator_alias_->GetValue().ToStdString(wxConvUTF8) : std::string{};
+    request.ordinary_renpy = ordinary_renpy_ && ordinary_renpy_->GetValue();
+    request.alias_overrides = alias_overrides_;
+    {
+        std::lock_guard<std::mutex> lock(worker_mutex_);
+        pending_request_ = std::move(request);
+    }
+    summary_->SetLabel("Converting…");
+    replace_->Disable();
+    copy_->Disable();
+    worker_wakeup_.notify_one();
+}
+
+void ChatConversionDialog::WorkerLoop() {
+    for (;;) {
+        ConversionRequest request;
+        {
+            std::unique_lock<std::mutex> lock(worker_mutex_);
+            worker_wakeup_.wait(lock, [this] { return stopping_ || pending_request_.has_value(); });
+            if (stopping_) return;
+            request = std::move(*pending_request_);
+            pending_request_.reset();
+        }
+        auto conversion = Convert(request);
+        if (generation_.load(std::memory_order_relaxed) != request.generation) continue;
+        auto* event = new wxThreadEvent(kChatConversionReady);
+        event->SetPayload(std::pair<std::uint64_t, ChatConversion>{
+            request.generation, std::move(conversion)});
+        wxQueueEvent(this, event);
+    }
+}
+
+void ChatConversionDialog::OnConversionReady(wxThreadEvent& event) {
+    auto payload = event.GetPayload<std::pair<std::uint64_t, ChatConversion>>();
+    if (payload.first != generation_.load(std::memory_order_relaxed)) return;
+    conversion_ = std::move(payload.second);
+    if (to_chat_) {
+        std::map<std::string, std::string> aliases_by_name;
+        for (const auto& [alias, name] : existing_characters_) aliases_by_name[name] = alias;
+        for (const auto& character : conversion_.document.characters)
+            aliases_by_name[character.name] = character.alias;
+        if (!mappings_initialized_) {
+            for (const auto& [name, alias] : aliases_by_name)
+                mappings_->AppendItem({wxVariant(wxString::FromUTF8(alias)),
+                                       wxVariant(wxString::FromUTF8(name))});
+            mappings_initialized_ = true;
+        }
+    }
+    preview_->ChangeValue(wxString::FromUTF8(conversion_.text));
+    std::string summary = std::to_string(conversion_.messages) + " messages · " +
+        std::to_string(conversion_.narration) + " narration · " +
+        std::to_string(conversion_.choices) + " choices";
+    if (!conversion_.losses.empty()) summary += " · " + std::to_string(conversion_.losses.size()) + " metadata losses";
+    if (!conversion_.document.diagnostics.empty()) summary += " · " + std::to_string(conversion_.document.diagnostics.size()) + " warnings";
+    summary_->SetLabel(wxString::FromUTF8(summary));
+    std::string loss_details;
+    for (const auto& loss : conversion_.losses) {
+        if (!loss_details.empty()) loss_details += "\n";
+        loss_details += "• " + loss.message;
+    }
+    losses_->SetLabel(wxString::FromUTF8(loss_details));
+    losses_->Show(!conversion_.losses.empty());
+    acknowledge_losses_->Show(!conversion_.losses.empty());
+    if (conversion_.losses.empty()) acknowledge_losses_->SetValue(false);
+    replace_->Enable(!conversion_.text.empty() &&
+                     (conversion_.losses.empty() || acknowledge_losses_->GetValue()));
+    copy_->Enable(!conversion_.text.empty());
+    Layout();
+}
+
+}  // namespace say_count::ui

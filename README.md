@@ -7,6 +7,30 @@ caret/scroll positions, active tab, connected project, and dock layout. Use
 `Ctrl+P` to search project files, labels, and characters, or `Ctrl+Shift+P` to
 search application commands.
 
+## Chat format conversion
+
+Use **Edit → Convert to Chat Format…** to turn selected prose/dialogue (or the
+whole active tab) into syntax for
+[`robo-barbie/chat_program`](https://github.com/robo-barbie/chat_program).
+Choose a default channel, review the generated `ChatCharacter` definitions and
+messages, then replace the source as one undoable edit. Use **Convert Chat to
+Dialogue…** for the reverse direction, either as readable `Name: text`
+manuscript or ordinary Ren'Py say statements. The preview reports chat-only
+channel, typing, timing, and choice metadata that regular dialogue cannot keep.
+
+For a connected Ren'Py project, **Edit → Install/Update Chat Runtime…** installs
+the pinned, licensed upstream runtime under `game/vendor/chat_program`. Existing
+files that differ are treated as local customizations and are never overwritten.
+When the runtime itself is customized, Say Count can export the pinned upgrade
+beside the project for manual comparison; it does not place a second active
+runtime inside `game/`.
+Say Count does not edit `screens.rpy`; projects using chat-specific choice-screen
+behavior should apply the upstream screen customization manually.
+
+Use `call say_count_chat_begin("#general")` to enter the installed chat screen
+and `call say_count_chat_end` to hide it and resume normal VN dialogue. See the
+complete transition example in `resources/chat_program/INTEGRATION.md`.
+
 ## Build
 
 Install CMake, a C++17 compiler, Git, wxWidgets 3.2 or newer with the `core`,
