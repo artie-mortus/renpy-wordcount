@@ -8,19 +8,19 @@ jobs:
   build-test-performance:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install dependencies
         # nodejs is required by CMake configure even though parity tests are skipped below.
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake nodejs libwxgtk3.2-dev libwxgtk-media3.2-dev libcurl4-openssl-dev libssl-dev
+          sudo apt-get install -y build-essential cmake nodejs xvfb libwxgtk3.2-dev libwxgtk-media3.2-dev libcurl4-openssl-dev libssl-dev
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
-        run: cmake --build build -j2 --target say-count say-count-tests
+        run: cmake --build build -j2 --target say-count say-count-tests say-count-chat-ui-tests
       - name: Test
         # Parity tests need the reference JS app checked out as a sibling
         # (../words-til-vn), which is not available on CI.
-        run: ctest --test-dir build --output-on-failure -E parser-parity
+        run: xvfb-run -a ctest --test-dir build --output-on-failure -E parser-parity
       - name: Check performance thresholds
         run: cmake --build build -j2 --target performance-check
