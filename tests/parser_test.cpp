@@ -80,7 +80,7 @@ TEST_CASE("menu choices can be ignored or counted") {
     CHECK(ignored.total_words == 3);
     CHECK(ignored.counted.size() == 2);
 
-    const auto counted = say_count::analyze_script(script, say_count::AnalysisOptions{true});
+    const auto counted = say_count::analyze_script(script, say_count::AnalysisOptions{true, {}, 35});
     CHECK(counted.total_words == 7);
     REQUIRE(counted.counted.size() == 4);
     CHECK(counted.counted[0].speaker == "menu choice");
@@ -171,7 +171,7 @@ TEST_CASE("project analysis resolves definitions and invalidates changed inputs"
 TEST_CASE("project analysis option counts menu choices") {
     const std::vector<say_count::NamedScript> files = {{"menu.rpy", "menu:\n    \"Choice text\":\n        \"Narration.\""}};
     CHECK(say_count::analyze_project(files).total_words == 1);
-    const auto counted = say_count::analyze_project(files, say_count::AnalysisOptions{true});
+    const auto counted = say_count::analyze_project(files, say_count::AnalysisOptions{true, {}, 35});
     CHECK(counted.total_words == 3);
     CHECK(std::any_of(counted.counted.begin(), counted.counted.end(), [](const auto& line) { return line.is_menu_choice; }));
 }

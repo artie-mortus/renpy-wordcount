@@ -75,7 +75,8 @@ std::vector<std::string> collect_project_labels(const std::vector<NamedScript>& 
                 else global = name;
                 labels.insert(std::move(name));
             }
-            if (newline == std::string::npos) break; start = newline + 1;
+            if (newline == std::string::npos) break;
+            start = newline + 1;
         }
     }
     return {labels.begin(), labels.end()};
@@ -89,7 +90,9 @@ std::string coverage_file_name(std::string_view project_root) {
 }
 
 std::vector<std::string> CoverageTail::Read(const std::string& path, std::string* error) {
-    if (error) error->clear(); std::vector<std::string> labels; std::error_code ec;
+    if (error) error->clear();
+    std::vector<std::string> labels;
+    std::error_code ec;
     if (!fs::exists(path, ec)) { Reset(); return labels; }
     const auto size = fs::file_size(path, ec); if (ec) { if (error) *error = "Could not inspect coverage output."; return {}; }
     if (size < offset_) Reset();
@@ -111,8 +114,11 @@ std::vector<std::string> CoverageTail::Read(const std::string& path, std::string
 void CoverageTail::Reset() { offset_ = 0; pending_.clear(); }
 
 std::map<std::string, std::set<std::string>> ManualCoverageStore::Load(std::string* error) const {
-    if (error) error->clear(); std::map<std::string, std::set<std::string>> result; std::ifstream in(path_, std::ios::binary);
-    if (!in) return result; std::string magic, count_line;
+    if (error) error->clear();
+    std::map<std::string, std::set<std::string>> result;
+    std::ifstream in(path_, std::ios::binary);
+    if (!in) return result;
+    std::string magic, count_line;
     if (!std::getline(in, magic) || magic != kMagic || !std::getline(in, count_line)) { if (error) *error = "Invalid manual coverage file."; return {}; }
     std::size_t projects = 0; try { projects = std::stoull(count_line); } catch (...) { if (error) *error = "Invalid manual coverage file."; return {}; }
     for (std::size_t p = 0; p < projects; ++p) {
@@ -124,7 +130,9 @@ std::map<std::string, std::set<std::string>> ManualCoverageStore::Load(std::stri
 }
 
 bool ManualCoverageStore::Save(const std::map<std::string, std::set<std::string>>& projects, std::string* error) const {
-    if (error) error->clear(); std::error_code ec; fs::create_directories(fs::path(path_).parent_path(), ec);
+    if (error) error->clear();
+    std::error_code ec;
+    fs::create_directories(fs::path(path_).parent_path(), ec);
     if (ec) { if (error) *error = "Could not create coverage directory."; return false; }
     const fs::path temporary = path_ + ".tmp"; std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
     out << kMagic << '\n' << projects.size() << '\n';

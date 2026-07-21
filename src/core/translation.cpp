@@ -75,7 +75,7 @@ TranslationDashboard scan_translation_dashboard(
                                     std::regex_match(line, match, dialogue_pattern);
             if (!translated || source_file.empty() || !source_line) continue;
             if (match[1].str().empty()) {
-                TranslationEntry entry{source_file, source_line, source_text};
+                TranslationEntry entry{source_file, source_line, source_text, {}, {}, {}, {}, 0};
                 entry.translation_file = std::filesystem::relative(path, game_directory, ec).generic_string();
                 entry.translation_line = translation_line;
                 const auto found = context.find(source_file + ":" + std::to_string(source_line));

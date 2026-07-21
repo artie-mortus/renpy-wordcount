@@ -13,6 +13,23 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+option(SAY_COUNT_WARNINGS_AS_ERRORS "Treat Say Count compiler warnings as errors" OFF)
+option(SAY_COUNT_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+
+function(say_count_harden_target target)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        if(SAY_COUNT_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+        if(SAY_COUNT_ENABLE_SANITIZERS)
+            target_compile_options(${target} PRIVATE
+                -fsanitize=address,undefined -fno-omit-frame-pointer)
+            target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+        endif()
+    endif()
+endfunction()
+
 set(PROSE_GUIDE_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/resources/guides/prose.html)
 set(CHAT_GUIDE_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/resources/guides/chat.html)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
@@ -95,6 +112,7 @@ add_library(say_count_core STATIC
 )
 target_include_directories(say_count_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(say_count_core PUBLIC SAY_COUNT_VERSION="${PROJECT_VERSION}")
+say_count_harden_target(say_count_core)
 
 add_executable(say-count
     src/app/main.cpp
@@ -103,17 +121,20 @@ add_executable(say-count
     src/app/offline_prose_runner.cpp
     src/ui/editor_notebook.cpp
     src/ui/command_model.cpp
+    src/ui/command_button.cpp
     src/ui/style.cpp
     src/ui/guide_dialog.cpp
     src/ui/welcome_dialog.cpp
     src/ui/story_element_dialog.cpp
     src/ui/story_library_panel.cpp
+    src/ui/project_navigator_panel.cpp
     src/ui/writer_draft_dialog.cpp
     src/ui/palette_dialog.cpp
     src/ui/diagnostics_panel.cpp
     src/ui/conflict_dialog.cpp
     src/ui/snapshot_dialog.cpp
     src/ui/main_frame.cpp
+    src/ui/main_frame_shell.cpp
     src/ui/rename_dialog.cpp
     src/ui/manuscript_dialog.cpp
     src/ui/chat_conversion_dialog.cpp
@@ -135,6 +156,7 @@ target_compile_definitions(say-count PRIVATE
     SAY_COUNT_SOURCE_ICON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/say-count.png"
     SAY_COUNT_CHAT_INSTALLED_PATH="${CMAKE_INSTALL_FULL_DATADIR}/say-count/chat_program"
     SAY_COUNT_CHAT_RESOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/chat_program")
+say_count_harden_target(say-count)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(say_count_core PRIVATE $<$<CONFIG:Release>:-O2>)
     target_compile_options(say-count PRIVATE $<$<CONFIG:Release>:-O2>)
@@ -218,16 +240,19 @@ if(BUILD_TESTING)
         tests/vim_test.cpp
     )
     target_link_libraries(say-count-tests PRIVATE say_count_core Catch2::Catch2WithMain)
+    say_count_harden_target(say-count-tests)
 
     add_executable(say-count-chat-ui-tests
         tests/chat_ui_test.cpp
         src/app/settings.cpp
         src/ui/command_model.cpp
+        src/ui/command_button.cpp
         src/ui/chat_conversion_dialog.cpp
         src/ui/guide_dialog.cpp
         src/ui/welcome_dialog.cpp
         src/ui/story_element_dialog.cpp
         src/ui/story_library_panel.cpp
+        src/ui/project_navigator_panel.cpp
         src/ui/writer_draft_dialog.cpp
         src/ui/editor_notebook.cpp
         src/ui/style.cpp)
@@ -235,11 +260,13 @@ if(BUILD_TESTING)
         say_count_core Catch2::Catch2 ${SAY_COUNT_WX_LIBRARIES} Threads::Threads)
     target_include_directories(say-count-chat-ui-tests PRIVATE
         ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    say_count_harden_target(say-count-chat-ui-tests)
     add_test(NAME chat-conversion-ui COMMAND say-count-chat-ui-tests)
     set_tests_properties(chat-conversion-ui PROPERTIES TIMEOUT 20)
 
     add_executable(say-count-performance tests/performance_benchmark.cpp)
     target_link_libraries(say-count-performance PRIVATE say_count_core)
+    say_count_harden_target(say-count-performance)
     add_custom_target(performance-check
         COMMAND say-count-performance --check
         DEPENDS say-count-performance
@@ -346,9 +373,21 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_COMMAND}
                 -DRENPY=${RENPY_TEST_EXECUTABLE}
                 -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}
-                -DWORK=${CMAKE_CURRENT_BINARY_DIR}/chat-program-renpy-project
-                -DRUN_GRAPHICAL_RUNTIME=${SAY_COUNT_GRAPHICAL_TESTS}
+                -DWORK=${CMAKE_CURRENT_BINARY_DIR}/chat-program-renpy-lint-project
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/chat_renpy.cmake)
         set_tests_properties(chat-program-renpy-lint-compile PROPERTIES TIMEOUT 90)
+        if(SAY_COUNT_GRAPHICAL_TESTS)
+            add_test(
+                NAME chat-program-renpy-runtime
+                COMMAND ${CMAKE_COMMAND}
+                    -DRENPY=${RENPY_TEST_EXECUTABLE}
+                    -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}
+                    -DWORK=${CMAKE_CURRENT_BINARY_DIR}/chat-program-renpy-runtime-project
+                    -DRUN_GRAPHICAL_RUNTIME=ON
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/chat_renpy.cmake)
+            set_tests_properties(chat-program-renpy-runtime PROPERTIES
+                DEPENDS chat-program-renpy-lint-compile
+                TIMEOUT 75)
+        endif()
     endif()
 endif()

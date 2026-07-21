@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <map>
 #include <string>
+#include <utility>
 #include <string_view>
 #include <vector>
 
@@ -14,6 +15,14 @@ struct ChatSourceLocation {
 };
 
 struct ChatCharacter {
+    ChatCharacter() = default;
+    ChatCharacter(std::string alias_value, std::string name_value,
+                  std::string icon_value = {}, std::string color_value = "#FFF",
+                  bool player = false, ChatSourceLocation source_value = {})
+        : alias(std::move(alias_value)), name(std::move(name_value)),
+          icon(std::move(icon_value)), name_color(std::move(color_value)),
+          is_player(player), source(source_value) {}
+
     std::string alias;
     std::string name;
     std::string icon;

@@ -101,7 +101,7 @@ std::optional<ChatCharacter> ParseCharacter(std::string_view line, std::size_t n
     if (arguments.empty()) return std::nullopt;
     const auto name = QuotedValue(arguments.front());
     if (!name) return std::nullopt;
-    ChatCharacter result{alias, *name};
+    ChatCharacter result{alias, *name, {}, "#FFF", false, {}};
     result.source = {number, 1};
     for (std::size_t i = 1; i < arguments.size(); ++i) {
         const auto equal = arguments[i].find('=');

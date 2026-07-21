@@ -66,6 +66,7 @@ enum MenuId {
     kShowProduction,
     kFixIndents,
     kShowOutline,
+    kShowProjectNavigator,
     kShowSpeakerStats,
     kShowStoryLibrary,
     kShowDiagnostics,

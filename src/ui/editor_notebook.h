@@ -78,7 +78,8 @@ public:
 
     void NewTab();
     bool OpenFiles(const std::vector<wxString>& paths, bool focus_existing = true);
-    bool OpenProjectFiles(const std::vector<wxString>& paths);
+    bool OpenProjectFiles(const std::vector<ProjectScriptFile>& files);
+    bool RefreshProjectFile(const wxString& path);
     bool SaveCurrent();
     bool SaveCurrentAs();
     void CloseCurrentTab();
@@ -173,6 +174,15 @@ private:
     void ApplyDiagnostics();
     void ApplyCommandResult(wxStyledTextCtrl* editor, const EditorCommandResult& result);
     void NotifyDocumentState();
+    std::optional<std::size_t> ProjectIndexForPath(const wxString& path) const;
+    wxStyledTextCtrl* OpenProjectEditor(std::size_t index);
+    wxStyledTextCtrl* OpenEditorForPath(const wxString& path) const;
+    std::string ProjectNameForPath(const wxString& path) const;
+
+    struct ProjectDocument {
+        ProjectScriptFile file;
+        std::string content;
+    };
 
     unsigned int next_untitled_number_ = 1;
     app::EditorSettings settings_;
@@ -185,6 +195,7 @@ private:
     std::unordered_map<wxStyledTextCtrl*, wxPanel*> empty_hints_;
     CompletionIndex completion_index_;
     std::unordered_map<wxStyledTextCtrl*, CompletionIndex> completion_indexes_;
+    std::unordered_map<std::string, CompletionIndex> project_completion_indexes_;
     std::unordered_set<wxStyledTextCtrl*> pending_completion_editors_;
     std::string find_query_;
     FindOptions find_options_;
@@ -198,6 +209,7 @@ private:
     std::string nvim_command_line_;
     bool opening_files_ = false;
     bool count_menu_choices_ = false;
+    std::vector<ProjectDocument> project_documents_;
 };
 
 }  // namespace say_count::ui

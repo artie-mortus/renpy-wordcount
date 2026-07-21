@@ -165,13 +165,15 @@ std::map<std::string, std::string> RuntimePresetStore::Load(std::string* error) 
     std::ifstream input(path_, std::ios::binary);
     if (!input) return result;
     std::string magic; if (!std::getline(input, magic) || magic != kPresetMagic) {
-        if (error) *error = "Invalid runtime preset file."; return {};
+        if (error) *error = "Invalid runtime preset file.";
+        return {};
     }
     std::string line; if (!std::getline(input, line)) { if (error) *error = "Invalid runtime preset count."; return {}; }
     std::size_t count = 0; try { count = std::stoull(line); } catch (...) { if (error) *error = "Invalid runtime preset count."; return {}; }
     for (std::size_t i = 0; i < count; ++i) {
         std::string name, json; if (!ReadBlob(input, name) || !ReadBlob(input, json) || !validate_runtime_state(json).valid) {
-            if (error) *error = "Invalid runtime preset data."; return {};
+            if (error) *error = "Invalid runtime preset data.";
+            return {};
         }
         result[name] = json;
     }

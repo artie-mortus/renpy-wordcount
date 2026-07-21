@@ -7,13 +7,16 @@
 #include "ui/welcome_dialog.h"
 #include "ui/story_element_dialog.h"
 #include "ui/story_library_panel.h"
+#include "ui/project_navigator_panel.h"
 #include "ui/command_model.h"
+#include "ui/command_button.h"
 #include "ui/writer_draft_dialog.h"
 #include "app/settings.h"
 
 #include <chrono>
 #include <thread>
 #include <filesystem>
+#include <fstream>
 
 #include <wx/app.h>
 #include <wx/button.h>
@@ -185,6 +188,17 @@ TEST_CASE("command bar keeps writing stable while problems change") {
     CHECK(say_count::ui::CommandFor(say_count::ui::kShowHome).label == std::string("Home"));
 }
 
+TEST_CASE("command bar buttons expose native keyboard and accessibility semantics") {
+    wxFrame frame(nullptr, wxID_ANY, "command button test");
+    say_count::ui::CommandButton button(&frame, "Preview game", true);
+    CHECK(button.AcceptsFocusFromKeyboard());
+    CHECK(button.GetLabel() == "Preview game");
+    CHECK(button.GetName() == "Preview game");
+    button.SetCommandLabel("Stop preview");
+    CHECK(button.GetLabel() == "Stop preview");
+    CHECK(button.GetName() == "Stop preview");
+}
+
 TEST_CASE("onboarding setting defaults safely and persists") {
     namespace fs = std::filesystem;
     const fs::path data = fs::temp_directory_path() / "say-count-onboarding-settings-test";
@@ -298,6 +312,59 @@ TEST_CASE("story library turns cast and project media into plain writing actions
     search->SetValue("missing");
     CHECK(cast->GetCount() == 0);
     CHECK(places->GetCount() == 0);
+}
+
+TEST_CASE("project scripts stay indexed while editor tabs open lazily") {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "say-count-lazy-project-ui-test";
+    fs::remove_all(root);
+    fs::create_directories(root / "chapter-one");
+    fs::create_directories(root / "chapter-two");
+    std::ofstream(root / "chapter-one" / "scene.rpy") << "label one:\n    return\n";
+    std::ofstream(root / "chapter-two" / "scene.rpy") << "label two:\n    return\n";
+
+    wxFrame frame(nullptr, wxID_ANY, "lazy project test");
+    say_count::app::EditorSettings settings;
+    say_count::ui::EditorNotebook notebook(&frame, settings,
+        [](const wxString&, const say_count::ScriptAnalysis&) {});
+    const std::vector<say_count::ProjectScriptFile> files{
+        {"chapter-one/scene.rpy", (root / "chapter-one" / "scene.rpy").string()},
+        {"chapter-two/scene.rpy", (root / "chapter-two" / "scene.rpy").string()},
+    };
+    REQUIRE(notebook.OpenProjectFiles(files));
+    CHECK(notebook.GetPageCount() == 1);
+    const auto scripts = notebook.ProjectScripts();
+    REQUIRE(scripts.size() == 2);
+    CHECK(scripts[0].name == "chapter-one/scene.rpy");
+    CHECK(scripts[1].name == "chapter-two/scene.rpy");
+    notebook.SelectFileIndex(1);
+    CHECK(notebook.GetPageCount() == 2);
+    CHECK(notebook.CurrentFileName() == "chapter-two/scene.rpy");
+    fs::remove_all(root);
+}
+
+TEST_CASE("script index filters relative paths and opens the selected project file") {
+    wxFrame frame(nullptr, wxID_ANY, "script index test");
+    say_count::ui::ProjectNavigatorPanel panel(&frame);
+    panel.SetProject({
+        {"chapter-one/scene.rpy", "/game/chapter-one/scene.rpy"},
+        {"chapter-two/scene.rpy", "/game/chapter-two/scene.rpy"},
+    });
+    auto* search = Named<wxTextCtrl>(panel, "Search project scripts");
+    auto* scripts = Named<wxListBox>(panel, "Project scripts");
+    auto* open = Named<wxButton>(panel, "Open selected project script");
+    REQUIRE(search); REQUIRE(scripts); REQUIRE(open);
+    CHECK(panel.script_count() == 2);
+    search->SetValue("chapter-two");
+    REQUIRE(scripts->GetCount() == 1);
+    CHECK(scripts->GetString(0) == "chapter-two/scene.rpy");
+    std::optional<std::size_t> opened;
+    panel.SetOpenHandler([&](std::size_t index) { opened = index; });
+    scripts->SetSelection(0);
+    wxCommandEvent event(wxEVT_BUTTON, open->GetId());
+    open->GetEventHandler()->ProcessEvent(event);
+    REQUIRE(opened);
+    CHECK(*opened == 1);
 }
 
 TEST_CASE("writing draft keeps natural writing separate from generated script") {

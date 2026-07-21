@@ -40,6 +40,7 @@ const std::vector<CommandSpec>& CommandCatalog() {
         {kToggleWrap, "Toggle word wrap", "View", "Soft-wrap long lines"},
         {kFocusMode, "Toggle focus mode", "Ctrl+Shift+F · View", "Hide nonessential panels"},
         {kShowOutline, "Toggle outline", "View", "Show or hide the script outline"},
+        {kShowProjectNavigator, "Toggle script index", "View", "Show or hide the project's script index"},
         {kShowSpeakerStats, "Toggle speaker statistics", "View", "Show or hide speaker statistics"},
         {kShowDiagnostics, "Problems", "View", "Show problems found in the writing"},
         {kShowRoutes, "Route details", "View", "Show route summaries and paths"},

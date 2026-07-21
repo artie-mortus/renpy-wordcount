@@ -81,7 +81,7 @@ TEST_CASE("analysis menu choices participate in non-narration aggregates only wh
     CHECK_FALSE(find(ignored.speakers, "menu choice"));
     REQUIRE(find(ignored.speakers, "narrator"));
     CHECK(find(ignored.speakers, "narrator")->words == 2);
-    const auto counted = say_count::analyze_script(script, say_count::AnalysisOptions{true});
+    const auto counted = say_count::analyze_script(script, say_count::AnalysisOptions{true, {}, 35});
     REQUIRE(find(counted.speakers, "menu choice"));
     CHECK(find(counted.speakers, "menu choice")->words == 3);
     CHECK(find(counted.speakers, "narrator")->words == 2);

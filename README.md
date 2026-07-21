@@ -5,7 +5,9 @@ Say Count Native is a Linux C++17/wxWidgets conversion of the Say Count Ren'Py e
 The last clean workspace is restored automatically, including open files,
 caret/scroll positions, active tab, connected project, and dock layout. Use
 `Ctrl+P` to search project files, labels, and characters, or `Ctrl+Shift+P` to
-search application commands.
+search application commands. The dockable **Script Index** keeps every project
+script searchable by its folder-relative path while editor tabs are opened only
+as needed; this also keeps same-named scripts in different folders distinct.
 
 Use **File → Home** to start a story, open a game, open a loose script, or
 return to recent work. New stories default to a familiar local folder, preview
@@ -64,6 +66,15 @@ cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
+
+GCC and Clang builds enable the project warning set by default. CI additionally
+uses `-DSAY_COUNT_WARNINGS_AS_ERRORS=ON`; local AddressSanitizer and
+UndefinedBehaviorSanitizer coverage is available with
+`-DSAY_COUNT_ENABLE_SANITIZERS=ON`. Ren'Py lint and bytecode compilation run
+whenever an SDK is found. The display-dependent Ren'Py runtime smoke test is
+separate and opt-in with `-DSAY_COUNT_GRAPHICAL_TESTS=ON`, so it can run under a
+known graphical test environment such as Xvfb without weakening the mandatory
+static integration check.
 
 If Catch2 cannot be downloaded, configure again after restoring network access or provide a pre-populated FetchContent source/cache for Catch2 v3. The application binary is `build/say-count`.
 

@@ -31,7 +31,7 @@ TEST_CASE("prose ignores menu choices names stopwords and custom exclusions") {
         "define e = Character(\"Eileen\")\nlabel start:\n"
         "    e \"Eileen watches quietly quietly quietly quietly.\"\n"
         "    menu:\n        \"Quietly quietly quietly quietly\":\n            pass",
-        {true});
+        {true, {}, 35});
     const auto prose = analyze_prose(analysis, {"quietly"});
     CHECK(prose.total_words == 6);
     CHECK(prose.overused_words.empty());

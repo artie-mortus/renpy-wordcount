@@ -35,7 +35,8 @@ execute_process(
     OUTPUT_VARIABLE lint_output
     ERROR_VARIABLE lint_error)
 if(NOT lint_result EQUAL 0)
-    message(FATAL_ERROR "Ren'Py lint failed:\n${lint_output}\n${lint_error}")
+    message(FATAL_ERROR
+        "Ren'Py lint failed (result: ${lint_result}):\n${lint_output}\n${lint_error}")
 endif()
 
 execute_process(
@@ -45,17 +46,22 @@ execute_process(
     ERROR_VARIABLE compile_error
     TIMEOUT 60)
 if(NOT compile_result EQUAL 0)
-    message(FATAL_ERROR "Ren'Py compilation failed:\n${compile_output}\n${compile_error}")
+    message(FATAL_ERROR
+        "Ren'Py compilation failed (result: ${compile_result}):\n${compile_output}\n${compile_error}")
 endif()
 
 if(DEFINED RUN_GRAPHICAL_RUNTIME AND RUN_GRAPHICAL_RUNTIME)
     execute_process(
-        COMMAND "${RENPY}" "${WORK}" test chat_runtime_suite --hide-header
+        COMMAND "${CMAKE_COMMAND}" -E env SDL_AUDIODRIVER=dummy
+                "${RENPY}" "${WORK}" test chat_runtime_suite
+                --report-detailed --hide-execution hooks
         RESULT_VARIABLE runtime_result
         OUTPUT_VARIABLE runtime_output
         ERROR_VARIABLE runtime_error
-        TIMEOUT 30)
+        TIMEOUT 60)
     if(NOT runtime_result EQUAL 0)
-        message(FATAL_ERROR "Ren'Py runtime smoke failed:\n${runtime_output}\n${runtime_error}")
+        message(FATAL_ERROR
+            "Ren'Py runtime smoke failed (result: ${runtime_result}):\n"
+            "${runtime_output}\n${runtime_error}")
     endif()
 endif()

@@ -85,7 +85,9 @@ wxString EditorNotebook::FilePath(wxStyledTextCtrl* editor) const {
 
 void EditorNotebook::SetFilePath(wxStyledTextCtrl* editor, const wxString& path) {
     editor->SetProperty(kFilePathProperty, path);
-    editor->SetName(wxFileName(path).GetFullName());
+    const std::string project_name = ProjectNameForPath(path);
+    editor->SetName(project_name.empty() ? wxFileName(path).GetFullName()
+                                         : wxString::FromUTF8(project_name));
     UpdateTabLabel(editor);
     NotifyDocumentState();
 }
@@ -149,25 +151,65 @@ bool EditorNotebook::OpenFiles(const std::vector<wxString>& paths, bool focus_ex
     return opened;
 }
 
-bool EditorNotebook::OpenProjectFiles(const std::vector<wxString>& paths) {
-    if (paths.empty()) return true;
-    // Project refresh must not steal focus from the tab the user is editing.
-    const bool opened = OpenFiles(paths, false);
-    if (!opened) return false;
-    bool removed = false;
-    for (size_t index = GetPageCount(); index-- > 0;) {
-        auto* editor = EditorAt(index);
-        if (GetPageCount() > 1 && editor && FilePath(editor).empty() && !editor->GetModify() &&
-            editor->GetText().empty()) {
-            DropEditorState(editor);
-            DeletePage(index);
-            removed = true;
+bool EditorNotebook::OpenProjectFiles(const std::vector<ProjectScriptFile>& files) {
+    std::unordered_map<std::string, std::string> retained;
+    for (const auto& document : project_documents_)
+        retained.emplace(document.file.absolute_path, document.content);
+
+    project_documents_.clear();
+    project_documents_.reserve(files.size());
+    for (const auto& file : files) {
+        ProjectDocument document{file, {}};
+        const auto existing = retained.find(file.absolute_path);
+        if (existing != retained.end()) {
+            document.content = existing->second;
+        } else {
+            wxFile input(wxString::FromUTF8(file.absolute_path));
+            wxString content;
+            if (!input.IsOpened() || !input.ReadAll(&content, wxConvUTF8)) return false;
+            document.content = NormalizeTabs(content).ToStdString(wxConvUTF8);
         }
+        project_documents_.push_back(std::move(document));
     }
-    if (removed) {
-        MergeCompletionIndex();
+
+    for (size_t index = 0; index < GetPageCount(); ++index) {
+        auto* editor = EditorAt(index);
+        if (editor && !FilePath(editor).empty()) SetFilePath(editor, FilePath(editor));
+    }
+    RefreshCompletionIndex();
+
+    if (project_documents_.empty()) {
         AnalyzeActive();
+        return true;
     }
+    const bool project_tab_open = std::any_of(project_documents_.begin(), project_documents_.end(),
+        [this](const auto& document) {
+            return OpenEditorForPath(wxString::FromUTF8(document.file.absolute_path)) != nullptr;
+        });
+    if (!project_tab_open) {
+        const auto preferred = std::find_if(project_documents_.begin(), project_documents_.end(),
+            [](const auto& document) { return document.file.relative_path == "script.rpy"; });
+        const std::size_t index = preferred == project_documents_.end()
+            ? 0 : static_cast<std::size_t>(std::distance(project_documents_.begin(), preferred));
+        if (!OpenProjectEditor(index)) return false;
+    }
+    RefreshDiagnostics();
+    AnalyzeActive();
+    return true;
+}
+
+bool EditorNotebook::RefreshProjectFile(const wxString& path) {
+    const auto index = ProjectIndexForPath(path);
+    if (!index) return false;
+    wxFile input(wxString::FromUTF8(project_documents_[*index].file.absolute_path));
+    wxString content;
+    if (!input.IsOpened() || !input.ReadAll(&content, wxConvUTF8)) return false;
+    project_documents_[*index].content = NormalizeTabs(content).ToStdString(wxConvUTF8);
+    project_completion_indexes_[project_documents_[*index].file.relative_path] =
+        build_completion_index({project_documents_[*index].file.relative_path,
+                                project_documents_[*index].content});
+    MergeCompletionIndex();
+    RefreshDiagnostics();
     return true;
 }
 
@@ -201,6 +243,8 @@ ExternalFileUpdate EditorNotebook::ReloadExternalFile(const wxString& path) {
                          std::min(selection_end, editor->GetTextLength()));
     editor->SetFirstVisibleLine(std::min(first_visible, editor->GetLineCount() - 1));
     editor->SetSavePoint();
+    if (const auto index = ProjectIndexForPath(absolute_path))
+        project_documents_[*index].content = disk;
     RefreshSpeakers(editor);
     editor->Colourise(0, -1);
     RefreshCompletionDocument(editor);
@@ -225,6 +269,10 @@ bool EditorNotebook::ApplyExternalVersion(const wxString& path, std::string_view
                          std::min(selection_end, editor->GetTextLength()));
     editor->SetFirstVisibleLine(std::min(first_visible, editor->GetLineCount() - 1));
     if (mark_clean) editor->SetSavePoint();
+    if (mark_clean) {
+        if (const auto index = ProjectIndexForPath(absolute_path))
+            project_documents_[*index].content = editor->GetText().ToStdString(wxConvUTF8);
+    }
     RefreshSpeakers(editor);
     editor->Colourise(0, -1);
     RefreshCompletionDocument(editor);
@@ -423,6 +471,13 @@ void EditorNotebook::DropEditorState(wxStyledTextCtrl* editor) {
 
 void EditorNotebook::RefreshCompletionIndex() {
     completion_indexes_.clear();
+    project_completion_indexes_.clear();
+    if (!project_documents_.empty()) {
+        for (const auto& script : ProjectScripts())
+            project_completion_indexes_[script.name] = build_completion_index(script);
+        MergeCompletionIndex();
+        return;
+    }
     for (size_t index = 0; index < GetPageCount(); ++index) {
         auto* editor = EditorAt(index);
         if (!editor) continue;
@@ -435,15 +490,26 @@ void EditorNotebook::RefreshCompletionIndex() {
 
 void EditorNotebook::RefreshCompletionDocument(wxStyledTextCtrl* editor) {
     if (!editor) return;
-    completion_indexes_[editor] = build_completion_index(
-        NamedScript{editor->GetName().ToStdString(wxConvUTF8),
-                    editor->GetText().ToStdString(wxConvUTF8)});
+    const NamedScript script{ProjectNameForPath(FilePath(editor)).empty()
+            ? editor->GetName().ToStdString(wxConvUTF8) : ProjectNameForPath(FilePath(editor)),
+        editor->GetText().ToStdString(wxConvUTF8)};
+    if (ProjectIndexForPath(FilePath(editor))) project_completion_indexes_[script.name] = build_completion_index(script);
+    else completion_indexes_[editor] = build_completion_index(script);
     MergeCompletionIndex();
 }
 
 void EditorNotebook::MergeCompletionIndex() {
     std::vector<CompletionIndex> indexes;
-    indexes.reserve(GetPageCount());
+    indexes.reserve(project_completion_indexes_.empty() ? GetPageCount()
+                                                        : project_completion_indexes_.size());
+    if (!project_completion_indexes_.empty()) {
+        for (const auto& [name, index] : project_completion_indexes_) {
+            (void)name;
+            indexes.push_back(index);
+        }
+        completion_index_ = merge_completion_indexes(indexes);
+        return;
+    }
     for (size_t index = 0; index < GetPageCount(); ++index) {
         auto* editor = EditorAt(index);
         const auto found = completion_indexes_.find(editor);
@@ -459,8 +525,6 @@ void EditorNotebook::OnStyleNeeded(wxStyledTextEvent& event) {
     const int start_line = editor->LineFromPosition(editor->GetEndStyled());
     const int end_line = editor->LineFromPosition(requested);
     const int start = editor->PositionFromLine(start_line);
-    const int end = end_line + 1 < editor->GetLineCount() ? editor->PositionFromLine(end_line + 1)
-                                                         : editor->GetTextLength();
     editor->StartStyling(start);
     int cursor = start;
     for (int line_number = start_line; line_number <= end_line; ++line_number) {
@@ -576,9 +640,11 @@ void EditorNotebook::OnDwellStart(wxStyledTextEvent& event) {
     const int page = GetPageIndex(editor);
     if (page == wxNOT_FOUND) return;
     const std::size_t line = static_cast<std::size_t>(editor->LineFromPosition(event.GetPosition()) + 1);
+    const std::size_t file_index = ProjectIndexForPath(FilePath(editor)).value_or(
+        static_cast<std::size_t>(page));
     std::string message;
     for (const auto& diagnostic : diagnostics_) {
-        if (diagnostic.file_index != static_cast<std::size_t>(page) || diagnostic.line_number != line) continue;
+        if (diagnostic.file_index != file_index || diagnostic.line_number != line) continue;
         if (!message.empty()) message += "\n";
         message += diagnostic.message;
     }
@@ -792,7 +858,8 @@ void EditorNotebook::AnalyzeActive() {
     auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<size_t>(selection));
     if (!editor || !analysis_handler_) return;
     const wxString source = editor->GetText();
-    analysis_handler_(source, analyze_script(source.ToStdString(wxConvUTF8), {count_menu_choices_}));
+    analysis_handler_(source, analyze_script(
+        source.ToStdString(wxConvUTF8), {count_menu_choices_, {}, 35}));
     RefreshDiagnostics();
 }
 
@@ -833,8 +900,13 @@ void EditorNotebook::ApplyDiagnostics() {
                                  kDiagnosticNoticeMarker}) editor->MarkerDeleteAll(marker);
     }
     for (const auto& diagnostic : diagnostics_) {
-        if (diagnostic.file_index >= GetPageCount()) continue;
-        auto* editor = EditorAt(diagnostic.file_index);
+        wxStyledTextCtrl* editor = nullptr;
+        if (!project_documents_.empty() && diagnostic.file_index < project_documents_.size()) {
+            editor = OpenEditorForPath(
+                wxString::FromUTF8(project_documents_[diagnostic.file_index].file.absolute_path));
+        } else if (diagnostic.file_index < GetPageCount()) {
+            editor = EditorAt(diagnostic.file_index);
+        }
         if (!editor) continue;
         int indicator = kDiagnosticWarningIndicator;
         int marker = kDiagnosticWarningMarker;
@@ -855,9 +927,12 @@ void EditorNotebook::ApplyDiagnostics() {
 }
 
 void EditorNotebook::SelectDiagnostic(const Diagnostic& diagnostic) {
-    if (diagnostic.file_index >= GetPageCount()) return;
-    SetSelection(diagnostic.file_index);
-    auto* editor = EditorAt(diagnostic.file_index);
+    wxStyledTextCtrl* editor = nullptr;
+    if (!project_documents_.empty()) editor = OpenProjectEditor(diagnostic.file_index);
+    else if (diagnostic.file_index < GetPageCount()) {
+        SetSelection(diagnostic.file_index);
+        editor = EditorAt(diagnostic.file_index);
+    }
     if (!editor) return;
     const std::size_t end = std::min<std::size_t>(diagnostic.position + diagnostic.length,
                                                  editor->GetTextLength());
@@ -952,6 +1027,15 @@ FindStatus EditorNotebook::FindNext(int direction) {
 
 std::vector<NamedScript> EditorNotebook::ProjectScripts() const {
     std::vector<NamedScript> scripts;
+    if (!project_documents_.empty()) {
+        scripts.reserve(project_documents_.size());
+        for (const auto& document : project_documents_) {
+            const auto* editor = OpenEditorForPath(wxString::FromUTF8(document.file.absolute_path));
+            scripts.push_back({document.file.relative_path, editor
+                ? editor->GetText().ToStdString(wxConvUTF8) : document.content});
+        }
+        return scripts;
+    }
     scripts.reserve(GetPageCount());
     for (size_t index = 0; index < GetPageCount(); ++index) {
         if (auto* editor = EditorAt(index))
@@ -962,11 +1046,18 @@ std::vector<NamedScript> EditorNotebook::ProjectScripts() const {
 
 std::size_t EditorNotebook::CurrentFileIndex() const {
     const int selection = GetSelection();
-    return selection == wxNOT_FOUND ? 0 : static_cast<std::size_t>(selection);
+    if (selection == wxNOT_FOUND) return 0;
+    if (const auto index = ProjectIndexForPath(FilePath(EditorAt(static_cast<std::size_t>(selection)))))
+        return *index;
+    return static_cast<std::size_t>(selection);
 }
 
 void EditorNotebook::SelectFileIndex(std::size_t index) {
-    if (index < GetPageCount()) SetSelection(index);
+    if (!project_documents_.empty()) {
+        OpenProjectEditor(index);
+    } else if (index < GetPageCount()) {
+        SetSelection(index);
+    }
 }
 
 void EditorNotebook::SetCountMenuChoices(bool enabled) {
@@ -1074,6 +1165,43 @@ bool EditorNotebook::OpenAndJump(const wxString& path, std::size_t line) {
         if (FilePath(EditorAt(index)) == absolute) { SetSelection(index); JumpToLine(line); return true; }
     }
     return false;
+}
+
+std::optional<std::size_t> EditorNotebook::ProjectIndexForPath(const wxString& path) const {
+    if (path.empty()) return std::nullopt;
+    const wxString absolute = wxFileName(path).GetAbsolutePath();
+    for (std::size_t index = 0; index < project_documents_.size(); ++index) {
+        if (wxFileName(wxString::FromUTF8(project_documents_[index].file.absolute_path)).GetAbsolutePath() == absolute)
+            return index;
+    }
+    return std::nullopt;
+}
+
+wxStyledTextCtrl* EditorNotebook::OpenEditorForPath(const wxString& path) const {
+    const wxString absolute = wxFileName(path).GetAbsolutePath();
+    for (std::size_t index = 0; index < GetPageCount(); ++index) {
+        auto* editor = EditorAt(index);
+        if (editor && FilePath(editor) == absolute) return editor;
+    }
+    return nullptr;
+}
+
+std::string EditorNotebook::ProjectNameForPath(const wxString& path) const {
+    const auto index = ProjectIndexForPath(path);
+    return index ? project_documents_[*index].file.relative_path : std::string{};
+}
+
+wxStyledTextCtrl* EditorNotebook::OpenProjectEditor(std::size_t index) {
+    if (index >= project_documents_.size()) return nullptr;
+    const wxString path = wxString::FromUTF8(project_documents_[index].file.absolute_path);
+    if (auto* existing = OpenEditorForPath(path)) {
+        const int page = GetPageIndex(existing);
+        if (page != wxNOT_FOUND) SetSelection(static_cast<std::size_t>(page));
+        existing->SetFocus();
+        return existing;
+    }
+    if (!OpenFiles({path})) return nullptr;
+    return OpenEditorForPath(path);
 }
 
 void EditorNotebook::InsertAtCaret(std::string_view text) {
@@ -1228,6 +1356,42 @@ bool EditorNotebook::ApplyManuscriptConversion(
 
 bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scripts) {
     if (scripts.empty()) return false;
+    if (!project_documents_.empty()) {
+        std::vector<std::size_t> mapped;
+        mapped.reserve(scripts.size());
+        for (const auto& script : scripts) {
+            const auto found = std::find_if(project_documents_.begin(), project_documents_.end(),
+                [&](const auto& document) { return document.file.relative_path == script.name; });
+            if (found == project_documents_.end()) {
+                mapped.clear();
+                break;
+            }
+            mapped.push_back(static_cast<std::size_t>(std::distance(project_documents_.begin(), found)));
+        }
+        if (mapped.size() == scripts.size()) {
+            for (std::size_t script_index = 0; script_index < scripts.size(); ++script_index) {
+                const auto& script = scripts[script_index];
+                const std::size_t project_index = mapped[script_index];
+                const auto current = ProjectScripts();
+                if (project_index >= current.size() || current[project_index].content == script.content) continue;
+                auto* editor = OpenProjectEditor(project_index);
+                if (!editor) return false;
+                editor->BeginUndoAction();
+                editor->SetTargetStart(0);
+                editor->SetTargetEnd(editor->GetTextLength());
+                editor->ReplaceTarget(NormalizeTabs(wxString::FromUTF8(script.content)));
+                editor->EndUndoAction();
+                RefreshSpeakers(editor);
+                editor->Colourise(0, -1);
+                RefreshCompletionDocument(editor);
+            }
+            RefreshDiagnostics();
+            AnalyzeActive();
+            return true;
+        }
+        project_documents_.clear();
+        project_completion_indexes_.clear();
+    }
     std::unordered_set<wxStyledTextCtrl*> retained;
     std::vector<wxStyledTextCtrl*> ordered;
     ordered.reserve(scripts.size());
@@ -1282,9 +1446,12 @@ bool EditorNotebook::RestoreProjectScripts(const std::vector<NamedScript>& scrip
 }
 
 void EditorNotebook::SelectProjectMatch(const ProjectFindMatch& match) {
-    if (match.file_index >= GetPageCount()) return;
-    SetSelection(match.file_index);
-    auto* editor = EditorAt(match.file_index);
+    wxStyledTextCtrl* editor = nullptr;
+    if (!project_documents_.empty()) editor = OpenProjectEditor(match.file_index);
+    else if (match.file_index < GetPageCount()) {
+        SetSelection(match.file_index);
+        editor = EditorAt(match.file_index);
+    }
     if (!editor) return;
     editor->SetSelection(static_cast<int>(match.position),
                          static_cast<int>(match.position + match.length));
@@ -1299,7 +1466,7 @@ FindStatus EditorNotebook::FindNextAcrossFiles(int direction) {
     if (!editor || find_query_.empty()) return RefreshFindHighlights();
     const auto found = find_project_matches(ProjectScripts(), find_query_, find_options_);
     if (!found.valid || found.matches.empty()) return RefreshFindHighlights();
-    const std::size_t current_file = static_cast<std::size_t>(page);
+    const std::size_t current_file = CurrentFileIndex();
     const std::size_t caret = static_cast<std::size_t>(
         direction >= 0 ? editor->GetSelectionEnd() : editor->GetSelectionStart());
     const ProjectFindMatch* selected = nullptr;
@@ -1379,9 +1546,10 @@ std::size_t EditorNotebook::ReplaceAllAcrossFiles(
                                                  replacement, find_options_);
     if (!changed.valid || changed.count == 0) return 0;
     for (const auto index : selected_files) {
-        if (index >= GetPageCount() || index >= changed.per_file_counts.size() ||
-            changed.per_file_counts[index] == 0) continue;
-        auto* editor = EditorAt(index);
+        if (index >= changed.per_file_counts.size() || changed.per_file_counts[index] == 0) continue;
+        auto* editor = !project_documents_.empty()
+            ? OpenProjectEditor(index)
+            : (index < GetPageCount() ? EditorAt(index) : nullptr);
         if (!editor) continue;
         editor->BeginUndoAction();
         editor->SetTargetStart(0);
@@ -1412,7 +1580,9 @@ void EditorNotebook::OnCompletionTimer(wxTimerEvent&) {
     const auto pending = std::move(pending_completion_editors_);
     pending_completion_editors_.clear();
     for (auto* editor : pending)
-        if (completion_indexes_.count(editor) != 0) RefreshCompletionDocument(editor);
+        if (completion_indexes_.count(editor) != 0 ||
+            ProjectIndexForPath(FilePath(editor)).has_value())
+            RefreshCompletionDocument(editor);
 }
 
 void EditorNotebook::OnPageChanged(wxAuiNotebookEvent& event) {
@@ -1491,6 +1661,8 @@ bool EditorNotebook::SaveEditor(wxStyledTextCtrl* editor, const wxString& path) 
         return false;
     }
     SetFilePath(editor, wxFileName(path).GetAbsolutePath());
+    if (const auto index = ProjectIndexForPath(path))
+        project_documents_[*index].content = editor->GetText().ToStdString(wxConvUTF8);
     editor->SetSavePoint();
     NotifyDocumentState();
     return true;

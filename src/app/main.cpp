@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
             scripts.push_back({argv[index], std::string((std::istreambuf_iterator<char>(input)),
                                                         std::istreambuf_iterator<char>())});
         }
-        const say_count::AnalysisOptions options{count_menu_choices};
+        const say_count::AnalysisOptions options{count_menu_choices, {}, 35};
         const auto analysis = scripts.size() == 1 ? say_count::analyze_script(scripts.front().content, options)
                                                   : say_count::analyze_project(scripts, options);
         std::cout << say_count::analysis_json(analysis) << '\n';

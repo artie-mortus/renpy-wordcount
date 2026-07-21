@@ -118,7 +118,8 @@ RouteGraph build_route_graph(const std::vector<NamedScript>& scripts) {
                         }
                     }
 
-                    const auto inserted = graph.nodes.emplace(name, RouteNode{name, script.name, line_number});
+                    const auto inserted = graph.nodes.emplace(name, RouteNode{
+                        name, script.name, line_number, {}, std::nullopt, 0, 0, false, false});
                     if (inserted.second) graph.node_order.push_back(name);
                     current = inserted.second ? &inserted.first->second : nullptr;
                     if (!graph.start) graph.start = name;

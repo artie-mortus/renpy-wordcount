@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/parser.h"
@@ -10,6 +11,16 @@
 namespace say_count {
 
 struct TranslationEntry {
+    TranslationEntry() = default;
+    TranslationEntry(std::string file_value, std::size_t line_value = 0,
+                     std::string text_value = {}, std::string source_file_value = {},
+                     std::string speaker_value = {}, std::string label_value = {},
+                     std::string translation_file_value = {}, std::size_t translation_line_value = 0)
+        : file(std::move(file_value)), line(line_value), text(std::move(text_value)),
+          source_file(std::move(source_file_value)), speaker(std::move(speaker_value)),
+          label(std::move(label_value)), translation_file(std::move(translation_file_value)),
+          translation_line(translation_line_value) {}
+
     std::string file;
     std::size_t line = 0;
     std::string text;

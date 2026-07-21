@@ -64,13 +64,18 @@ std::string statistics_json(const ScriptAnalysis& a,
             const long wt = it == targets.end() ? 0 : it->second.first, lt = it == targets.end() ? 0 : it->second.second;
             o << "\n    {\"" << (std::string(key)=="speakers"?"speaker":"scene") << "\": \"" << json_escape(s.name)
               << "\", \"words\": " << s.words << ", \"lines\": " << s.lines << ", \"targets\": {\"words\": " << wt << ", \"lines\": " << lt << "}}"; }
-        if (!values.empty()) o << '\n'; o << "  ],\n"; };
+        if (!values.empty()) o << '\n';
+        o << "  ],\n";
+    };
     aggregates("speakers", a.speakers, speaker_targets); aggregates("scenes", a.scenes, scene_targets);
     o << "  \"warnings\": ["; for (std::size_t i=0;i<a.warnings.size();++i) { const auto& w=a.warnings[i]; if(i)o<<',';
         o << "\n    {\"type\": \""<<json_escape(w.type)<<"\", \"lineNumber\": "<<w.line_number<<", \"file\": \""<<json_escape(w.file)<<"\", \"message\": \""<<json_escape(w.message)<<"\"}"; }
-    if(!a.warnings.empty())o<<'\n'; o << "  ],\n  \"countedLines\": [";
+    if (!a.warnings.empty()) o << '\n';
+    o << "  ],\n  \"countedLines\": [";
     for(std::size_t i=0;i<a.counted.size();++i){const auto& l=a.counted[i];if(i)o<<',';o<<"\n    {\"lineNumber\": "<<l.line_number<<", \"speaker\": \""<<json_escape(l.speaker)<<"\", \"text\": \""<<json_escape(l.text)<<"\", \"words\": "<<l.words<<", \"scene\": \""<<json_escape(l.scene)<<"\", \"raw\": \""<<json_escape(l.raw)<<"\"}";}
-    if(!a.counted.empty())o<<'\n'; o << "  ]\n}\n"; return o.str();
+    if (!a.counted.empty()) o << '\n';
+    o << "  ]\n}\n";
+    return o.str();
 }
 
 std::string statistics_html(const ScriptAnalysis& a, std::string_view title, std::string_view generated_at) {

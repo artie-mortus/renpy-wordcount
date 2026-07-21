@@ -6,8 +6,6 @@
 
 #include <wx/aboutdlg.h>
 #include <wx/aui/dockart.h>
-#include <wx/control.h>
-#include <wx/dcbuffer.h>
 #include <wx/display.h>
 #include <wx/dnd.h>
 #include <wx/filedlg.h>
@@ -32,6 +30,7 @@
 #include <wx/dataview.h>
 #include <wx/stream.h>
 #include <wx/progdlg.h>
+#include <wx/infobar.h>
 
 #include "ui/editor_notebook.h"
 #include "ui/speaker_stats_panel.h"
@@ -45,6 +44,7 @@
 #include "ui/runtime_preset_dialog.h"
 #include "ui/renpy_lint_panel.h"
 #include "ui/story_library_panel.h"
+#include "ui/project_navigator_panel.h"
 #include "ui/coverage_panel.h"
 #include "ui/route_panel.h"
 #include "ui/production_panel.h"
@@ -55,6 +55,7 @@
 #include "ui/story_element_dialog.h"
 #include "ui/writer_draft_dialog.h"
 #include "ui/command_model.h"
+#include "ui/command_button.h"
 #include "core/version.h"
 #include "core/indent.h"
 #include "core/navigator.h"
@@ -67,78 +68,6 @@ namespace {
 
 constexpr int kDefaultWidth = 1380;
 constexpr int kDefaultHeight = 860;
-
-class CommandButton final : public wxControl {
-public:
-    CommandButton(wxWindow* parent, const wxString& label, bool primary = false)
-        : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                    wxBORDER_NONE | wxWANTS_CHARS), label_(label), primary_(primary) {
-        SetBackgroundStyle(wxBG_STYLE_PAINT);
-        SetFont(style::BodyFont(9, wxFONTWEIGHT_BOLD));
-        const wxSize text = GetTextExtent(label_);
-        SetMinSize(FromDIP(wxSize(text.x + 30, 36)));
-        Bind(wxEVT_PAINT, &CommandButton::OnPaint, this);
-        Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) { hovered_ = true; Refresh(); });
-        Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) { hovered_ = false; pressed_ = false; Refresh(); });
-        Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent&) { pressed_ = true; SetFocus(); CaptureMouse(); Refresh(); });
-        Bind(wxEVT_LEFT_UP, [this](wxMouseEvent& event) {
-            if (HasCapture()) ReleaseMouse();
-            const bool activate = pressed_ && GetClientRect().Contains(event.GetPosition());
-            pressed_ = false; Refresh();
-            if (activate) SendClick();
-        });
-        Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& event) {
-            if (event.GetKeyCode() == WXK_SPACE || event.GetKeyCode() == WXK_RETURN) SendClick();
-            else event.Skip();
-        });
-        Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) { Refresh(); event.Skip(); });
-        Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) { Refresh(); event.Skip(); });
-    }
-
-    void SetCommandLabel(const wxString& label) {
-        label_ = label;
-        const wxSize size = GetTextExtent(label_);
-        SetMinSize(FromDIP(wxSize(size.x + 30, 36)));
-        Refresh();
-    }
-
-private:
-    void SendClick() {
-        wxCommandEvent event(wxEVT_BUTTON, GetId());
-        event.SetEventObject(this);
-        ProcessWindowEvent(event);
-    }
-
-    void OnPaint(wxPaintEvent&) {
-        wxAutoBufferedPaintDC dc(this);
-        dc.SetBackground(wxBrush(style::Colors().ink));
-        dc.Clear();
-        wxColour fill = primary_ ? style::Colors().cue : wxColour("#243650");
-        if (hovered_) fill = primary_ ? wxColour("#D6AB4B") : wxColour("#304660");
-        if (pressed_) fill = primary_ ? wxColour("#B8892D") : wxColour("#1E2D43");
-        dc.SetPen(wxPen(primary_ ? style::Colors().cue : wxColour("#526178"), 1));
-        dc.SetBrush(wxBrush(fill));
-        wxRect box = GetClientRect();
-        box.Deflate(1);
-        dc.DrawRoundedRectangle(box, FromDIP(6));
-        if (HasFocus()) {
-            wxRect focus = box;
-            focus.Deflate(3);
-            dc.SetPen(wxPen(primary_ ? style::Colors().ink : style::Colors().cue, 1, wxPENSTYLE_DOT));
-            dc.SetBrush(*wxTRANSPARENT_BRUSH);
-            dc.DrawRoundedRectangle(focus, FromDIP(4));
-        }
-        dc.SetFont(GetFont());
-        dc.SetTextForeground(primary_ ? style::Colors().ink : style::Colors().white);
-        const wxSize text = dc.GetTextExtent(label_);
-        dc.DrawText(label_, (GetClientSize().x - text.x) / 2, (GetClientSize().y - text.y) / 2);
-    }
-
-    wxString label_;
-    bool primary_ = false;
-    bool hovered_ = false;
-    bool pressed_ = false;
-};
 
 class ScriptDropTarget final : public wxFileDropTarget {
 public:
@@ -284,6 +213,10 @@ MainFrame::MainFrame()
                                         wxDefaultPosition, wxDefaultSize,
                                         wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
     story_library_ = new StoryLibraryPanel(this);
+    project_navigator_ = new ProjectNavigatorPanel(this);
+    project_navigator_->SetOpenHandler([this](std::size_t index) {
+        notebook_->SelectFileIndex(index);
+    });
     story_library_->SetIndentationProvider([this] {
         return notebook_->CurrentIndentation().ToStdString(wxConvUTF8);
     });
@@ -304,7 +237,7 @@ MainFrame::MainFrame()
         if (covered) labels.insert(label); else labels.erase(label);
         std::string error;
         if (!manual_coverage_store_->Save(manual_coverage_projects_, &error))
-            wxMessageBox(wxString::FromUTF8(error), "Coverage save failed", wxOK | wxICON_ERROR, this);
+            ShowNotice("Coverage was not saved: " + wxString::FromUTF8(error), wxICON_ERROR);
         RefreshCoveragePanel();
     });
     coverage_panel_->SetClearHandler([this] {
@@ -368,9 +301,17 @@ MainFrame::MainFrame()
     outline_->SetJumpHandler([this](std::size_t line) { notebook_->JumpToLine(line); });
     style::ApplyWorkspaceTheme(this);
     BuildCommandBar();
+    notification_bar_ = new wxInfoBar(this);
+    notification_bar_->SetName("Writing notification");
+    notification_bar_->AddButton(wxID_CLOSE, "Dismiss");
+    notification_bar_->Bind(wxEVT_BUTTON, [this](wxCommandEvent& event) {
+        if (event.GetId() == wxID_CLOSE) HideNotice();
+        else event.Skip();
+    });
     notebook_->SetDocumentStateHandler([this](const DocumentState& state) {
         current_document_dirty_ = state.dirty;
         current_document_path_ = state.path;
+        if (project_navigator_) project_navigator_->SelectPath(state.path);
         RefreshCommandBarState();
         RefreshCueSummary();
     });
@@ -398,9 +339,12 @@ MainFrame::MainFrame()
     manager_.AddPane(command_bar_, wxAuiPaneInfo().Top().Layer(0).Row(0).Name("command-bar")
                          .CaptionVisible(false).PaneBorder(false).DockFixed(true).Resizable(false)
                          .BestSize(-1, 64).MinSize(-1, 64).CloseButton(false));
+    manager_.AddPane(notification_bar_, wxAuiPaneInfo().Top().Layer(0).Row(1).Name("notification-bar")
+                         .CaptionVisible(false).PaneBorder(false).DockFixed(true).Resizable(false)
+                         .BestSize(-1, 42).MinSize(-1, 42).CloseButton(false).Hide());
     manager_.AddPane(notebook_, wxAuiPaneInfo().CenterPane().Name("editor").PaneBorder(false));
     manager_.AddPane(find_bar_, wxAuiPaneInfo().Top().Name("find-replace").CaptionVisible(false)
-                         .Layer(0).Row(1).PaneBorder(false).DockFixed(true).Resizable(false)
+                         .Layer(0).Row(2).PaneBorder(false).DockFixed(true).Resizable(false)
                          .BestSize(-1, 48).Hide());
     manager_.AddPane(find_results_, wxAuiPaneInfo().Bottom().Name("find-results").Caption("Find Results")
                          .BestSize(-1, 190).MinSize(300, 110).CloseButton(false).Hide());
@@ -420,6 +364,8 @@ MainFrame::MainFrame()
                          .CloseButton(true).Hide());
     manager_.AddPane(story_library_, wxAuiPaneInfo().Left().Name("asset-browser").Caption("Story Library")
                          .BestSize(360, 560).MinSize(300, 300).CloseButton(true).MaximizeButton(true).Hide());
+    manager_.AddPane(project_navigator_, wxAuiPaneInfo().Left().Name("project-navigator").Caption("Script Index")
+                         .BestSize(300, 560).MinSize(240, 240).CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(coverage_panel_, wxAuiPaneInfo().Left().Name("coverage").Caption("Label Coverage")
                          .BestSize(360, 520).MinSize(280, 220).CloseButton(true).Hide());
     manager_.AddPane(route_panel_, wxAuiPaneInfo().Right().Name("routes").Caption("Route Details")
@@ -561,7 +507,7 @@ void MainFrame::StartNewStory() {
         return;
     const auto result = apply_project_creation(*plan);
     if (!result.success) {
-        wxMessageBox(wxString::FromUTF8(result.error), "Story was not created", wxOK | wxICON_ERROR, this);
+        ShowNotice("Story was not created: " + wxString::FromUTF8(result.error), wxICON_ERROR);
         return;
     }
     if (ConnectProjectFolder(wxString::FromUTF8(result.root))) {
@@ -569,264 +515,19 @@ void MainFrame::StartNewStory() {
     }
 }
 
-void MainFrame::BuildCommandBar() {
-    const auto& colors = style::Colors();
-    command_bar_ = new wxPanel(this);
-    command_bar_->SetBackgroundColour(colors.ink);
-    command_bar_->SetMinSize(wxSize(-1, 64));
-    auto* layout = new wxBoxSizer(wxHORIZONTAL);
-
-    auto* cue = new wxPanel(command_bar_, wxID_ANY, wxDefaultPosition, wxSize(4, 36));
-    cue->SetBackgroundColour(colors.cue);
-    layout->Add(cue, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 16);
-
-    auto* identity = new wxBoxSizer(wxVERTICAL);
-    auto* title = new wxStaticText(command_bar_, wxID_ANY, "Say Count");
-    title->SetFont(style::BodyFont(13, wxFONTWEIGHT_BOLD));
-    title->SetForegroundColour(colors.white);
-    auto* edition = new wxStaticText(command_bar_, wxID_ANY, "REN'PY STORY DESK");
-    edition->SetFont(style::UtilityFont(8, wxFONTWEIGHT_BOLD));
-    edition->SetForegroundColour(colors.mint);
-    identity->Add(title);
-    identity->Add(edition, 0, wxTOP, 2);
-    layout->Add(identity, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 22);
-
-    auto* divider = new wxPanel(command_bar_, wxID_ANY, wxDefaultPosition, wxSize(1, 34));
-    divider->SetBackgroundColour(wxColour("#405068"));
-    layout->Add(divider, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 20);
-
-    auto* context = new wxBoxSizer(wxVERTICAL);
-    const wxString initial_name = notebook_ ? notebook_->CurrentFileName() : wxString{};
-    workspace_name_ = new wxStaticText(command_bar_, wxID_ANY,
-                                        initial_name.empty() ? "Loose script" : initial_name);
-    workspace_name_->SetFont(style::BodyFont(10, wxFONTWEIGHT_BOLD));
-    workspace_name_->SetForegroundColour(colors.white);
-    cue_summary_ = new wxStaticText(command_bar_, wxID_ANY, wxEmptyString);
-    cue_summary_->SetFont(style::UtilityFont(8));
-    cue_summary_->SetForegroundColour(wxColour("#AAB5C3"));
-    context->Add(workspace_name_);
-    context->Add(cue_summary_, 0, wxTOP, 3);
-    layout->Add(context, 0, wxALIGN_CENTER_VERTICAL);
-    layout->AddStretchSpacer();
-
-    auto make_action = [&](const wxString& label, bool primary = false) {
-        auto* button = new CommandButton(command_bar_, label, primary);
-        layout->Add(button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
-        return button;
-    };
-    open_game_button_ = make_action("Open a game");
-    save_button_ = make_action(CommandFor(wxID_SAVE).label);
-    write_button_ = make_action("Write naturally");
-    history_button_ = make_action("Version history");
-    problems_button_ = make_action(CommandFor(kShowDiagnostics).label);
-    run_button_ = make_action("Preview game", true);
-    layout->AddSpacer(8);
-
-    open_game_button_->Bind(wxEVT_BUTTON, &MainFrame::OnConnectProject, this);
-    save_button_->Bind(wxEVT_BUTTON, &MainFrame::OnSave, this);
-    write_button_->Bind(wxEVT_BUTTON, &MainFrame::OnWriterDraft, this);
-    history_button_->Bind(wxEVT_BUTTON, &MainFrame::OnManageSnapshots, this);
-    problems_button_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        if (fixable_problem_count_ > 0) {
-            OnFixBasicErrors();
-        } else {
-            manager_.GetPane("diagnostics").Show(true);
-            if (GetMenuBar()) GetMenuBar()->Check(kShowDiagnostics, true);
-            manager_.Update();
-        }
-    });
-    run_button_->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
-    command_bar_->SetSizer(layout);
-    RefreshCommandBarState();
-    RefreshCueSummary();
-}
-
-void MainFrame::RefreshCommandBarState() {
-    if (!command_bar_) return;
-    const auto state = DeriveCommandBarState({project_.has_value(), current_document_dirty_,
-        !current_document_path_.empty(), problem_count_, fixable_problem_count_,
-        renpy_sdk_.has_value(), renpy_process_ != nullptr});
-    const bool compact = GetClientSize().x < FromDIP(1080);
-    if (open_game_button_) open_game_button_->Show(state.show_open_game);
-    if (history_button_) history_button_->Show(state.show_history && !compact);
-    if (problems_button_) {
-        problems_button_->Show(state.show_problems);
-        auto* button = static_cast<CommandButton*>(problems_button_);
-        button->SetCommandLabel(wxString::FromUTF8(state.problem_label));
-    }
-    if (write_button_) write_button_->Show(state.show_write);
-    if (run_button_) {
-        run_button_->Show(state.show_preview);
-        run_button_->Enable(state.enable_preview);
-    }
-    if (save_button_) {
-        save_button_->Show(!compact || state.enable_save);
-        save_button_->Enable(state.enable_save);
-    }
-    command_bar_->Layout();
-}
-
-void MainFrame::RefreshCueSummary() {
-    if (!cue_summary_) return;
-    wxString state;
-    if (current_document_dirty_) state = "UNSAVED CHANGES";
-    else if (!last_saved_time_.empty()) state = "SAVED LOCALLY " + last_saved_time_;
-    else if (!current_document_path_.empty()) state = "SAVED LOCALLY";
-    else state = "NOT SAVED YET";
-    cue_summary_->SetLabel(wxString::FromUTF8(std::to_string(analysis_.total_words) + " WORDS") +
-                           "   /   " + state);
-    command_bar_->Layout();
-}
-
-void MainFrame::BuildMenus() {
-    auto* file = new wxMenu();
-    file->Append(wxID_NEW, "&New\tCtrl+N", "Create a new tab");
-    file->Append(wxID_OPEN, "&Open...\tCtrl+O", "Open one or more Ren'Py scripts");
-    file->Append(kQuickOpen, "&Quick Open...\tCtrl+P", "Find a project file, label, or character");
-    file->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current script");
-    file->Append(wxID_SAVEAS, "Save &As...\tCtrl+Shift+S", "Save the current script under a new name");
-    file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
-    file->AppendSeparator();
-    file->Append(kShowHome, "&Home...\tCtrl+Shift+H", CommandFor(kShowHome).help);
-    const auto& open_game = CommandFor(kConnectProject);
-    file->Append(kConnectProject, open_game.label, open_game.help);
-    recent_projects_menu_ = new wxMenu();
-    file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
-    file->Append(kReviewConflicts, "Review External &Conflicts...");
-    const auto& save_version = CommandFor(kSnapshotNow);
-    const auto& version_history = CommandFor(kManageSnapshots);
-    file->Append(kSnapshotNow, save_version.label, save_version.help);
-    file->Append(kManageSnapshots, version_history.label, version_history.help);
-    file->Append(kGitRepository, "Git &Repository...", "Clone, sync, commit, and push with any Git remote");
-    file->Append(kImportProject, "Import Say Count Project...", "Import a browser-app project bundle");
-    RebuildRecentProjectsMenu();
-    file->AppendSeparator();
-    auto* export_menu = new wxMenu();
-    export_menu->Append(kExportCsv, "Speaker statistics (CSV)...");
-    export_menu->Append(kExportJson, "Full statistics (JSON)...");
-    export_menu->Append(kExportHtml, "Standalone report (HTML)...");
-    export_menu->AppendSeparator();
-    export_menu->Append(kExportProject, "Complete Say Count project...");
-    file->AppendSubMenu(export_menu, "Export &Statistics");
-    file->AppendSeparator();
-    file->Append(wxID_EXIT, "&Quit\tCtrl+Q", "Quit Say Count");
-
-    auto* edit = new wxMenu();
-    edit->Append(kCommandPalette, "Command &Palette...\tCtrl+Shift+P");
-    edit->AppendSeparator();
-    edit->Append(wxID_FIND, "&Find and Replace...\tCtrl+F");
-    edit->Append(kFindNext, "Find &Next\tF3");
-    edit->Append(kFindPrevious, "Find &Previous\tShift+F3");
-    edit->AppendSeparator();
-    edit->Append(kGoToLine, "&Go to Line...\tCtrl+G");
-    edit->Append(kToggleComment, "Toggle &Comment\tCtrl+/");
-    auto* insert = new wxMenu();
-    insert->Append(kInsertStoryElement, "Character, dialogue, choice, or direction...",
-                   "Build a story element and preview the generated script");
-    insert->Append(kShowAssets, "From the Story Library...", CommandFor(kShowAssets).help);
-    edit->AppendSubMenu(insert, "&Insert Into Story");
-    edit->AppendCheckItem(kToggleNvimMotions, "&Vim Motions (Built-in)",
-                          "Use built-in modal editing without an external process");
-    edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
-    const auto& natural_writing = CommandFor(kWriteManuscript);
-    edit->Append(kWriterDraft, CommandFor(kWriterDraft).label,
-                 CommandFor(kWriterDraft).help);
-    edit->Append(kWriteManuscript, natural_writing.label, natural_writing.help);
-    edit->Append(kConvertToChat, "Turn Writing Into a &Chat Scene...",
-                 "Turn the selected writing (or the whole tab) into a phone/messenger scene");
-    edit->Append(kConvertChatToDialogue, "Turn Chat Scene Back Into &Dialogue...",
-                 "Turn a chat scene (selected, or the whole tab) back into normal writing");
-    edit->Append(kInstallChatRuntime, "Install/Update Chat &App Files...",
-                 "Add the chat app to your game project; your own files are never overwritten");
-    edit->Append(kConfigureOfflineProseAi, "Configure &Offline Prose AI...",
-                 "Optionally improve prose interpretation with a network-blocked local model");
-    edit->Append(kFixIndents, "Fix &Indents...", "Preview and repair indentation in the active file");
-    edit->Append(kRenameSymbol, "Rename Ren'Py Symbol...", "Preview and safely rename an alias or label project-wide");
-    auto* view = new wxMenu();
-    view->AppendCheckItem(kToggleWrap, "Word &Wrap", "Soft-wrap long lines");
-    view->Check(kToggleWrap, editor_settings_.word_wrap);
-    view->AppendCheckItem(kFocusMode, "&Focus Mode\tCtrl+Shift+F", "Hide nonessential panels");
-    view->AppendSeparator();
-    view->AppendCheckItem(kShowOutline, "Outline panel");
-    view->AppendCheckItem(kShowSpeakerStats, "Speaker statistics panel");
-    view->AppendCheckItem(kShowStoryLibrary, "Story library");
-    view->AppendCheckItem(kShowDiagnostics, CommandFor(kShowDiagnostics).label);
-    view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");
-    view->Append(kShowProduction, "&Production Desk...", "Show prose and production tools");
-    view->AppendSeparator();
-    view->Append(kFontIncrease, "Increase Font Size\tCtrl+=");
-    view->Append(kFontDecrease, "Decrease Font Size\tCtrl+-");
-    view->Append(kFontReset, "Reset Font Size\tCtrl+0");
-    auto* theme = new wxMenu();
-    theme->AppendRadioItem(kThemeSystem, "System");
-    theme->AppendRadioItem(kThemeLight, "Light");
-    theme->AppendRadioItem(kThemeDark, "Dark");
-    theme->Check(kThemeSystem + static_cast<int>(editor_settings_.theme), true);
-    view->AppendSubMenu(theme, "Theme");
-
-    auto* help = new wxMenu();
-    help->Append(kManuscriptGuide, "Prose Writing &Guide...",
-                 "Learn the supported manuscript formats and conversion rules");
-    help->Append(kChatGuide, "Chat &Format Guide...",
-                 "Write social-media chat scenes and mix them with regular VN dialogue");
-    help->Append(kShortcutSheet, "Keyboard &Shortcuts\tCtrl+K");
-    help->AppendSeparator();
-    help->Append(wxID_ABOUT, "&About", "About Say Count");
-    renpy_menu_ = new wxMenu();
-    renpy_menu_->Append(kRunRenpy, "Run Project\tF6");
-    renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
-    renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
-    renpy_menu_->Append(kRuntimePresets, "Runtime State Presets...");
-    renpy_menu_->Append(kRunRenpyLint, CommandFor(kRunRenpyLint).label);
-    renpy_menu_->Append(kGenerateTranslations, "Generate Translations...");
-    renpy_menu_->Append(kExportDialogue, "Export Dialogue...");
-    renpy_menu_->Append(kShowAssets, "Story Library...");
-    renpy_menu_->Append(kShowCoverage, "Label Coverage...");
-    renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
-    renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
-    renpy_menu_->AppendSeparator();
-    renpy_menu_->Append(kConfigureRenpy, "Configure SDK Executable...");
-    auto* sdk_status = renpy_menu_->Append(kRenpyStatus, renpy_sdk_
-        ? "SDK: " + wxString::FromUTF8(renpy_sdk_->version.empty() ? "detected" : renpy_sdk_->version)
-        : "SDK: not found");
-    sdk_status->Enable(false);
-
-    auto* menu_bar = new wxMenuBar();
-    menu_bar->Append(file, "&File");
-    menu_bar->Append(edit, "&Edit");
-    menu_bar->Append(view, "&View");
-    menu_bar->Append(renpy_menu_, "&Ren'Py");
-    menu_bar->Append(help, "&Help");
-    SetMenuBar(menu_bar);
-}
-
-void MainFrame::RebuildRecentProjectsMenu() {
-    if (!recent_projects_menu_) return;
-    while (recent_projects_menu_->GetMenuItemCount() != 0)
-        recent_projects_menu_->Destroy(recent_projects_menu_->FindItemByPosition(0));
-    if (recent_projects_.empty()) {
-        auto* item = recent_projects_menu_->Append(wxID_ANY, "(None)");
-        item->Enable(false);
-        return;
-    }
-    const std::size_t count = std::min<std::size_t>(recent_projects_.size(), 8);
-    for (std::size_t index = 0; index < count; ++index)
-        recent_projects_menu_->Append(kRecentProjectFirst + static_cast<int>(index), recent_projects_[index]);
-}
-
 bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     std::string error;
     auto discovered = discover_project_folder(selected_path.ToStdString(wxConvUTF8), &error);
     if (!discovered) {
-        wxMessageBox(wxString::FromUTF8(error), "Project connection failed",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("Game could not be opened: " + wxString::FromUTF8(error), wxICON_ERROR);
         return false;
     }
-    std::vector<wxString> paths;
-    paths.reserve(discovered->scripts.size());
-    for (const auto& script : discovered->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
-    if (!notebook_->OpenProjectFiles(paths)) return false;
+    if (!notebook_->OpenProjectFiles(discovered->scripts)) return false;
     project_ = std::move(discovered);
+    project_navigator_->SetProject(project_->scripts);
+    manager_.GetPane("project-navigator").Show(true);
+    if (GetMenuBar()) GetMenuBar()->Check(kShowProjectNavigator, true);
+    manager_.Update();
     story_assets_ = discover_project_assets(project_->scripts_root);
     RefreshStoryLibrary();
     SetupCoverageProject();
@@ -878,11 +579,9 @@ void MainFrame::RefreshProjectDiscovery() {
     if (!project_) return;
     auto refreshed = discover_project_folder(project_->root);
     if (!refreshed) return;
-    std::vector<wxString> paths;
-    paths.reserve(refreshed->scripts.size());
-    for (const auto& script : refreshed->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
-    notebook_->OpenProjectFiles(paths);
+    notebook_->OpenProjectFiles(refreshed->scripts);
     project_ = std::move(refreshed);
+    project_navigator_->SetProject(project_->scripts);
     story_assets_ = discover_project_assets(project_->scripts_root);
     RefreshStoryLibrary();
     coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
@@ -907,7 +606,7 @@ void MainFrame::HandleExternalScriptChange(const wxString& path) {
         SetStatusText(file.GetFullName() + " changed externally; local unsaved edits were kept");
         if (first) CallAfter([this, key] { ReviewExternalConflict(key); });
     } else if (result == ExternalFileResult::NotOpen && wxFileName::FileExists(path)) {
-        notebook_->OpenFiles({path});
+        notebook_->RefreshProjectFile(path);
     } else if (result == ExternalFileResult::Unchanged) {
         external_conflicts_.erase(key);
     } else if (result == ExternalFileResult::Failed) {
@@ -929,8 +628,7 @@ void MainFrame::ReviewExternalConflict(const std::string& key) {
     const auto current = external_conflicts_.find(key);
     if (current == external_conflicts_.end()) return;
     if (current->second.disk_content != conflict.disk_content) {
-        wxMessageBox("The disk file changed again during review. The comparison will be refreshed.",
-                     "Conflict changed", wxOK | wxICON_WARNING, this);
+        ShowNotice("The disk file changed again. The comparison has been refreshed.", wxICON_WARNING);
         CallAfter([this, key] { ReviewExternalConflict(key); });
         return;
     }
@@ -948,15 +646,15 @@ void MainFrame::ReviewExternalConflict(const std::string& key) {
                           wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         if (save.ShowModal() != wxID_OK) return;
         if (wxFileName(save.GetPath()).GetAbsolutePath() == original.GetAbsolutePath()) {
-            wxMessageBox("Choose a different path so the external disk revision is not overwritten.",
-                         "Different path required", wxOK | wxICON_WARNING, this);
+            ShowNotice("Choose a different path so the external disk revision is not overwritten.",
+                       wxICON_WARNING);
             return;
         }
         wxFile output;
         if (!output.Create(save.GetPath(), true) ||
             !output.Write(wxString::FromUTF8(conflict.local_content), wxConvUTF8) || !output.Close()) {
-            wxMessageBox("The local copy could not be saved. The conflict remains unresolved.",
-                         "Save failed", wxOK | wxICON_ERROR, this);
+            ShowNotice("The local copy could not be saved. The conflict remains unresolved.",
+                       wxICON_ERROR);
             return;
         }
     } else if (!TakeSnapshot(false, "Before using disk version of " +
@@ -984,13 +682,13 @@ bool MainFrame::TakeSnapshot(bool automatic, std::string label) {
     if (automatic && std::none_of(files.begin(), files.end(), [](const auto& file) {
         return file.content.find_first_not_of(" \t\r\n") != std::string::npos;
     })) return true;
-    const auto words = analyze_project(files, {count_menu_choices_}).total_words;
+    const auto words = analyze_project(files, {count_menu_choices_, {}, 35}).total_words;
     if (label.empty()) label = automatic ? "Automatic snapshot" : "Manual snapshot";
     const auto result = snapshot_store_->Create(files, std::move(label), automatic,
                                                 project_ ? project_->root : std::string{}, words);
     if (!result.success) {
-        if (!automatic) wxMessageBox(wxString::FromUTF8(result.error), "Snapshot failed",
-                                     wxOK | wxICON_ERROR, this);
+        if (!automatic) ShowNotice("Version was not saved: " + wxString::FromUTF8(result.error),
+                                   wxICON_ERROR);
         return false;
     }
     if (result.created) {
@@ -1013,8 +711,7 @@ void MainFrame::OnManageSnapshots(wxCommandEvent&) {
     std::string error;
     const auto snapshot = snapshot_store_->Load(*dialog.selected_id(), &error);
     if (!snapshot) {
-        wxMessageBox("Could not load the selected snapshot: " + wxString::FromUTF8(error),
-                     "Restore failed", wxOK | wxICON_ERROR, this);
+        ShowNotice("Version could not be loaded: " + wxString::FromUTF8(error), wxICON_ERROR);
         return;
     }
     if (wxMessageBox(
@@ -1024,8 +721,7 @@ void MainFrame::OnManageSnapshots(wxCommandEvent&) {
         return;
     if (!TakeSnapshot(false, "Before snapshot restore")) return;
     if (!notebook_->RestoreProjectScripts(snapshot->files)) {
-        wxMessageBox("The snapshot did not contain any restorable scripts.", "Restore failed",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("That version does not contain any scripts that can be restored.", wxICON_ERROR);
         return;
     }
     SetStatusText("Snapshot restored — changes are unsaved");
@@ -1043,13 +739,12 @@ void MainFrame::OnImportProject(wxCommandEvent&) {
     wxFile file(dialog.GetPath());
     wxString text;
     if (!file.IsOpened() || !file.ReadAll(&text, wxConvUTF8)) {
-        wxMessageBox("Could not read the selected project.", "Import failed", wxOK | wxICON_ERROR, this);
+        ShowNotice("The selected project could not be read.", wxICON_ERROR);
         return;
     }
     auto parsed = parse_project_bundle(text.ToStdString(wxConvUTF8));
     if (!parsed.bundle) {
-        wxMessageBox("Project import failed: " + wxString::FromUTF8(parsed.error), "Import failed",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("Project import failed: " + wxString::FromUTF8(parsed.error), wxICON_ERROR);
         return;
     }
     if (!TakeSnapshot(false, "Before project import")) return;
@@ -1105,7 +800,7 @@ void MainFrame::OnExportProject(wxCommandEvent&) {
     const std::string json = project_bundle_json(bundle);
     if (!file.Create(dialog.GetPath(), true) || !file.Write(wxString::FromUTF8(json), wxConvUTF8) ||
         !file.Close()) {
-        wxMessageBox("Could not write the project bundle.", "Export failed", wxOK | wxICON_ERROR, this);
+        ShowNotice("The project export could not be written.", wxICON_ERROR);
         return;
     }
     imported_bundle_ = bundle;
@@ -1157,13 +852,12 @@ void MainFrame::OnConfigureRenpy(wxCommandEvent&) {
                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dialog.ShowModal() != wxID_OK) return;
     if (!is_renpy_executable(dialog.GetPath().ToStdString(wxConvUTF8))) {
-        wxMessageBox("The selected file is not executable.", "Invalid Ren'Py SDK",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("Choose an executable from a Ren'Py SDK.", wxICON_ERROR);
         return;
     }
     editor_settings_.renpy_sdk_path = wxFileName(dialog.GetPath()).GetAbsolutePath();
     if (!settings_.SaveEditor(editor_settings_)) {
-        wxMessageBox("Could not save the SDK setting.", "Settings failed", wxOK | wxICON_ERROR, this);
+        ShowNotice("The Ren'Py SDK setting could not be saved.", wxICON_ERROR);
         return;
     }
     DetectRenpy();
@@ -1188,18 +882,16 @@ bool MainFrame::LaunchRenpy(const std::vector<wxString>& arguments,
                             const wxExecuteEnv* environment,
                             std::function<void(int, std::string)> completion) {
     if (renpy_pid_ != 0) {
-        wxMessageBox("A Ren'Py operation is already running.", "Ren'Py busy",
-                     wxOK | wxICON_INFORMATION, this);
+        ShowNotice("A Ren'Py operation is already running. Stop it before starting another.",
+                   wxICON_INFORMATION);
         return false;
     }
     if (!renpy_sdk_) {
-        wxMessageBox("Ren'Py was not found. Configure the SDK executable first.", "Ren'Py unavailable",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("Ren'Py was not found. Configure the SDK executable first.", wxICON_ERROR);
         return false;
     }
     if (!project_) {
-        wxMessageBox("Connect a Ren'Py project folder first.", "No project",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("Open a Ren'Py game before running this command.", wxICON_WARNING);
         return false;
     }
     wxArrayString command;
@@ -1318,22 +1010,20 @@ void MainFrame::OnRenpyEnded(wxProcessEvent& event) {
 void MainFrame::OnWarpRenpy(wxCommandEvent&) {
     if (!renpy_sdk_) { LaunchRenpy({}); return; }
     if (!renpy_capabilities(renpy_sdk_->version).warp) {
-        wxMessageBox("This Ren'Py SDK version does not support line warping.", "Warp unsupported",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("This Ren'Py SDK version does not support running from the caret.", wxICON_ERROR);
         return;
     }
     if (!project_) { LaunchRenpy({}); return; }
     const wxString path = notebook_->CurrentFilePath();
     if (path.empty()) {
-        wxMessageBox("Save the active script inside the connected project before warping.",
-                     "Warp unavailable", wxOK | wxICON_ERROR, this);
+        ShowNotice("Save the active script inside this game before running from the caret.",
+                   wxICON_WARNING);
         return;
     }
     std::error_code ec;
     const auto relative = std::filesystem::relative(path.ToStdString(wxConvUTF8), project_->scripts_root, ec);
     if (ec || relative.empty() || *relative.begin() == "..") {
-        wxMessageBox("The active script is outside the connected project's game folder.",
-                     "Warp unavailable", wxOK | wxICON_ERROR, this);
+        ShowNotice("The active script is outside this game's script folder.", wxICON_WARNING);
         return;
     }
     if (!notebook_->SaveAll()) return;
@@ -1344,8 +1034,7 @@ void MainFrame::OnWarpRenpy(wxCommandEvent&) {
 void MainFrame::OnDirectorRenpy(wxCommandEvent&) {
     if (!renpy_sdk_) { LaunchRenpy({}); return; }
     if (!renpy_capabilities(renpy_sdk_->version).director) {
-        wxMessageBox("This Ren'Py SDK version does not support Interactive Director.",
-                     "Director unsupported", wxOK | wxICON_ERROR, this);
+        ShowNotice("This Ren'Py SDK version does not support Interactive Director.", wxICON_ERROR);
         return;
     }
     if (!notebook_->SaveAll()) return;
@@ -1356,12 +1045,12 @@ bool MainFrame::LaunchRenpyWithRuntime(const std::vector<wxString>& arguments) {
     if (!project_) { return LaunchRenpy(arguments); }
     const auto validation = validate_runtime_state(runtime_state_json_);
     if (!validation.valid) {
-        wxMessageBox(wxString::FromUTF8(validation.error), "Invalid runtime state", wxOK | wxICON_ERROR, this);
+        ShowNotice("Runtime state is invalid: " + wxString::FromUTF8(validation.error), wxICON_ERROR);
         return false;
     }
     std::string error;
     if (!write_renpy_runtime(project_->scripts_root, &error)) {
-        wxMessageBox(wxString::FromUTF8(error), "Runtime helper not written", wxOK | wxICON_ERROR, this);
+        ShowNotice("Runtime helper was not written: " + wxString::FromUTF8(error), wxICON_ERROR);
         return false;
     }
     wxExecuteEnv environment;
@@ -1410,8 +1099,7 @@ void MainFrame::RunLocalizationTool(bool dialogue) {
     if (prompt.ShowModal() != wxID_OK) return;
     const std::string language = prompt.GetValue().Strip(wxString::both).ToStdString(wxConvUTF8);
     if (!valid_renpy_language(language)) {
-        wxMessageBox("Enter a language containing only letters, numbers, and underscores.",
-                     "Invalid language", wxOK | wxICON_ERROR, this);
+        ShowNotice("Language names can contain only letters, numbers, and underscores.", wxICON_WARNING);
         return;
     }
     if (!notebook_->SaveAll()) return;
@@ -1439,12 +1127,12 @@ void MainFrame::RunLocalizationTool(bool dialogue) {
 void MainFrame::RefreshStoryLibrary() {
     if (!notebook_ || !story_library_) return;
     const auto scripts = notebook_->ProjectScripts();
-    story_library_->SetLibrary(analyze_project(scripts, {count_menu_choices_}), story_assets_);
+    story_library_->SetLibrary(analyze_project(scripts, {count_menu_choices_, {}, 35}), story_assets_);
 }
 
 void MainFrame::OnShowAssets(wxCommandEvent&) {
     if (!project_) {
-        wxMessageBox("Connect a Ren'Py project folder first.", "No project", wxOK | wxICON_ERROR, this);
+        ShowNotice("Open a Ren'Py game to use the Story Library.", wxICON_INFORMATION);
         return;
     }
     story_assets_ = discover_project_assets(project_->scripts_root);
@@ -1489,7 +1177,7 @@ void MainFrame::OnCoverageTimer(wxTimerEvent&) {
 
 void MainFrame::OnShowCoverage(wxCommandEvent&) {
     if (!project_) {
-        wxMessageBox("Connect a Ren'Py project folder first.", "No project", wxOK | wxICON_ERROR, this);
+        ShowNotice("Open a Ren'Py game to review label coverage.", wxICON_INFORMATION);
         return;
     }
     RefreshCoveragePanel();
@@ -1505,7 +1193,7 @@ void MainFrame::RefreshRoutes() {
     const auto& pane = manager_.GetPane("routes");
     if (pane.IsOk() && !pane.IsShown()) return;
     const auto scripts = notebook_->ProjectScripts();
-    const auto project_analysis = analyze_project(scripts, {count_menu_choices_});
+    const auto project_analysis = analyze_project(scripts, {count_menu_choices_, {}, 35});
     route_panel_->SetReport(compute_routes(project_analysis, scripts));
 }
 
@@ -1524,7 +1212,7 @@ void MainFrame::RefreshProduction() {
     const auto scripts = notebook_->ProjectScripts();
     const std::size_t active = notebook_->CurrentFileIndex();
     production_panel_->SetProject(
-        scripts, analyze_project(scripts, {count_menu_choices_}),
+        scripts, analyze_project(scripts, {count_menu_choices_, {}, 35}),
         project_ ? project_->scripts_root : std::string{},
         active < scripts.size() ? scripts[active].name : std::string{}, notebook_->CurrentLine());
 }
@@ -1964,6 +1652,7 @@ void MainFrame::OnToggleFocus(wxCommandEvent& event) {
 
 void MainFrame::OnTogglePane(wxCommandEvent& event) {
     const char* pane = event.GetId() == kShowOutline ? "outline" :
+                       event.GetId() == kShowProjectNavigator ? "project-navigator" :
                        event.GetId() == kShowSpeakerStats ? "speaker-statistics" :
                        event.GetId() == kShowStoryLibrary ? "asset-browser" : "diagnostics";
     manager_.GetPane(pane).Show(event.IsChecked());
@@ -1976,6 +1665,7 @@ void MainFrame::OnPaneClose(wxAuiManagerEvent& event) {
         const wxString& name = event.GetPane()->name;
         int id = wxID_NONE;
         if (name == "outline") id = kShowOutline;
+        else if (name == "project-navigator") id = kShowProjectNavigator;
         else if (name == "speaker-statistics") id = kShowSpeakerStats;
         else if (name == "asset-browser") id = kShowStoryLibrary;
         else if (name == "diagnostics") id = kShowDiagnostics;
@@ -2024,15 +1714,20 @@ void MainFrame::RestoreWorkspace() {
             paths.push_back(wxString::FromUTF8(file.path));
     if (!paths.empty()) notebook_->OpenFiles(paths, false);
     notebook_->RestoreWorkspaceViews(state->files, state->active_file);
+    const bool perspective_has_project_navigator =
+        state->perspective.find("name=project-navigator") != std::string::npos;
     if (!state->perspective.empty()) {
         manager_.LoadPerspective(wxString::FromUTF8(state->perspective), true);
         manager_.GetPane("command-bar").Show(true);
+        if (project_ && !perspective_has_project_navigator)
+            manager_.GetPane("project-navigator").Show(true);
         manager_.Update();
     }
     RefreshRoutes();
     RefreshProduction();
     if (GetMenuBar()) {
         GetMenuBar()->Check(kShowOutline, manager_.GetPane("outline").IsShown());
+        GetMenuBar()->Check(kShowProjectNavigator, manager_.GetPane("project-navigator").IsShown());
         GetMenuBar()->Check(kShowSpeakerStats, manager_.GetPane("speaker-statistics").IsShown());
         GetMenuBar()->Check(kShowStoryLibrary, manager_.GetPane("asset-browser").IsShown());
         GetMenuBar()->Check(kShowDiagnostics, manager_.GetPane("diagnostics").IsShown());
@@ -2107,9 +1802,8 @@ void MainFrame::OnNewTab(wxCommandEvent&) {
 void MainFrame::OnWriteManuscript(wxCommandEvent&) {
     auto preview = notebook_->PrepareManuscriptConversion();
     if (!preview) {
-        wxMessageBox("Type prose in the active script editor, then choose Convert prose.\n\n"
-                     "To convert only part of a tab, select that text first.",
-                     "Nothing to convert", wxOK | wxICON_INFORMATION, this);
+        ShowNotice("Type prose in the editor, or select part of the script, before converting.",
+                   wxICON_INFORMATION);
         return;
     }
     if (preview->inclusive_conversion.script == preview->source) {
@@ -2136,9 +1830,8 @@ void MainFrame::OnWriteManuscript(wxCommandEvent&) {
             return;
         }
         if (!local.error.empty()) {
-            wxMessageBox(wxString::FromUTF8(local.error) +
-                         "\n\nThe rule-based converter will be used instead.",
-                         "Offline AI unavailable", wxOK | wxICON_WARNING, this);
+            ShowNotice(wxString::FromUTF8(local.error) +
+                       " The built-in converter will be used instead.", wxICON_WARNING);
         } else {
             offline_ai_used = notebook_->PrepareOfflineAiConversion(
                 &*preview, local.rewrite.manuscript);
@@ -2168,8 +1861,7 @@ void MainFrame::OnWriteManuscript(wxCommandEvent&) {
 void MainFrame::OnConvertChat(wxCommandEvent& event) {
     auto preview = notebook_->PrepareTextReplacement();
     if (!preview) {
-        wxMessageBox("Select text or type into the active editor first.", "Nothing to convert",
-                     wxOK | wxICON_INFORMATION, this);
+        ShowNotice("Select text or type into the editor before converting.", wxICON_INFORMATION);
         return;
     }
     const bool to_chat = event.GetId() == kConvertToChat;
@@ -2200,8 +1892,7 @@ void MainFrame::OnConvertChat(wxCommandEvent& event) {
 
 void MainFrame::OnInstallChatRuntime(wxCommandEvent&) {
     if (!project_) {
-        wxMessageBox("Connect a Ren'Py project folder before installing the chat runtime.",
-                     "Project required", wxOK | wxICON_INFORMATION, this);
+        ShowNotice("Open a Ren'Py game before installing the chat app files.", wxICON_INFORMATION);
         return;
     }
     const wxFileName executable(wxStandardPaths::Get().GetExecutablePath());
@@ -2216,8 +1907,8 @@ void MainFrame::OnInstallChatRuntime(wxCommandEvent&) {
         resource_directory = SAY_COUNT_CHAT_INSTALLED_PATH;
     auto inspection = inspect_chat_runtime(resource_directory, project_->scripts_root);
     if (!inspection.error.empty()) {
-        wxMessageBox(wxString::FromUTF8(inspection.error), "Install failed",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("Chat app files were not installed: " + wxString::FromUTF8(inspection.error),
+                   wxICON_ERROR);
         return;
     }
     std::vector<std::string> changed;
@@ -2239,8 +1930,8 @@ void MainFrame::OnInstallChatRuntime(wxCommandEvent&) {
         inspection = inspect_chat_runtime(resource_directory, export_root.string());
         exported_upgrade = true;
         if (!inspection.error.empty() || inspection.has_modified_files()) {
-            wxMessageBox("The upgrade-export destination is unavailable or also customized.",
-                         "Install stopped", wxOK | wxICON_WARNING, this);
+            ShowNotice("The upgrade destination is unavailable or already customized.",
+                       wxICON_WARNING);
             return;
         }
         changed.clear();
@@ -2259,8 +1950,8 @@ void MainFrame::OnInstallChatRuntime(wxCommandEvent&) {
                      wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES) return;
     const auto installed = install_chat_runtime(inspection);
     if (!installed.error.empty()) {
-        wxMessageBox(wxString::FromUTF8(installed.error), "Install failed",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("Chat app files were not installed: " + wxString::FromUTF8(installed.error),
+                   wxICON_ERROR);
         return;
     }
     RefreshProjectDiscovery();
@@ -2272,8 +1963,7 @@ void MainFrame::OnInstallChatRuntime(wxCommandEvent&) {
 void MainFrame::OnConfigureOfflineProseAi(wxCommandEvent&) {
     if (!ConfigureOfflineProseAi(this, &editor_settings_)) return;
     if (!settings_.SaveEditor(editor_settings_)) {
-        wxMessageBox("Could not save the offline AI setting.", "Settings failed",
-                     wxOK | wxICON_ERROR, this);
+        ShowNotice("The offline prose AI setting could not be saved.", wxICON_ERROR);
         return;
     }
     SetStatusText(editor_settings_.offline_prose_ai
@@ -2322,7 +2012,7 @@ void MainFrame::OnExport(wxCommandEvent& event) {
     if (dialog.ShowModal() != wxID_OK) return;
     wxFile output(dialog.GetPath(), wxFile::write);
     if (!output.IsOpened() || !output.Write(contents, wxConvUTF8)) {
-        wxMessageBox("Could not write the export file.", "Export failed", wxOK | wxICON_ERROR, this);
+        ShowNotice("The statistics export could not be written.", wxICON_ERROR);
         return;
     }
     SetStatusText("Exported " + dialog.GetPath());
@@ -2365,7 +2055,8 @@ void MainFrame::OnCloseTab(wxCommandEvent&) {
 void MainFrame::OnAbout(wxCommandEvent&) {
     wxAboutDialogInfo info;
     info.SetName("Say Count");
-    info.SetVersion("0.1.0");
+    const auto version = say_count::core_version();
+    info.SetVersion(wxString::FromUTF8(version.data(), version.size()));
     info.SetDescription("A native Ren'Py writing and word-counting application.");
     wxAboutBox(info, this);
 }

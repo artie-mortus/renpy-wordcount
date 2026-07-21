@@ -33,6 +33,7 @@ class wxDataViewListCtrl;
 class wxDataViewEvent;
 class wxMenu;
 class wxControl;
+class wxInfoBar;
 
 namespace say_count::ui {
 
@@ -45,6 +46,7 @@ class CoveragePanel;
 class RoutePanel;
 class ProductionPanel;
 class StoryLibraryPanel;
+class ProjectNavigatorPanel;
 struct FindStatus;
 
 class MainFrame final : public wxFrame {
@@ -58,6 +60,8 @@ private:
     void BuildCommandBar();
     void RefreshCommandBarState();
     void RefreshCueSummary();
+    void ShowNotice(const wxString& message, int flags);
+    void HideNotice();
     void BuildFindBar();
     void BuildFindResults();
     void BuildFocusPill();
@@ -170,6 +174,7 @@ private:
     DiagnosticsPanel* diagnostics_ = nullptr;
     wxPanel* find_bar_ = nullptr;
     wxPanel* command_bar_ = nullptr;
+    wxInfoBar* notification_bar_ = nullptr;
     wxStaticText* workspace_name_ = nullptr;
     wxStaticText* cue_summary_ = nullptr;
     wxControl* open_game_button_ = nullptr;
@@ -221,6 +226,7 @@ private:
     wxTextCtrl* renpy_tool_output_ = nullptr;
     RenpyLintPanel* renpy_lint_ = nullptr;
     StoryLibraryPanel* story_library_ = nullptr;
+    ProjectNavigatorPanel* project_navigator_ = nullptr;
     std::vector<ProjectAsset> story_assets_;
     CoveragePanel* coverage_panel_ = nullptr;
     RoutePanel* route_panel_ = nullptr;
