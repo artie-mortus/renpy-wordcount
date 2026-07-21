@@ -383,6 +383,7 @@ TEST_CASE("writing draft keeps natural writing separate from generated script") 
     REQUIRE(update);
     writing->SetValue("Eileen: Hello");
     CHECK(preview->GetValue().Contains("Character(\"Eileen\")"));
+    CHECK(preview->GetValue().Contains("label start:"));
     CHECK(save->IsEnabled());
     CHECK(update->IsEnabled());
     CHECK(dialog.script_differs());

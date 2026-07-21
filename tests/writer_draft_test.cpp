@@ -28,3 +28,12 @@ TEST_CASE("writer draft comparison detects manual script edits") {
 TEST_CASE("empty writer drafts generate no script") {
     CHECK(say_count::render_writer_draft(" \n\t").empty());
 }
+
+TEST_CASE("writer draft output always includes the RenPy start label") {
+    const auto generated = say_count::render_writer_draft(
+        "She said it'd be here, said Leon.\n\n"
+        "Well, it's not here, said Robin.");
+    CHECK(generated.find("label start:\n") != std::string::npos);
+    CHECK(generated.find("leon \"She said it'd be here.\"") != std::string::npos);
+    CHECK(generated.find("robin \"Well, it's not here.\"") != std::string::npos);
+}

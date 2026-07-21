@@ -976,7 +976,12 @@ void MainFrame::DrainRenpyOutput(bool flush) {
     if (!text.empty()) AppendRenpyLog(text);
 }
 
-void MainFrame::OnRunRenpy(wxCommandEvent&) { LaunchRenpyWithRuntime({}); }
+void MainFrame::OnRunRenpy(wxCommandEvent&) {
+    // Ren'Py reads scripts from disk. Always persist the editor state first so
+    // Preview game cannot run a stale script after an undoable conversion.
+    if (project_ && !notebook_->SaveAll()) return;
+    LaunchRenpyWithRuntime({});
+}
 
 void MainFrame::OnStopRenpy(wxCommandEvent&) {
     if (!renpy_pid_) { SetStatusText("No Ren'Py process is running"); return; }
@@ -1599,7 +1604,11 @@ void MainFrame::OnWriterDraft(wxCommandEvent&) {
                      wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this) != wxYES) return;
     if (!TakeSnapshot(false, "Before updating script from writing draft")) return;
     if (!notebook_->ReplaceCurrentDocument(dialog.generated_script())) return;
-    SetStatusText("Game script updated from writing draft — changes are unsaved and Undo is available");
+    if (!notebook_->SaveCurrent()) {
+        SetStatusText("Game script updated in the editor but could not be saved — Undo is available");
+        return;
+    }
+    SetStatusText("Game script updated and saved from writing draft — Undo is available");
 }
 
 void MainFrame::OnShowShortcuts(wxCommandEvent&) {
