@@ -377,16 +377,36 @@ TEST_CASE("writing draft keeps natural writing separate from generated script") 
     auto* preview = Named<wxTextCtrl>(dialog, "Generated game script");
     auto* save = Named<wxButton>(dialog, "Save writing draft");
     auto* update = Named<wxButton>(dialog, "Update game script");
+    auto* tabs = Named<wxNotebook>(dialog, "Writing and generated script");
+    auto* format = Named<wxRadioBox>(dialog, "Writing draft output format");
+    auto* chat_options = Named<wxPanel>(dialog, "Writing draft chat options");
+    auto* channel = Named<wxTextCtrl>(dialog, "Writing draft chat channel");
     REQUIRE(writing);
     REQUIRE(preview);
     REQUIRE(save);
     REQUIRE(update);
+    REQUIRE(tabs);
+    REQUIRE(format);
+    REQUIRE(chat_options);
+    REQUIRE(channel);
+    CHECK(format->GetParent() == tabs->GetPage(0));
+    CHECK(chat_options->GetParent() == tabs->GetPage(0));
+    CHECK_FALSE(chat_options->IsShown());
     writing->SetValue("Eileen: Hello");
     CHECK(preview->GetValue().Contains("Character(\"Eileen\")"));
     CHECK(preview->GetValue().Contains("label start:"));
     CHECK(save->IsEnabled());
     CHECK(update->IsEnabled());
     CHECK(dialog.script_differs());
+
+    format->SetSelection(1);
+    wxCommandEvent changed(wxEVT_RADIOBOX, format->GetId());
+    format->GetEventHandler()->ProcessEvent(changed);
+    CHECK(chat_options->IsShown());
+    CHECK(dialog.generates_chat());
+    CHECK(preview->GetValue().Contains("label start:"));
+    CHECK(preview->GetValue().Contains("say_count_chat_begin"));
+    CHECK(preview->GetValue().Contains("ChatCharacter(\"Eileen\")"));
     fs::remove_all(root);
 }
 

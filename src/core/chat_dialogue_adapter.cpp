@@ -467,7 +467,7 @@ ChatConversion convert_manuscript_to_chat(
     std::string_view manuscript, std::string_view default_channel,
     const std::map<std::string, std::string>& existing_characters,
     std::string_view narrator_alias, std::string_view narrator_name,
-    std::string_view bridge_skin) {
+    std::string_view bridge_skin, std::string_view label) {
     ChatConversion result;
     result.document.default_channel = std::string(default_channel);
 
@@ -510,7 +510,7 @@ ChatConversion convert_manuscript_to_chat(
             result.document.characters.push_back({std::string(narrator_alias),
                 narrator_name.empty() ? "Narrator" : std::string(narrator_name)});
     }
-    result.text = format_chat_program(result.document, "chat_scene", true, bridge_skin);
+    result.text = format_chat_program(result.document, label, true, bridge_skin);
     CountEvents(result.document.events, &result);
     return result;
 }

@@ -91,7 +91,12 @@ void MainFrame::RefreshCommandBarState() {
     const auto state = DeriveCommandBarState({project_.has_value(), current_document_dirty_,
         !current_document_path_.empty(), problem_count_, fixable_problem_count_,
         renpy_sdk_.has_value(), renpy_process_ != nullptr});
-    const bool compact = GetClientSize().x < FromDIP(1080);
+    const int width = GetClientSize().x;
+    const bool compact = width < FromDIP(1080);
+    const bool narrow = width < FromDIP(900);
+    const bool very_narrow = width < FromDIP(720);
+    if (cue_summary_) cue_summary_->Show(!narrow);
+    if (workspace_name_) workspace_name_->Show(!very_narrow);
     if (open_game_button_) open_game_button_->Show(state.show_open_game);
     if (history_button_) history_button_->Show(state.show_history && !compact);
     if (problems_button_) {

@@ -10,7 +10,7 @@ ChatConversion convert_manuscript_to_chat(
     std::string_view manuscript, std::string_view default_channel = "#general",
     const std::map<std::string, std::string>& existing_characters = {},
     std::string_view narrator_alias = {}, std::string_view narrator_name = {},
-    std::string_view bridge_skin = {});
+    std::string_view bridge_skin = {}, std::string_view label = "chat_scene");
 ChatConversion convert_chat_to_manuscript(
     std::string_view script, bool ordinary_renpy = false);
 

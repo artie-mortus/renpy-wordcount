@@ -5,6 +5,9 @@
 #include <wx/dialog.h>
 
 class wxButton;
+class wxNotebook;
+class wxPanel;
+class wxRadioBox;
 class wxStaticText;
 class wxTextCtrl;
 
@@ -15,6 +18,7 @@ public:
     WriterDraftDialog(wxWindow* parent, std::string script_path, std::string current_script);
     const std::string& generated_script() const { return generated_script_; }
     bool script_differs() const { return script_differs_; }
+    bool generates_chat() const;
 
 private:
     void RefreshPreview();
@@ -28,6 +32,12 @@ private:
     bool draft_dirty_ = false;
     wxTextCtrl* writing_ = nullptr;
     wxTextCtrl* preview_ = nullptr;
+    wxNotebook* tabs_ = nullptr;
+    wxRadioBox* output_format_ = nullptr;
+    wxPanel* chat_options_ = nullptr;
+    wxRadioBox* chat_style_ = nullptr;
+    wxStaticText* chat_channel_label_ = nullptr;
+    wxTextCtrl* chat_channel_ = nullptr;
     wxStaticText* state_ = nullptr;
     wxButton* save_ = nullptr;
     wxButton* update_ = nullptr;

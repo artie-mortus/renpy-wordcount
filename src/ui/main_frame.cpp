@@ -1609,6 +1609,7 @@ void MainFrame::OnWriterDraft(wxCommandEvent&) {
         return;
     }
     SetStatusText("Game script updated and saved from writing draft — Undo is available");
+    if (dialog.generates_chat()) OfferChatRuntimeInstall();
 }
 
 void MainFrame::OnShowShortcuts(wxCommandEvent&) {
@@ -1884,18 +1885,21 @@ void MainFrame::OnConvertChat(wxCommandEvent& event) {
     }
     SetStatusText(wxString::Format("Converted %zu messages · %zu metadata losses · Undo restores it",
                                   conversion.messages, conversion.losses.size()));
-    if (to_chat && project_) {
-        std::error_code probe;
-        const auto runtime = std::filesystem::path(project_->scripts_root) /
-            "vendor" / "chat_program" / "chat_program.rpy";
-        if (!std::filesystem::exists(runtime, probe) &&
-            wxMessageBox("Your chat scene is in the script, but the chat app itself is not "
-                         "installed in this project yet, so the scene cannot play in the game.\n\n"
-                         "Install the chat app files now? Your writing will not be touched.",
-                         "Install the chat app?", wxYES_NO | wxICON_QUESTION, this) == wxYES) {
-            wxCommandEvent install;
-            OnInstallChatRuntime(install);
-        }
+    if (to_chat) OfferChatRuntimeInstall();
+}
+
+void MainFrame::OfferChatRuntimeInstall() {
+    if (!project_) return;
+    std::error_code probe;
+    const auto runtime = std::filesystem::path(project_->scripts_root) /
+        "vendor" / "chat_program" / "chat_program.rpy";
+    if (!std::filesystem::exists(runtime, probe) &&
+        wxMessageBox("Your chat scene is in the script, but the chat app itself is not "
+                     "installed in this project yet, so the scene cannot play in the game.\n\n"
+                     "Install the chat app files now? Your writing will not be touched.",
+                     "Install the chat app?", wxYES_NO | wxICON_QUESTION, this) == wxYES) {
+        wxCommandEvent install;
+        OnInstallChatRuntime(install);
     }
 }
 

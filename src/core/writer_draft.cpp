@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "core/chat_dialogue_adapter.h"
 #include "core/manuscript.h"
 
 namespace say_count {
@@ -50,8 +51,13 @@ bool save_writer_draft(const std::string& script_path, std::string_view writing,
     return false;
 }
 
-std::string render_writer_draft(std::string_view writing) {
+std::string render_writer_draft(
+    std::string_view writing, const WriterDraftRenderOptions& options) {
     if (writing.find_first_not_of(" \t\r\n") == std::string_view::npos) return {};
+    if (options.output == WriterDraftOutput::SocialMediaChat) {
+        return convert_manuscript_to_chat(
+            writing, options.chat_channel, {}, {}, {}, options.chat_skin, "start").text;
+    }
     return convert_manuscript_to_renpy(writing).script;
 }
 

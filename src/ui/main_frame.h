@@ -113,6 +113,7 @@ private:
     void OnShowShortcuts(wxCommandEvent& event);
     void OnShowManuscriptGuide(wxCommandEvent& event);
     void OnConvertChat(wxCommandEvent& event);
+    void OfferChatRuntimeInstall();
     void OnInstallChatRuntime(wxCommandEvent& event);
     void OnToggleFocus(wxCommandEvent& event);
     void OnTogglePane(wxCommandEvent& event);
