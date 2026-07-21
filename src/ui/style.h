@@ -25,5 +25,6 @@ wxFont BodyFont(int size = 10, wxFontWeight weight = wxFONTWEIGHT_NORMAL);
 wxFont UtilityFont(int size = 9, wxFontWeight weight = wxFONTWEIGHT_NORMAL);
 void ApplyWorkspaceTheme(wxWindow* root);
 void StylePrimaryButton(wxButton* button);
+void StyleSecondaryButton(wxButton* button);
 
 }  // namespace say_count::ui::style

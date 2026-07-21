@@ -26,6 +26,7 @@ private:
     std::vector<wxString> recent_games_;
 };
 
-std::optional<ProjectCreationPlan> ShowNewStoryDialog(wxWindow* parent);
+std::optional<ProjectCreationPlan> ShowNewStoryDialog(wxWindow* parent,
+                                                      const wxString& initial_parent = {});
 
 }  // namespace say_count::ui

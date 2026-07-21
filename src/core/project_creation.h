@@ -22,6 +22,7 @@ struct ProjectCreationResult {
     std::string root;
 };
 
+std::string project_folder_name(std::string story_name);
 ProjectCreationResult plan_project_creation(const std::string& parent_directory,
                                             const std::string& story_name,
                                             ProjectCreationPlan* plan);

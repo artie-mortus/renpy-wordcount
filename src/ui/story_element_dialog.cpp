@@ -31,23 +31,27 @@ FormCopy CopyFor(StoryElementKind kind) {
 
 }  // namespace
 
-StoryElementDialog::StoryElementDialog(wxWindow* parent, const wxString& indentation)
+StoryElementDialog::StoryElementDialog(wxWindow* parent, const wxString& indentation,
+                                       std::optional<StoryElementKind> fixed_kind)
     : wxDialog(parent, wxID_ANY, "Insert Into the Story", wxDefaultPosition, wxSize(760, 680),
-               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), indentation_(indentation) {
+               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER), indentation_(indentation),
+      fixed_kind_(fixed_kind) {
     auto* layout = new wxBoxSizer(wxVERTICAL);
     auto* cue = new wxPanel(this, wxID_ANY, wxDefaultPosition, FromDIP(wxSize(-1, 4)));
     cue->SetBackgroundColour(style::Colors().cue); layout->Add(cue, 0, wxEXPAND);
     auto* kicker = new wxStaticText(this, wxID_ANY, "STORY ELEMENT");
     kicker->SetFont(style::UtilityFont(9, wxFONTWEIGHT_BOLD)); kicker->SetForegroundColour(style::Colors().plum);
     layout->Add(kicker, 0, wxLEFT | wxRIGHT | wxTOP, 20);
-    auto* heading = new wxStaticText(this, wxID_ANY, "Add something without writing code");
+    auto* heading = new wxStaticText(this, wxID_ANY,
+        fixed_kind_ == StoryElementKind::Character ? "Add a character" : "Add something without writing code");
     heading->SetFont(style::BodyFont(17, wxFONTWEIGHT_BOLD)); layout->Add(heading, 0, wxALL, 20);
 
     kind_ = new wxChoice(this, wxID_ANY);
     for (const auto* label : {"Character", "Dialogue or narration", "Player choice", "Background scene",
                               "Music", "Sound effect", "Continue at another scene"}) kind_->Append(label);
-    kind_->SetSelection(0); kind_->SetName("Story element type");
+    kind_->SetSelection(fixed_kind_ ? static_cast<int>(*fixed_kind_) : 0); kind_->SetName("Story element type");
     layout->Add(kind_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
+    kind_->Show(!fixed_kind_.has_value());
     guidance_ = new wxStaticText(this, wxID_ANY, wxEmptyString); guidance_->SetForegroundColour(style::Colors().ink_soft);
     layout->Add(guidance_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
 
@@ -76,7 +80,7 @@ StoryElementDialog::StoryElementDialog(wxWindow* parent, const wxString& indenta
 }
 
 StoryElementKind StoryElementDialog::kind() const {
-    return static_cast<StoryElementKind>(std::max(0, kind_->GetSelection()));
+    return fixed_kind_.value_or(static_cast<StoryElementKind>(std::max(0, kind_->GetSelection())));
 }
 
 void StoryElementDialog::RefreshForm() {

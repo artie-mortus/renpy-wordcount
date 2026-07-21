@@ -98,4 +98,12 @@ void StylePrimaryButton(wxButton* button) {
     button->SetMinSize(wxSize(-1, 34));
 }
 
+void StyleSecondaryButton(wxButton* button) {
+    if (!button) return;
+    button->SetBackgroundColour(wxColour("#E2E7EB"));
+    button->SetForegroundColour(kPalette.ink);
+    button->SetFont(BodyFont(9, wxFONTWEIGHT_MEDIUM));
+    button->SetMinSize(wxSize(-1, 34));
+}
+
 }  // namespace say_count::ui::style

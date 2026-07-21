@@ -41,10 +41,10 @@ class SpeakerStatsPanel;
 class OutlinePanel;
 class DiagnosticsPanel;
 class RenpyLintPanel;
-class AssetPanel;
 class CoveragePanel;
 class RoutePanel;
 class ProductionPanel;
+class StoryLibraryPanel;
 struct FindStatus;
 
 class MainFrame final : public wxFrame {
@@ -72,7 +72,10 @@ private:
     void RestoreWindow();
     void RestoreWorkspace();
     void ShowWelcomeIfNeeded();
+    void ShowHome();
     void StartNewStory();
+    wxString PreferredStoryParent() const;
+    void RefreshStoryLibrary();
     void SaveWorkspace();
     void OnQuickOpen(wxCommandEvent& event);
     void OnCommandPalette(wxCommandEvent& event);
@@ -217,7 +220,8 @@ private:
     wxTextCtrl* renpy_log_ = nullptr;
     wxTextCtrl* renpy_tool_output_ = nullptr;
     RenpyLintPanel* renpy_lint_ = nullptr;
-    AssetPanel* asset_panel_ = nullptr;
+    StoryLibraryPanel* story_library_ = nullptr;
+    std::vector<ProjectAsset> story_assets_;
     CoveragePanel* coverage_panel_ = nullptr;
     RoutePanel* route_panel_ = nullptr;
     ProductionPanel* production_panel_ = nullptr;

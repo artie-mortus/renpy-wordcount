@@ -2,6 +2,8 @@
 
 - Completed: Steps 0.1 through 9.5; Phases 8 and 9 and the release gate are complete.
 - The application shell now uses a modern script-desk design with a live cue bar, quieter default layout, paper/ink editor palette, and purpose-led production workflows.
+- Home is reusable from the File menu, new-story creation previews its destination and supports Unicode titles, and the stable action bar keeps writing available alongside problem badges.
+- Story Library now provides project-wide cast lookup plus searchable image/audio previews and context-safe insertion, replacing the separate asset-browser surface while retaining its saved pane identity.
 - Workspace sessions restore the project, open files, active tab, caret/scroll positions, and dock layout; Ctrl+P and Ctrl+Shift+P provide fuzzy Quick Open and command access.
 - Production Desk includes prose analysis, voice tracking/exports, translation gaps, continuity notes, and accessibility findings.
 - Fix Indents provides a confirmed preview and snapshot before applying tab/four-space normalization.

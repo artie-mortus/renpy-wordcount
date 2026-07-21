@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <wx/dialog.h>
 
 #include "core/script_builder.h"
@@ -13,12 +15,13 @@ namespace say_count::ui {
 
 class StoryElementDialog final : public wxDialog {
 public:
-    StoryElementDialog(wxWindow* parent, const wxString& indentation);
+    StoryElementDialog(wxWindow* parent, const wxString& indentation,
+                       std::optional<StoryElementKind> fixed_kind = std::nullopt);
     const std::string& generated_text() const { return generated_text_; }
+    StoryElementKind kind() const;
 
 private:
     void RefreshForm();
-    StoryElementKind kind() const;
 
     wxChoice* kind_ = nullptr;
     wxStaticText* primary_label_ = nullptr;
@@ -31,6 +34,7 @@ private:
     wxTextCtrl* preview_ = nullptr;
     wxButton* insert_ = nullptr;
     wxString indentation_;
+    std::optional<StoryElementKind> fixed_kind_;
     std::string generated_text_;
 };
 

@@ -4,6 +4,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <utility>
 
 namespace say_count {
 namespace {
@@ -15,16 +16,20 @@ std::string trim(std::string value) {
     return value;
 }
 
-std::string folder_name(std::string name) {
-    std::replace_if(name.begin(), name.end(), [](unsigned char c) {
-        return !(std::isalnum(c) || c == '-' || c == '_');
-    }, '-');
+}  // namespace
+
+std::string project_folder_name(std::string name) {
+    name = trim(std::move(name));
+    for (char& value : name) {
+        const auto c = static_cast<unsigned char>(value);
+        if (c >= 0x80 || std::isalnum(c) || value == '-' || value == '_') continue;
+        value = '-';
+    }
     while (name.find("--") != std::string::npos) name.replace(name.find("--"), 2, "-");
-    while (!name.empty() && name.front() == '-') name.erase(name.begin());
-    while (!name.empty() && name.back() == '-') name.pop_back();
+    while (!name.empty() && (name.front() == '-' || name.front() == '.')) name.erase(name.begin());
+    while (!name.empty() && (name.back() == '-' || name.back() == '.')) name.pop_back();
     return name;
 }
-}  // namespace
 
 ProjectCreationResult plan_project_creation(const std::string& parent_directory,
                                             const std::string& story_name,
@@ -32,7 +37,7 @@ ProjectCreationResult plan_project_creation(const std::string& parent_directory,
     if (!plan) return {false, "The project plan could not be prepared.", {}};
     const std::string title = trim(story_name);
     if (title.empty()) return {false, "Enter a name for the story.", {}};
-    const std::string folder = folder_name(title);
+    const std::string folder = project_folder_name(title);
     if (folder.empty() || folder == "." || folder == "..")
         return {false, "Use letters or numbers in the story name.", {}};
     std::error_code error;

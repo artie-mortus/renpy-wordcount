@@ -44,7 +44,7 @@
 #include "ui/chat_conversion_dialog.h"
 #include "ui/runtime_preset_dialog.h"
 #include "ui/renpy_lint_panel.h"
-#include "ui/asset_panel.h"
+#include "ui/story_library_panel.h"
 #include "ui/coverage_panel.h"
 #include "ui/route_panel.h"
 #include "ui/production_panel.h"
@@ -54,6 +54,7 @@
 #include "ui/welcome_dialog.h"
 #include "ui/story_element_dialog.h"
 #include "ui/writer_draft_dialog.h"
+#include "ui/command_model.h"
 #include "core/version.h"
 #include "core/indent.h"
 #include "core/navigator.h"
@@ -66,68 +67,6 @@ namespace {
 
 constexpr int kDefaultWidth = 1380;
 constexpr int kDefaultHeight = 860;
-enum MenuId {
-    kToggleWrap = wxID_HIGHEST + 1,
-    kToggleNvimMotions,
-    kFontIncrease,
-    kFontDecrease,
-    kFontReset,
-    kThemeSystem,
-    kThemeLight,
-    kThemeDark,
-    kExportCsv,
-    kExportJson,
-    kExportHtml,
-    kFindNext,
-    kFindPrevious,
-    kFindReplace,
-    kFindReplaceAll,
-    kFindClose,
-    kGoToLine,
-    kToggleComment,
-    kInsertStoryElement,
-    kWriterDraft,
-    kWriteManuscript,
-    kConvertToChat,
-    kConvertChatToDialogue,
-    kInstallChatRuntime,
-    kConfigureOfflineProseAi,
-    kShortcutSheet,
-    kManuscriptGuide,
-    kChatGuide,
-    kFocusMode,
-    kConnectProject,
-    kRecentProjectFirst,
-    kRecentProjectLast = kRecentProjectFirst + 7,
-    kReviewConflicts = kRecentProjectLast + 1,
-    kSnapshotNow,
-    kManageSnapshots,
-    kImportProject,
-    kExportProject,
-    kGitRepository,
-    kRenameSymbol,
-    kConfigureRenpy,
-    kRenpyStatus,
-    kRunRenpy,
-    kStopRenpy,
-    kShowRenpyLog,
-    kWarpRenpy,
-    kDirectorRenpy,
-    kRuntimePresets,
-    kRunRenpyLint,
-    kGenerateTranslations,
-    kExportDialogue,
-    kShowAssets,
-    kShowCoverage,
-    kShowRoutes,
-    kShowProduction,
-    kFixIndents,
-    kShowOutline,
-    kShowSpeakerStats,
-    kShowDiagnostics,
-    kQuickOpen,
-    kCommandPalette,
-};
 
 class CommandButton final : public wxControl {
 public:
@@ -200,24 +139,6 @@ private:
     bool hovered_ = false;
     bool pressed_ = false;
 };
-
-struct CommandCopy {
-    const char* label;
-    const char* help;
-};
-
-CommandCopy FriendlyCommandCopy(int id) {
-    switch (id) {
-        case kConnectProject: return {"Open a game...", "Open an existing Ren'Py game folder"};
-        case kShowDiagnostics: return {"Problems", "Show problems found in the writing"};
-        case kRunRenpyLint: return {"Check game for problems", "Run Ren'Py's complete project check"};
-        case kSnapshotNow: return {"Save a version now", "Store a version of every open script"};
-        case kManageSnapshots: return {"Version history...", "Preview and restore earlier local versions"};
-        case kWriteManuscript: return {"Make game script from writing...", "Review and turn natural writing into Ren'Py script"};
-        case kWriterDraft: return {"Writing draft...", "Write naturally in a persistent draft with a generated-script preview"};
-        default: return {"", ""};
-    }
-}
 
 class ScriptDropTarget final : public wxFileDropTarget {
 public:
@@ -315,6 +236,7 @@ MainFrame::MainFrame()
             if (focus_mode_) PositionFocusPill();
         }
         speaker_stats_->SetAnalysis(analysis);
+        if (story_library_ && manager_.GetPane("asset-browser").IsShown()) RefreshStoryLibrary();
         outline_->SetDocument(source, analysis);
         if (notebook_) RefreshRoutes();
         if (notebook_) RefreshProduction();
@@ -361,10 +283,19 @@ MainFrame::MainFrame()
     renpy_tool_output_ = new wxTextCtrl(this, wxID_ANY, "No Ren'Py tool has run yet.",
                                         wxDefaultPosition, wxDefaultSize,
                                         wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
-    asset_panel_ = new AssetPanel(this);
-    asset_panel_->SetInsertHandler([this](const std::string& statement) {
-        notebook_->InsertAtCaret(statement);
-        SetStatusText("Inserted Ren'Py asset statement");
+    story_library_ = new StoryLibraryPanel(this);
+    story_library_->SetIndentationProvider([this] {
+        return notebook_->CurrentIndentation().ToStdString(wxConvUTF8);
+    });
+    story_library_->SetInsertHandler([this](const std::string& text, const std::string& message) {
+        notebook_->InsertStoryElement(text);
+        SetStatusText(wxString::FromUTF8(message));
+    });
+    story_library_->SetAddCharacterHandler([this] {
+        StoryElementDialog dialog(this, {}, StoryElementKind::Character);
+        if (dialog.ShowModal() != wxID_OK) return;
+        notebook_->InsertTopLevelDefinition(dialog.generated_text());
+        SetStatusText("Character added at the top of this script — Undo is available");
     });
     coverage_panel_ = new CoveragePanel(this);
     coverage_panel_->SetManualHandler([this](const std::string& label, bool covered) {
@@ -487,8 +418,8 @@ MainFrame::MainFrame()
     manager_.AddPane(renpy_tool_output_, wxAuiPaneInfo().Bottom().Name("renpy-tool-output")
                          .Caption("Ren'Py Tool Output").BestSize(-1, 210).MinSize(360, 120)
                          .CloseButton(true).Hide());
-    manager_.AddPane(asset_panel_, wxAuiPaneInfo().Left().Name("asset-browser").Caption("Project Assets")
-                         .BestSize(330, 520).MinSize(260, 220).CloseButton(true).Hide());
+    manager_.AddPane(story_library_, wxAuiPaneInfo().Left().Name("asset-browser").Caption("Story Library")
+                         .BestSize(360, 560).MinSize(300, 300).CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(coverage_panel_, wxAuiPaneInfo().Left().Name("coverage").Caption("Label Coverage")
                          .BestSize(360, 520).MinSize(280, 220).CloseButton(true).Hide());
     manager_.AddPane(route_panel_, wxAuiPaneInfo().Right().Name("routes").Caption("Route Details")
@@ -535,6 +466,7 @@ MainFrame::MainFrame()
     Bind(wxEVT_AUI_PANE_CLOSE, &MainFrame::OnPaneClose, this);
     Bind(wxEVT_SIZE, &MainFrame::OnSize, this);
     Bind(wxEVT_MENU, &MainFrame::OnConnectProject, this, kConnectProject);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&) { ShowHome(); }, kShowHome);
     Bind(wxEVT_MENU, &MainFrame::OnRecentProject, this, kRecentProjectFirst, kRecentProjectLast);
     Bind(wxEVT_FSWATCHER, &MainFrame::OnFileSystemEvent, this);
     Bind(wxEVT_MENU, &MainFrame::OnReviewConflicts, this, kReviewConflicts);
@@ -588,10 +520,16 @@ bool MainFrame::OpenInitialFiles(const std::vector<wxString>& paths) {
 void MainFrame::ShowWelcomeIfNeeded() {
     if (!notebook_ || editor_settings_.onboarding_version >= 1 || project_ ||
         notebook_->HasMeaningfulContent()) return;
+    ShowHome();
+}
+
+void MainFrame::ShowHome() {
     WelcomeDialog dialog(this, recent_projects_);
     const int result = dialog.ShowModal();
-    editor_settings_.onboarding_version = 1;
-    settings_.SaveEditor(editor_settings_);
+    if (editor_settings_.onboarding_version < 1) {
+        editor_settings_.onboarding_version = 1;
+        settings_.SaveEditor(editor_settings_);
+    }
     if (result != wxID_OK) return;
     wxCommandEvent command;
     switch (dialog.action()) {
@@ -605,8 +543,17 @@ void MainFrame::ShowWelcomeIfNeeded() {
     }
 }
 
+wxString MainFrame::PreferredStoryParent() const {
+    if (!recent_projects_.empty()) {
+        const wxFileName recent(recent_projects_.front());
+        if (recent.DirExists()) return recent.GetPath();
+    }
+    const wxString documents = wxStandardPaths::Get().GetDocumentsDir();
+    return wxFileName::DirExists(documents) ? documents : wxGetHomeDir();
+}
+
 void MainFrame::StartNewStory() {
-    const auto plan = ShowNewStoryDialog(this);
+    const auto plan = ShowNewStoryDialog(this, PreferredStoryParent());
     if (!plan) return;
     wxString preview = "Create this story?\n\n" + wxString::FromUTF8(plan->root) + "\n\nFiles:";
     for (const auto& file : plan->files) preview += "\n• " + wxString::FromUTF8(file.relative_path);
@@ -668,10 +615,10 @@ void MainFrame::BuildCommandBar() {
         return button;
     };
     open_game_button_ = make_action("Open a game");
-    save_button_ = make_action("Save");
+    save_button_ = make_action(CommandFor(wxID_SAVE).label);
     write_button_ = make_action("Write naturally");
     history_button_ = make_action("Version history");
-    problems_button_ = make_action("Problems");
+    problems_button_ = make_action(CommandFor(kShowDiagnostics).label);
     run_button_ = make_action("Preview game", true);
     layout->AddSpacer(8);
 
@@ -696,22 +643,26 @@ void MainFrame::BuildCommandBar() {
 
 void MainFrame::RefreshCommandBarState() {
     if (!command_bar_) return;
-    const bool has_game = project_.has_value();
-    if (open_game_button_) open_game_button_->Show(!has_game);
-    if (history_button_) history_button_->Show(has_game || !current_document_path_.empty());
+    const auto state = DeriveCommandBarState({project_.has_value(), current_document_dirty_,
+        !current_document_path_.empty(), problem_count_, fixable_problem_count_,
+        renpy_sdk_.has_value(), renpy_process_ != nullptr});
+    const bool compact = GetClientSize().x < FromDIP(1080);
+    if (open_game_button_) open_game_button_->Show(state.show_open_game);
+    if (history_button_) history_button_->Show(state.show_history && !compact);
     if (problems_button_) {
-        problems_button_->Show(problem_count_ > 0);
+        problems_button_->Show(state.show_problems);
         auto* button = static_cast<CommandButton*>(problems_button_);
-        button->SetCommandLabel(fixable_problem_count_ > 0
-            ? "Fix " + std::to_string(fixable_problem_count_)
-            : "Review " + std::to_string(problem_count_));
+        button->SetCommandLabel(wxString::FromUTF8(state.problem_label));
     }
-    if (write_button_) write_button_->Show(problem_count_ == 0);
+    if (write_button_) write_button_->Show(state.show_write);
     if (run_button_) {
-        run_button_->Show(has_game);
-        run_button_->Enable(has_game && renpy_sdk_.has_value() && !renpy_process_);
+        run_button_->Show(state.show_preview);
+        run_button_->Enable(state.enable_preview);
     }
-    if (save_button_) save_button_->Enable(current_document_dirty_ || current_document_path_.empty());
+    if (save_button_) {
+        save_button_->Show(!compact || state.enable_save);
+        save_button_->Enable(state.enable_save);
+    }
     command_bar_->Layout();
 }
 
@@ -736,13 +687,14 @@ void MainFrame::BuildMenus() {
     file->Append(wxID_SAVEAS, "Save &As...\tCtrl+Shift+S", "Save the current script under a new name");
     file->Append(wxID_CLOSE, "&Close Tab\tCtrl+W", "Close the current tab");
     file->AppendSeparator();
-    const auto open_game = FriendlyCommandCopy(kConnectProject);
+    file->Append(kShowHome, "&Home...\tCtrl+Shift+H", CommandFor(kShowHome).help);
+    const auto& open_game = CommandFor(kConnectProject);
     file->Append(kConnectProject, open_game.label, open_game.help);
     recent_projects_menu_ = new wxMenu();
     file->AppendSubMenu(recent_projects_menu_, "Recent Projects");
     file->Append(kReviewConflicts, "Review External &Conflicts...");
-    const auto save_version = FriendlyCommandCopy(kSnapshotNow);
-    const auto version_history = FriendlyCommandCopy(kManageSnapshots);
+    const auto& save_version = CommandFor(kSnapshotNow);
+    const auto& version_history = CommandFor(kManageSnapshots);
     file->Append(kSnapshotNow, save_version.label, save_version.help);
     file->Append(kManageSnapshots, version_history.label, version_history.help);
     file->Append(kGitRepository, "Git &Repository...", "Clone, sync, commit, and push with any Git remote");
@@ -771,15 +723,14 @@ void MainFrame::BuildMenus() {
     auto* insert = new wxMenu();
     insert->Append(kInsertStoryElement, "Character, dialogue, choice, or direction...",
                    "Build a story element and preview the generated script");
-    insert->Append(kShowAssets, "Image or audio from this game...",
-                   "Browse project assets and insert an image, scene, music, or sound instruction");
+    insert->Append(kShowAssets, "From the Story Library...", CommandFor(kShowAssets).help);
     edit->AppendSubMenu(insert, "&Insert Into Story");
     edit->AppendCheckItem(kToggleNvimMotions, "&Vim Motions (Built-in)",
                           "Use built-in modal editing without an external process");
     edit->Check(kToggleNvimMotions, editor_settings_.nvim_motions);
-    const auto natural_writing = FriendlyCommandCopy(kWriteManuscript);
-    edit->Append(kWriterDraft, FriendlyCommandCopy(kWriterDraft).label,
-                 FriendlyCommandCopy(kWriterDraft).help);
+    const auto& natural_writing = CommandFor(kWriteManuscript);
+    edit->Append(kWriterDraft, CommandFor(kWriterDraft).label,
+                 CommandFor(kWriterDraft).help);
     edit->Append(kWriteManuscript, natural_writing.label, natural_writing.help);
     edit->Append(kConvertToChat, "Turn Writing Into a &Chat Scene...",
                  "Turn the selected writing (or the whole tab) into a phone/messenger scene");
@@ -798,7 +749,8 @@ void MainFrame::BuildMenus() {
     view->AppendSeparator();
     view->AppendCheckItem(kShowOutline, "Outline panel");
     view->AppendCheckItem(kShowSpeakerStats, "Speaker statistics panel");
-    view->AppendCheckItem(kShowDiagnostics, FriendlyCommandCopy(kShowDiagnostics).label);
+    view->AppendCheckItem(kShowStoryLibrary, "Story library");
+    view->AppendCheckItem(kShowDiagnostics, CommandFor(kShowDiagnostics).label);
     view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");
     view->Append(kShowProduction, "&Production Desk...", "Show prose and production tools");
     view->AppendSeparator();
@@ -825,10 +777,10 @@ void MainFrame::BuildMenus() {
     renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
     renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
     renpy_menu_->Append(kRuntimePresets, "Runtime State Presets...");
-    renpy_menu_->Append(kRunRenpyLint, FriendlyCommandCopy(kRunRenpyLint).label);
+    renpy_menu_->Append(kRunRenpyLint, CommandFor(kRunRenpyLint).label);
     renpy_menu_->Append(kGenerateTranslations, "Generate Translations...");
     renpy_menu_->Append(kExportDialogue, "Export Dialogue...");
-    renpy_menu_->Append(kShowAssets, "Browse Project Assets...");
+    renpy_menu_->Append(kShowAssets, "Story Library...");
     renpy_menu_->Append(kShowCoverage, "Label Coverage...");
     renpy_menu_->Append(kStopRenpy, "Stop Running Project\tShift+F6");
     renpy_menu_->Append(kShowRenpyLog, "Show Launch Log");
@@ -875,7 +827,8 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     for (const auto& script : discovered->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
     if (!notebook_->OpenProjectFiles(paths)) return false;
     project_ = std::move(discovered);
-    asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
+    story_assets_ = discover_project_assets(project_->scripts_root);
+    RefreshStoryLibrary();
     SetupCoverageProject();
     RefreshRoutes();
     RefreshProduction();
@@ -930,7 +883,8 @@ void MainFrame::RefreshProjectDiscovery() {
     for (const auto& script : refreshed->scripts) paths.push_back(wxString::FromUTF8(script.absolute_path));
     notebook_->OpenProjectFiles(paths);
     project_ = std::move(refreshed);
-    asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
+    story_assets_ = discover_project_assets(project_->scripts_root);
+    RefreshStoryLibrary();
     coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
     RefreshCoveragePanel();
     RefreshRoutes();
@@ -1482,13 +1436,21 @@ void MainFrame::RunLocalizationTool(bool dialogue) {
     }
 }
 
+void MainFrame::RefreshStoryLibrary() {
+    if (!notebook_ || !story_library_) return;
+    const auto scripts = notebook_->ProjectScripts();
+    story_library_->SetLibrary(analyze_project(scripts, {count_menu_choices_}), story_assets_);
+}
+
 void MainFrame::OnShowAssets(wxCommandEvent&) {
     if (!project_) {
         wxMessageBox("Connect a Ren'Py project folder first.", "No project", wxOK | wxICON_ERROR, this);
         return;
     }
-    asset_panel_->SetAssets(discover_project_assets(project_->scripts_root));
+    story_assets_ = discover_project_assets(project_->scripts_root);
+    RefreshStoryLibrary();
     manager_.GetPane("asset-browser").Show(true);
+    if (GetMenuBar()) GetMenuBar()->Check(kShowStoryLibrary, true);
     manager_.Update();
 }
 
@@ -1923,8 +1885,13 @@ void MainFrame::OnToggleComment(wxCommandEvent&) {
 void MainFrame::OnInsertStoryElement(wxCommandEvent&) {
     StoryElementDialog dialog(this, notebook_->CurrentIndentation());
     if (dialog.ShowModal() != wxID_OK || dialog.generated_text().empty()) return;
-    notebook_->InsertStoryElement(dialog.generated_text());
-    SetStatusText("Inserted story element — undo is available");
+    if (dialog.kind() == StoryElementKind::Character) {
+        notebook_->InsertTopLevelDefinition(dialog.generated_text());
+        SetStatusText("Character added at the top of this script — Undo is available");
+    } else {
+        notebook_->InsertStoryElement(dialog.generated_text());
+        SetStatusText("Inserted story element — Undo is available");
+    }
 }
 
 void MainFrame::OnWriterDraft(wxCommandEvent&) {
@@ -1997,9 +1964,11 @@ void MainFrame::OnToggleFocus(wxCommandEvent& event) {
 
 void MainFrame::OnTogglePane(wxCommandEvent& event) {
     const char* pane = event.GetId() == kShowOutline ? "outline" :
-                       event.GetId() == kShowSpeakerStats ? "speaker-statistics" : "diagnostics";
+                       event.GetId() == kShowSpeakerStats ? "speaker-statistics" :
+                       event.GetId() == kShowStoryLibrary ? "asset-browser" : "diagnostics";
     manager_.GetPane(pane).Show(event.IsChecked());
     manager_.Update();
+    if (event.GetId() == kShowStoryLibrary && event.IsChecked()) RefreshStoryLibrary();
 }
 
 void MainFrame::OnPaneClose(wxAuiManagerEvent& event) {
@@ -2008,6 +1977,7 @@ void MainFrame::OnPaneClose(wxAuiManagerEvent& event) {
         int id = wxID_NONE;
         if (name == "outline") id = kShowOutline;
         else if (name == "speaker-statistics") id = kShowSpeakerStats;
+        else if (name == "asset-browser") id = kShowStoryLibrary;
         else if (name == "diagnostics") id = kShowDiagnostics;
         if (id != wxID_NONE && GetMenuBar()) GetMenuBar()->Check(id, false);
     }
@@ -2016,6 +1986,7 @@ void MainFrame::OnPaneClose(wxAuiManagerEvent& event) {
 
 void MainFrame::OnSize(wxSizeEvent& event) {
     event.Skip();
+    RefreshCommandBarState();
     if (focus_mode_) PositionFocusPill();
 }
 
@@ -2063,6 +2034,7 @@ void MainFrame::RestoreWorkspace() {
     if (GetMenuBar()) {
         GetMenuBar()->Check(kShowOutline, manager_.GetPane("outline").IsShown());
         GetMenuBar()->Check(kShowSpeakerStats, manager_.GetPane("speaker-statistics").IsShown());
+        GetMenuBar()->Check(kShowStoryLibrary, manager_.GetPane("asset-browser").IsShown());
         GetMenuBar()->Check(kShowDiagnostics, manager_.GetPane("diagnostics").IsShown());
     }
 }
@@ -2099,12 +2071,13 @@ void MainFrame::DispatchCommand(int id) {
     wxCommandEvent command(wxEVT_MENU, id);
     command.SetEventObject(this);
     if (id == kToggleWrap || id == kToggleNvimMotions || id == kFocusMode || id == kShowOutline ||
-        id == kShowSpeakerStats || id == kShowDiagnostics) {
+        id == kShowSpeakerStats || id == kShowStoryLibrary || id == kShowDiagnostics) {
         const bool checked = id == kToggleWrap ? !editor_settings_.word_wrap :
             id == kToggleNvimMotions ? !editor_settings_.nvim_motions :
             id == kFocusMode ? !focus_mode_ :
             id == kShowOutline ? !manager_.GetPane("outline").IsShown() :
             id == kShowSpeakerStats ? !manager_.GetPane("speaker-statistics").IsShown() :
+            id == kShowStoryLibrary ? !manager_.GetPane("asset-browser").IsShown() :
                                       !manager_.GetPane("diagnostics").IsShown();
         command.SetInt(checked ? 1 : 0);
         if (GetMenuBar()) GetMenuBar()->Check(id, checked);
@@ -2114,46 +2087,11 @@ void MainFrame::DispatchCommand(int id) {
 }
 
 void MainFrame::OnCommandPalette(wxCommandEvent&) {
-    const std::vector<PaletteEntry> commands{
-        {"New script", "Ctrl+N · File", wxID_NEW}, {"Open scripts", "Ctrl+O · File", wxID_OPEN},
-        {"Quick Open", "Ctrl+P · Navigation", kQuickOpen}, {"Save", "Ctrl+S · File", wxID_SAVE},
-        {"Save As", "Ctrl+Shift+S · File", wxID_SAVEAS}, {"Close tab", "Ctrl+W · File", wxID_CLOSE},
-        {FriendlyCommandCopy(kConnectProject).label, "Game", kConnectProject},
-        {FriendlyCommandCopy(kSnapshotNow).label, "Local history · Game", kSnapshotNow},
-        {FriendlyCommandCopy(kManageSnapshots).label, "Local history · Game", kManageSnapshots},
-        {"Review external conflicts", "Project", kReviewConflicts},
-        {"Git repository", "Clone, sync, commit, and push · Project", kGitRepository},
-        {"Import Say Count project", "File", kImportProject}, {"Export complete project", "File", kExportProject},
-        {"Export speaker statistics", "CSV · File", kExportCsv}, {"Export full statistics", "JSON · File", kExportJson},
-        {"Export standalone report", "HTML · File", kExportHtml}, {"Find and replace", "Ctrl+F · Edit", wxID_FIND},
-        {"Go to line", "Ctrl+G · Navigation", kGoToLine}, {"Toggle comment", "Ctrl+/ · Edit", kToggleComment},
-        {"Insert into story", "Character, dialogue, choice, scene, audio, or jump · Writing", kInsertStoryElement},
-        {FriendlyCommandCopy(kWriterDraft).label, "Persistent natural-writing source · Writing", kWriterDraft},
-        {"Toggle built-in Vim motions", "Normal/insert modes · Edit", kToggleNvimMotions},
-        {FriendlyCommandCopy(kWriteManuscript).label, "Writing", kWriteManuscript},
-        {"Turn writing into a chat scene", "Edit", kConvertToChat},
-        {"Turn chat scene back into dialogue", "Edit", kConvertChatToDialogue},
-        {"Install/update chat app files", "Edit", kInstallChatRuntime},
-        {"Fix indents", "Edit", kFixIndents}, {"Rename Ren'Py symbol", "Project", kRenameSymbol},
-        {"Toggle word wrap", "View", kToggleWrap}, {"Toggle focus mode", "Ctrl+Shift+F · View", kFocusMode},
-        {"Toggle outline", "View", kShowOutline}, {"Toggle speaker statistics", "View", kShowSpeakerStats},
-        {"Toggle problems", "View", kShowDiagnostics}, {"Route details", "View", kShowRoutes},
-        {"Production Desk", "View", kShowProduction}, {"Increase editor font", "Ctrl+= · View", kFontIncrease},
-        {"Decrease editor font", "Ctrl+- · View", kFontDecrease}, {"Reset editor font", "Ctrl+0 · View", kFontReset},
-        {"Use system theme", "View", kThemeSystem}, {"Use light theme", "View", kThemeLight},
-        {"Use dark theme", "View", kThemeDark},
-        {"Run project", "F6 · Ren'Py", kRunRenpy}, {"Run from caret", "F7 · Ren'Py", kWarpRenpy},
-        {"Interactive Director", "Ren'Py", kDirectorRenpy}, {"Runtime state presets", "Ren'Py", kRuntimePresets},
-        {FriendlyCommandCopy(kRunRenpyLint).label, "Ren'Py", kRunRenpyLint},
-        {"Generate translations", "Ren'Py", kGenerateTranslations},
-        {"Export dialogue", "Ren'Py", kExportDialogue}, {"Browse project assets", "Ren'Py", kShowAssets},
-        {"Label coverage", "Ren'Py", kShowCoverage}, {"Stop running project", "Shift+F6 · Ren'Py", kStopRenpy},
-        {"Show launch log", "Ren'Py", kShowRenpyLog}, {"Configure Ren'Py SDK", "Ren'Py", kConfigureRenpy},
-        {"Prose writing guide", "Help", kManuscriptGuide},
-        {"Chat format guide", "Help", kChatGuide},
-        {"Keyboard shortcuts", "Ctrl+K · Help", kShortcutSheet}, {"About Say Count", "Help", wxID_ABOUT}
-    };
-    PaletteDialog dialog(this, "Command Palette", "Type an action", commands);
+    std::vector<PaletteEntry> commands;
+    commands.reserve(CommandCatalog().size());
+    for (const auto& command : CommandCatalog())
+        commands.push_back({wxString::FromUTF8(command.label), wxString::FromUTF8(command.context), command.id});
+    PaletteDialog dialog(this, "Command Palette", "Type an action", std::move(commands));
     if (dialog.ShowModal() == wxID_OK && dialog.SelectedId() >= 0)
         DispatchCommand(dialog.SelectedId());
 }

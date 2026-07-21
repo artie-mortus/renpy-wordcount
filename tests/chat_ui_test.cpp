@@ -6,6 +6,8 @@
 #include "ui/guide_dialog.h"
 #include "ui/welcome_dialog.h"
 #include "ui/story_element_dialog.h"
+#include "ui/story_library_panel.h"
+#include "ui/command_model.h"
 #include "ui/writer_draft_dialog.h"
 #include "app/settings.h"
 
@@ -21,6 +23,7 @@
 #include <wx/frame.h>
 #include <wx/html/htmlwin.h>
 #include <wx/init.h>
+#include <wx/listbox.h>
 #include <wx/panel.h>
 #include <wx/radiobox.h>
 #include <wx/stattext.h>
@@ -151,6 +154,35 @@ TEST_CASE("welcome dialog exposes keyboard-accessible writer-first actions") {
     CHECK(start->AcceptsFocusFromKeyboard());
     CHECK(game->AcceptsFocusFromKeyboard());
     CHECK(script->AcceptsFocusFromKeyboard());
+    CHECK(start->IsEnabled());
+    CHECK(game->IsEnabled());
+    CHECK(script->IsEnabled());
+    auto* recent = Named<wxListBox>(dialog, "Recent games");
+    auto* empty = Named<wxStaticText>(dialog, "Recent games empty state");
+    REQUIRE(recent);
+    REQUIRE(empty);
+    CHECK_FALSE(recent->IsShown());
+    CHECK(empty->IsShown());
+}
+
+TEST_CASE("command bar keeps writing stable while problems change") {
+    say_count::ui::ShellContext context;
+    context.document_has_path = true;
+    context.problem_count = 1;
+    auto state = say_count::ui::DeriveCommandBarState(context);
+    CHECK(state.show_write);
+    CHECK(state.show_problems);
+    CHECK(state.problem_label == "1 problem");
+
+    context.fixable_problem_count = 2;
+    context.has_game = true;
+    context.renpy_available = true;
+    state = say_count::ui::DeriveCommandBarState(context);
+    CHECK(state.show_write);
+    CHECK(state.problem_label == "Fix 2");
+    CHECK(state.show_preview);
+    CHECK(state.enable_preview);
+    CHECK(say_count::ui::CommandFor(say_count::ui::kShowHome).label == std::string("Home"));
 }
 
 TEST_CASE("onboarding setting defaults safely and persists") {
@@ -203,6 +235,69 @@ TEST_CASE("story element insertion reuses current indentation as one edit") {
     CHECK(editor->GetText() == "label start:\n    e \"Hello\"\n");
     editor->Undo();
     CHECK(editor->GetText() == "label start:\n    ");
+}
+
+TEST_CASE("character definitions are inserted at top level as one edit") {
+    wxFrame frame(nullptr, wxID_ANY, "top-level definition test");
+    say_count::app::EditorSettings settings;
+    say_count::ui::EditorNotebook notebook(&frame, settings, [](const wxString&, const say_count::ScriptAnalysis&) {});
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(notebook.GetPage(0));
+    REQUIRE(editor);
+    editor->SetText("label start:\n    narrator \"Hello\"\n");
+    editor->GotoPos(editor->GetTextLength());
+    notebook.InsertTopLevelDefinition("define e = Character(\"Eileen\")\n");
+    CHECK(editor->GetText() == "define e = Character(\"Eileen\")\n\nlabel start:\n    narrator \"Hello\"\n");
+    editor->Undo();
+    CHECK(editor->GetText() == "label start:\n    narrator \"Hello\"\n");
+}
+
+TEST_CASE("story library turns cast and project media into plain writing actions") {
+    wxFrame frame(nullptr, wxID_ANY, "story library test");
+    say_count::ui::StoryLibraryPanel panel(&frame);
+    say_count::ScriptAnalysis analysis;
+    analysis.character_names = {{"e", "Eileen"}, {"m", "Morgan"}};
+    panel.SetLibrary(analysis, {
+        {"images/bg_kitchen.png", "/game/images/bg_kitchen.png", say_count::AssetKind::Image},
+        {"audio/theme.ogg", "/game/audio/theme.ogg", say_count::AssetKind::Audio},
+    });
+
+    auto* cast = Named<wxListBox>(panel, "Story library characters");
+    auto* line = Named<wxTextCtrl>(panel, "Character dialogue");
+    auto* add = Named<wxButton>(panel, "Add character dialogue");
+    auto* places = Named<wxListBox>(panel, "Story library places");
+    auto* background = Named<wxButton>(panel, "Set story background");
+    auto* music = Named<wxButton>(panel, "Play story music");
+    REQUIRE(cast); REQUIRE(line); REQUIRE(add); REQUIRE(places); REQUIRE(background); REQUIRE(music);
+    CHECK(cast->GetCount() == 2);
+    CHECK(cast->GetString(0).Contains("Eileen"));
+    CHECK(places->GetCount() == 1);
+    CHECK(add->AcceptsFocusFromKeyboard());
+    CHECK_FALSE(add->IsEnabled());
+
+    std::string inserted, status;
+    panel.SetIndentationProvider([] { return std::string("    "); });
+    panel.SetInsertHandler([&](const std::string& text, const std::string& message) {
+        inserted = text; status = message;
+    });
+    cast->SetSelection(0);
+    line->SetValue("The door is open.");
+    wxCommandEvent add_event(wxEVT_BUTTON, add->GetId());
+    add->GetEventHandler()->ProcessEvent(add_event);
+    CHECK(inserted == "    e \"The door is open.\"\n");
+    CHECK(status == "Dialogue added — Undo is available");
+
+    wxCommandEvent background_event(wxEVT_BUTTON, background->GetId());
+    background->GetEventHandler()->ProcessEvent(background_event);
+    CHECK(inserted == "    scene images bg kitchen\n");
+    wxCommandEvent music_event(wxEVT_BUTTON, music->GetId());
+    music->GetEventHandler()->ProcessEvent(music_event);
+    CHECK(inserted == "    play music \"audio/theme.ogg\"\n");
+
+    auto* search = Named<wxTextCtrl>(panel, "Search story library");
+    REQUIRE(search);
+    search->SetValue("missing");
+    CHECK(cast->GetCount() == 0);
+    CHECK(places->GetCount() == 0);
 }
 
 TEST_CASE("writing draft keeps natural writing separate from generated script") {

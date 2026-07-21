@@ -39,3 +39,15 @@ TEST_CASE("project creation validates its inputs") {
     CHECK_FALSE(say_count::plan_project_creation("/definitely/missing", "Story", &plan).success);
     CHECK_FALSE(say_count::plan_project_creation(std::filesystem::temp_directory_path().string(), "  ", &plan).success);
 }
+
+TEST_CASE("project creation preserves Unicode story names") {
+    namespace fs = std::filesystem;
+    const fs::path parent = fs::temp_directory_path() / "say-count-create-unicode-test";
+    fs::remove_all(parent); fs::create_directories(parent);
+    say_count::ProjectCreationPlan plan;
+    const auto result = say_count::plan_project_creation(parent.string(), "星の物語", &plan);
+    REQUIRE(result.success);
+    CHECK(fs::path(plan.root).filename().u8string() == "星の物語");
+    CHECK(say_count::project_folder_name("Café Story") == "Café-Story");
+    fs::remove_all(parent);
+}

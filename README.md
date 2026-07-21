@@ -7,6 +7,13 @@ caret/scroll positions, active tab, connected project, and dock layout. Use
 `Ctrl+P` to search project files, labels, and characters, or `Ctrl+Shift+P` to
 search application commands.
 
+Use **File → Home** to start a story, open a game, open a loose script, or
+return to recent work. New stories default to a familiar local folder, preview
+their destination before creation, and never replace existing files silently.
+The **Story Library** combines the project cast, image previews, and audio
+previews in one searchable pane; its writing actions insert correctly indented
+dialogue, backgrounds, images, music, and sounds at the cursor.
+
 ## Chat scenes (prose ↔ messenger)
 
 Use **Edit → Turn Writing Into a Chat Scene…** to turn selected prose/dialogue

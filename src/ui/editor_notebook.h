@@ -113,6 +113,7 @@ public:
     bool OpenAndJump(const wxString& path, std::size_t line);
     void InsertAtCaret(std::string_view text);
     void InsertStoryElement(std::string_view text);
+    void InsertTopLevelDefinition(std::string_view text);
     std::optional<ManuscriptEditorPreview> PrepareManuscriptConversion() const;
     std::optional<TextReplacementPreview> PrepareTextReplacement() const;
     bool ApplyTextReplacement(const TextReplacementPreview& preview, std::string_view replacement);

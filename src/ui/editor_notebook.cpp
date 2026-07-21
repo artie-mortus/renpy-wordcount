@@ -1104,6 +1104,20 @@ void EditorNotebook::InsertStoryElement(std::string_view text) {
     InsertAtCaret(insertion);
 }
 
+void EditorNotebook::InsertTopLevelDefinition(std::string_view text) {
+    const int selection = GetSelection();
+    auto* editor = selection == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(selection));
+    if (!editor || text.empty()) return;
+    std::string insertion(text);
+    if (insertion.back() != '\n') insertion.push_back('\n');
+    if (editor->GetTextLength() > 0 && editor->GetCharAt(0) != '\n') insertion.push_back('\n');
+    editor->BeginUndoAction();
+    editor->InsertText(0, wxString::FromUTF8(insertion));
+    editor->SetSelection(0, static_cast<int>(insertion.size()));
+    editor->EndUndoAction();
+    editor->SetFocus();
+}
+
 std::optional<ManuscriptEditorPreview> EditorNotebook::PrepareManuscriptConversion() const {
     const int page = GetSelection();
     auto* editor = page == wxNOT_FOUND ? nullptr : EditorAt(static_cast<std::size_t>(page));

@@ -102,10 +102,12 @@ add_executable(say-count
     src/app/git_client.cpp
     src/app/offline_prose_runner.cpp
     src/ui/editor_notebook.cpp
+    src/ui/command_model.cpp
     src/ui/style.cpp
     src/ui/guide_dialog.cpp
     src/ui/welcome_dialog.cpp
     src/ui/story_element_dialog.cpp
+    src/ui/story_library_panel.cpp
     src/ui/writer_draft_dialog.cpp
     src/ui/palette_dialog.cpp
     src/ui/diagnostics_panel.cpp
@@ -117,7 +119,6 @@ add_executable(say-count
     src/ui/chat_conversion_dialog.cpp
     src/ui/runtime_preset_dialog.cpp
     src/ui/renpy_lint_panel.cpp
-    src/ui/asset_panel.cpp
     src/ui/coverage_panel.cpp
     src/ui/route_panel.cpp
     src/ui/flow_map_panel.cpp
@@ -221,10 +222,12 @@ if(BUILD_TESTING)
     add_executable(say-count-chat-ui-tests
         tests/chat_ui_test.cpp
         src/app/settings.cpp
+        src/ui/command_model.cpp
         src/ui/chat_conversion_dialog.cpp
         src/ui/guide_dialog.cpp
         src/ui/welcome_dialog.cpp
         src/ui/story_element_dialog.cpp
+        src/ui/story_library_panel.cpp
         src/ui/writer_draft_dialog.cpp
         src/ui/editor_notebook.cpp
         src/ui/style.cpp)
