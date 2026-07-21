@@ -22,6 +22,9 @@ public:
 
 private:
     void RefreshPreview();
+    void UpdateWritingGuidance();
+    void InsertWritingSnippet(const wxString& snippet, long selection_start,
+                              long selection_length);
     bool SaveDraft();
     bool ConfirmClose();
 
@@ -38,6 +41,8 @@ private:
     wxRadioBox* chat_style_ = nullptr;
     wxStaticText* chat_channel_label_ = nullptr;
     wxTextCtrl* chat_channel_ = nullptr;
+    wxStaticText* writing_help_ = nullptr;
+    wxButton* switch_chat_ = nullptr;
     wxStaticText* state_ = nullptr;
     wxButton* save_ = nullptr;
     wxButton* update_ = nullptr;

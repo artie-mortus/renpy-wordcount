@@ -33,38 +33,61 @@ WriterDraftDialog::WriterDraftDialog(wxWindow* parent, std::string script_path, 
 
     tabs_ = new wxNotebook(this, wxID_ANY); tabs_->SetName("Writing and generated script");
     auto* writing_page = new wxPanel(tabs_); auto* writing_layout = new wxBoxSizer(wxVERTICAL);
-    const wxString formats[] = {"Visual novel dialogue", "Social media chat"};
-    output_format_ = new wxRadioBox(writing_page, wxID_ANY, "Make this as", wxDefaultPosition,
+    const wxString formats[] = {"Visual novel scene", "Social media chat"};
+    output_format_ = new wxRadioBox(writing_page, wxID_ANY, "What are you writing?", wxDefaultPosition,
                                     wxDefaultSize, 2, formats, 2, wxRA_SPECIFY_COLS);
     output_format_->SetName("Writing draft output format");
     writing_layout->Add(output_format_, 0, wxEXPAND | wxALL, 12);
 
     chat_options_ = new wxPanel(writing_page);
     chat_options_->SetName("Writing draft chat options");
-    auto* chat_layout = new wxBoxSizer(wxHORIZONTAL);
+    auto* chat_layout = new wxBoxSizer(wxVERTICAL);
+    auto* chat_settings = new wxBoxSizer(wxHORIZONTAL);
     const wxString chat_styles[] = {"Discord-style channels", "Kik-style messenger"};
     chat_style_ = new wxRadioBox(chat_options_, wxID_ANY, "Chat look", wxDefaultPosition,
                                  wxDefaultSize, 2, chat_styles, 1, wxRA_SPECIFY_ROWS);
     chat_style_->SetName("Writing draft chat style");
-    chat_layout->Add(chat_style_, 0, wxRIGHT, 20);
+    chat_settings->Add(chat_style_, 0, wxRIGHT, 20);
     auto* channel_layout = new wxBoxSizer(wxVERTICAL);
     chat_channel_label_ = new wxStaticText(chat_options_, wxID_ANY, "Chat room name");
     channel_layout->Add(chat_channel_label_, 0, wxBOTTOM, 6);
     chat_channel_ = new wxTextCtrl(chat_options_, wxID_ANY, "#general");
     chat_channel_->SetName("Writing draft chat channel");
     channel_layout->Add(chat_channel_, 0, wxEXPAND);
-    channel_layout->Add(new wxStaticText(chat_options_, wxID_ANY,
-        "Stage directions such as [Robo is typing], [fast], and Choice: work here too."),
-        0, wxTOP, 8);
-    chat_layout->Add(channel_layout, 1, wxEXPAND | wxTOP, 4);
+    chat_settings->Add(channel_layout, 1, wxEXPAND | wxTOP, 4);
+    chat_layout->Add(chat_settings, 0, wxEXPAND);
+
+    auto* shortcut_label = new wxStaticText(chat_options_, wxID_ANY,
+        "ADD A CHAT MOMENT: inserts editable words into your writing");
+    shortcut_label->SetFont(style::UtilityFont(9, wxFONTWEIGHT_BOLD));
+    shortcut_label->SetForegroundColour(style::Colors().plum);
+    chat_layout->Add(shortcut_label, 0, wxTOP | wxBOTTOM, 12);
+    auto* shortcuts = new wxBoxSizer(wxHORIZONTAL);
+    auto* player_message = new wxButton(chat_options_, wxID_ANY, "Player message");
+    player_message->SetName("Insert player chat message");
+    auto* character_message = new wxButton(chat_options_, wxID_ANY, "Character message");
+    character_message->SetName("Insert character chat message");
+    auto* typing = new wxButton(chat_options_, wxID_ANY, "Typing moment");
+    typing->SetName("Insert chat typing moment");
+    switch_chat_ = new wxButton(chat_options_, wxID_ANY, "Switch channel");
+    switch_chat_->SetName("Insert chat destination change");
+    auto* choices = new wxButton(chat_options_, wxID_ANY, "Player choices");
+    choices->SetName("Insert chat player choices");
+    shortcuts->Add(player_message, 0, wxRIGHT, 6);
+    shortcuts->Add(character_message, 0, wxRIGHT, 6);
+    shortcuts->Add(typing, 0, wxRIGHT, 6);
+    shortcuts->Add(switch_chat_, 0, wxRIGHT, 6);
+    shortcuts->Add(choices);
+    chat_layout->Add(shortcuts, 0, wxEXPAND);
     chat_options_->SetSizer(chat_layout);
     chat_options_->Hide();
     writing_layout->Add(chat_options_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
 
-    auto* writing_help = new wxStaticText(writing_page, wxID_ANY,
-        "Use Name: dialogue or dialogue, said Name. Quotation marks are optional. "
+    writing_help_ = new wxStaticText(writing_page, wxID_ANY,
+        "Use Name: dialogue or dialogue, said Name. Quotation marks are optional.\n"
         "Use :: scene name for headings. Your writing is saved beside the .rpy file.");
-    writing_help->Wrap(820); writing_layout->Add(writing_help, 0, wxEXPAND | wxALL, 12);
+    writing_help_->SetName("Writing draft help");
+    writing_layout->Add(writing_help_, 0, wxEXPAND | wxALL, 12);
     writing_ = new wxTextCtrl(writing_page, wxID_ANY, {}, wxDefaultPosition, wxDefaultSize,
                               wxTE_MULTILINE | wxTE_RICH2);
     writing_->SetName("Natural writing draft"); writing_->SetFont(style::BodyFont(12));
@@ -95,6 +118,7 @@ WriterDraftDialog::WriterDraftDialog(wxWindow* parent, std::string script_path, 
     output_format_->Bind(wxEVT_RADIOBOX, [this](wxCommandEvent&) {
         chat_options_->Show(generates_chat());
         tabs_->SetPageText(1, generates_chat() ? "Generated chat script" : "Generated script");
+        UpdateWritingGuidance();
         chat_options_->GetParent()->Layout();
         Layout();
         RefreshPreview();
@@ -106,8 +130,27 @@ WriterDraftDialog::WriterDraftDialog(wxWindow* parent, std::string script_path, 
             chat_channel_->ChangeValue("direct-message");
         else if (!messenger && chat_channel_->GetValue().Find('#') == wxNOT_FOUND)
             chat_channel_->ChangeValue("#general");
+        UpdateWritingGuidance();
         chat_options_->Layout();
         RefreshPreview();
+    });
+    player_message->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        InsertWritingSnippet("Me: ", 4, 0);
+    });
+    character_message->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        InsertWritingSnippet("Name: ", 0, 4);
+    });
+    typing->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        InsertWritingSnippet("[Name is typing]", 1, 4);
+    });
+    switch_chat_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        if (chat_style_->GetSelection() == 1)
+            InsertWritingSnippet("[to Name]", 4, 4);
+        else
+            InsertWritingSnippet("[in #channel]", 4, 8);
+    });
+    choices->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        InsertWritingSnippet("Choice:\n- First reply\n- Second reply", 10, 11);
     });
     chat_channel_->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { RefreshPreview(); });
     save_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { SaveDraft(); });
@@ -120,6 +163,53 @@ WriterDraftDialog::WriterDraftDialog(wxWindow* parent, std::string script_path, 
         if (ConfirmClose()) event.Skip(); else event.Veto();
     });
     RefreshPreview(); writing_->SetFocus();
+}
+
+void WriterDraftDialog::UpdateWritingGuidance() {
+    if (!writing_help_ || !switch_chat_) return;
+    if (!generates_chat()) {
+        writing_help_->SetLabel(
+            "Use Name: dialogue or dialogue, said Name. Quotation marks are optional.\n"
+            "Use :: scene name for headings. Your writing is saved beside the .rpy file.");
+        return;
+    }
+    const bool messenger = chat_style_ && chat_style_->GetSelection() == 1;
+    if (messenger) {
+        writing_help_->SetLabel(
+            "Write one message per line, such as Robo: Are you there? Use Me: for the "
+            "player.\nSwitch conversations with [to Robo], or use the buttons above; no "
+            "Ren'Py code needed.");
+        switch_chat_->SetLabel("Switch conversation");
+        switch_chat_->SetToolTip("Insert [to Name] and replace Name with a contact");
+    } else {
+        writing_help_->SetLabel(
+            "Write one post per line, such as Robo: Check the alerts. Use Me: for the "
+            "player.\nSwitch channels with [in #alerts], or use the buttons above; no "
+            "Ren'Py code needed.");
+        switch_chat_->SetLabel("Switch channel");
+        switch_chat_->SetToolTip("Insert [in #channel] and replace #channel with a room");
+    }
+}
+
+void WriterDraftDialog::InsertWritingSnippet(const wxString& snippet, long selection_start,
+                                             long selection_length) {
+    if (!writing_) return;
+    long insertion = writing_->GetInsertionPoint();
+    const wxString value = writing_->GetValue();
+    if (insertion > 0 && value[static_cast<std::size_t>(insertion - 1)] != '\n') {
+        const int next_line = value.Mid(static_cast<std::size_t>(insertion)).Find('\n');
+        insertion = next_line == wxNOT_FOUND ? writing_->GetLastPosition()
+                                             : insertion + next_line;
+    }
+    const wxString before = writing_->GetRange(0, insertion);
+    const wxString after = writing_->GetRange(insertion, writing_->GetLastPosition());
+    const wxString prefix = !before.empty() && before.Last() != '\n' ? "\n" : "";
+    const wxString suffix = !after.empty() && after[0] != '\n' ? "\n" : "";
+    writing_->Replace(insertion, insertion, prefix + snippet + suffix);
+    const long content_start = insertion + static_cast<long>(prefix.length());
+    writing_->SetSelection(content_start + selection_start,
+                           content_start + selection_start + selection_length);
+    writing_->SetFocus();
 }
 
 void WriterDraftDialog::RefreshPreview() {

@@ -381,6 +381,12 @@ TEST_CASE("writing draft keeps natural writing separate from generated script") 
     auto* format = Named<wxRadioBox>(dialog, "Writing draft output format");
     auto* chat_options = Named<wxPanel>(dialog, "Writing draft chat options");
     auto* channel = Named<wxTextCtrl>(dialog, "Writing draft chat channel");
+    auto* chat_style = Named<wxRadioBox>(dialog, "Writing draft chat style");
+    auto* writing_help = Named<wxStaticText>(dialog, "Writing draft help");
+    auto* player_message = Named<wxButton>(dialog, "Insert player chat message");
+    auto* typing = Named<wxButton>(dialog, "Insert chat typing moment");
+    auto* switch_chat = Named<wxButton>(dialog, "Insert chat destination change");
+    auto* choices = Named<wxButton>(dialog, "Insert chat player choices");
     REQUIRE(writing);
     REQUIRE(preview);
     REQUIRE(save);
@@ -389,6 +395,12 @@ TEST_CASE("writing draft keeps natural writing separate from generated script") 
     REQUIRE(format);
     REQUIRE(chat_options);
     REQUIRE(channel);
+    REQUIRE(chat_style);
+    REQUIRE(writing_help);
+    REQUIRE(player_message);
+    REQUIRE(typing);
+    REQUIRE(switch_chat);
+    REQUIRE(choices);
     CHECK(format->GetParent() == tabs->GetPage(0));
     CHECK(chat_options->GetParent() == tabs->GetPage(0));
     CHECK_FALSE(chat_options->IsShown());
@@ -407,6 +419,31 @@ TEST_CASE("writing draft keeps natural writing separate from generated script") 
     CHECK(preview->GetValue().Contains("label start:"));
     CHECK(preview->GetValue().Contains("say_count_chat_begin"));
     CHECK(preview->GetValue().Contains("ChatCharacter(\"Eileen\")"));
+
+    CHECK(writing_help->GetLabel().Contains("post"));
+    CHECK(switch_chat->GetLabel() == "Switch channel");
+    writing->Clear();
+    wxCommandEvent insert_player(wxEVT_BUTTON, player_message->GetId());
+    player_message->GetEventHandler()->ProcessEvent(insert_player);
+    CHECK(writing->GetValue() == "Me: ");
+    wxCommandEvent insert_typing(wxEVT_BUTTON, typing->GetId());
+    typing->GetEventHandler()->ProcessEvent(insert_typing);
+    CHECK(writing->GetValue() == "Me: \n[Name is typing]");
+    wxCommandEvent insert_choices(wxEVT_BUTTON, choices->GetId());
+    choices->GetEventHandler()->ProcessEvent(insert_choices);
+    CHECK(writing->GetValue() ==
+          "Me: \n[Name is typing]\nChoice:\n- First reply\n- Second reply");
+
+    chat_style->SetSelection(1);
+    wxCommandEvent style_changed(wxEVT_RADIOBOX, chat_style->GetId());
+    chat_style->GetEventHandler()->ProcessEvent(style_changed);
+    CHECK(writing_help->GetLabel().Contains("message"));
+    CHECK(writing_help->GetLabel().Contains("Robo"));
+    CHECK(switch_chat->GetLabel() == "Switch conversation");
+    writing->Clear();
+    wxCommandEvent insert_switch(wxEVT_BUTTON, switch_chat->GetId());
+    switch_chat->GetEventHandler()->ProcessEvent(insert_switch);
+    CHECK(writing->GetValue() == "[to Name]");
     fs::remove_all(root);
 }
 
