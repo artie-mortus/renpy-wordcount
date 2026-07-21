@@ -32,7 +32,8 @@ WriterDraftDialog::WriterDraftDialog(wxWindow* parent, std::string script_path, 
     auto* tabs = new wxNotebook(this, wxID_ANY); tabs->SetName("Writing and generated script");
     auto* writing_page = new wxPanel(tabs); auto* writing_layout = new wxBoxSizer(wxVERTICAL);
     auto* writing_help = new wxStaticText(writing_page, wxID_ANY,
-        "Use Name: dialogue, ordinary narration, and :: scene name headings. Your writing is saved beside the .rpy file.");
+        "Use Name: dialogue or dialogue, said Name. Quotation marks are optional. "
+        "Use :: scene name for headings. Your writing is saved beside the .rpy file.");
     writing_help->Wrap(820); writing_layout->Add(writing_help, 0, wxEXPAND | wxALL, 12);
     writing_ = new wxTextCtrl(writing_page, wxID_ANY, {}, wxDefaultPosition, wxDefaultSize,
                               wxTE_MULTILINE | wxTE_RICH2);

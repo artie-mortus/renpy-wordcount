@@ -288,6 +288,27 @@ TEST_CASE("book speech tags ignore capitalization and allow adverbs") {
         "    eileen \"Please.\"\n");
 }
 
+TEST_CASE("trailing speech tags accept dialogue without quotation marks") {
+    const auto result = convert_manuscript_to_renpy(
+        "And I gotta stop him, said Leon.\n"
+        "Well, not without me, Lucy replied softly.");
+    CHECK(result.script ==
+        "define leon = Character(\"Leon\")\n"
+        "define lucy = Character(\"Lucy\")\n\n"
+        "label start:\n"
+        "    leon \"And I gotta stop him.\"\n"
+        "    lucy \"Well, not without me.\"\n");
+    CHECK(result.dialogue_lines == 2);
+    CHECK(result.narration_lines == 0);
+
+    const auto review = review_manuscript_lines(
+        "And I gotta stop him, said Leon.\n"
+        "The bag held bread, milk, and eggs.");
+    REQUIRE(review.size() == 2);
+    CHECK(review[0].kind == ManuscriptLineKind::Prose);
+    CHECK(review[1].kind == ManuscriptLineKind::Uncertain);
+}
+
 TEST_CASE("natural dialogue accepts international quotation marks") {
     ManuscriptOptions options;
     options.existing_characters = {{"e", "Élodie"}, {"l", "Lucy"}, {"a", "Akira"}};

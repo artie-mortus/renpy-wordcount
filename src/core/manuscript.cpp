@@ -529,6 +529,34 @@ bool ParseAttributed(std::string_view line, std::string_view recent_speaker,
     return false;
 }
 
+bool ParseUnquotedTrailingAttribution(
+    std::string_view line, std::string_view recent_speaker,
+    std::string* speaker, std::string* attributes, std::string* dialogue) {
+    // And I gotta stop him, said Leon.
+    // Work backwards so dialogue may contain commas of its own. Keep this
+    // intentionally narrower than quoted attribution: a trailing comma or
+    // semicolon would make an action clause too easy to mistake for a name.
+    for (std::size_t search_before = line.size(); search_before > 0;) {
+        const auto separator = line.rfind(',', search_before - 1);
+        if (separator == std::string_view::npos) break;
+        std::string spoken = Trim(std::string(line.substr(0, separator)));
+        std::string attribution = Trim(std::string(line.substr(separator + 1)));
+        if (!spoken.empty() && !attribution.empty() &&
+            attribution.find(',') == std::string::npos &&
+            attribution.find(';') == std::string::npos &&
+            ParseAttributionPhrase(attribution, recent_speaker, speaker, attributes)) {
+            if (!EndsWith(spoken, ".") && !EndsWith(spoken, "!") &&
+                !EndsWith(spoken, "?") && !EndsWith(spoken, "\xe2\x80\xa6")) {
+                spoken += '.';
+            }
+            *dialogue = std::move(spoken);
+            return true;
+        }
+        search_before = separator;
+    }
+    return false;
+}
+
 struct RichDialogue {
     std::string speaker;
     std::string attributes;
@@ -606,6 +634,15 @@ bool ParseActionBeat(std::string_view line, const ManuscriptOptions& options,
     std::string attributed_attributes;
     if (ParseAttributed(line, recent_speaker, &attributed_speaker,
                         &attributed_attributes, &attributed_dialogue)) {
+        result->speaker = std::move(attributed_speaker);
+        result->attributes = std::move(attributed_attributes);
+        result->dialogue = std::move(attributed_dialogue);
+        return true;
+    }
+
+    if (ParseUnquotedTrailingAttribution(
+            line, recent_speaker, &attributed_speaker,
+            &attributed_attributes, &attributed_dialogue)) {
         result->speaker = std::move(attributed_speaker);
         result->attributes = std::move(attributed_attributes);
         result->dialogue = std::move(attributed_dialogue);

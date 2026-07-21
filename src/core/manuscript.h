@@ -56,6 +56,7 @@ ManuscriptConversion convert_mixed_manuscript_to_renpy(
 //   Eileen: We should go.
 //   Eileen said, "We should go."
 //   "We should go," Eileen said.
+//   We should go, said Eileen.       (quotation marks optional for a trailing tag)
 //   Eileen — We should go.
 //   Eileen             (speaker line followed by a quoted line)
 //   EILEEN             (screenplay cue followed by dialogue, with an optional parenthetical)
