@@ -37,6 +37,11 @@ struct ManuscriptLineReview {
     std::string text;
 };
 
+// Returns the conventional lowercase initial abbreviation used when a prose
+// character has no alias defined in the project (for example, Leon -> l and
+// Captain Vale -> cv). Callers remain responsible for resolving collisions.
+std::string abbreviate_character_name(std::string_view name);
+
 std::vector<ManuscriptLineReview> review_manuscript_lines(std::string_view text);
 
 // Returns true when the text contains recognizable Ren'Py structure and should

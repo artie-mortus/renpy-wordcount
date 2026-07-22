@@ -78,8 +78,8 @@
 <hr>
 <h2>Characters</h2>
 <p>When converting a whole tab, the converter creates character definitions above the scene:</p>
-<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>define eileen = Character("Eileen")</tt></td></tr></table>
-<p>Speaker names become lowercase aliases with underscores. For example, <tt>Captain Vale</tt> becomes <tt>captain_vale</tt>. If two names produce the same alias, later aliases receive <tt>_2</tt>, <tt>_3</tt>, and so on.</p>
+<table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td><tt>define e = Character("Eileen")</tt></td></tr></table>
+<p>Speaker names become lowercase initial abbreviations. For example, <tt>Leon</tt> becomes <tt>l</tt> and <tt>Captain Vale</tt> becomes <tt>cv</tt>. If two names produce the same abbreviation, later aliases receive <tt>_2</tt>, <tt>_3</tt>, and so on.</p>
 <p>Existing characters are matched across every open project script by display name or alias, without regard to capitalization. For example, <tt>Eileen:</tt>, <tt>eileen:</tt>, and <tt>EILEEN:</tt> all reuse an existing <tt>e = Character("Eileen")</tt> definition.</p>
 <p>Matching uses full Unicode case folding, so names such as <tt>Élodie</tt>, <tt>ÉLODIE</tt>, and <tt>élodie</tt> resolve to the same character.</p>
 

@@ -224,14 +224,10 @@ public:
         const std::string lower = Lower(name);
         for (const auto& [alias, known_name] : known_)
             if (Lower(known_name) == lower || alias == lower) return alias;
-        std::string alias;
-        for (char c : lower) {
-            if (std::isalnum(static_cast<unsigned char>(c)) || c == '_') alias += c;
-        }
-        while (!alias.empty() && std::isdigit(static_cast<unsigned char>(alias.front())))
-            alias.erase(alias.begin());
-        if (alias.empty() || !valid_chat_alias(alias)) alias = "chat_character";
-        while (known_.count(alias)) alias += '_';
+        const std::string base = abbreviate_character_name(name);
+        std::string alias = base;
+        for (std::size_t suffix = 2; known_.count(alias); ++suffix)
+            alias = base + "_" + std::to_string(suffix);
         known_[alias] = name;
         result_->document.characters.push_back({alias, name});
         return alias;

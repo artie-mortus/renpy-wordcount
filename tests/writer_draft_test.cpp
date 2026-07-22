@@ -34,8 +34,8 @@ TEST_CASE("writer draft output always includes the RenPy start label") {
         "She said it'd be here, said Leon.\n\n"
         "Well, it's not here, said Robin.");
     CHECK(generated.find("label start:\n") != std::string::npos);
-    CHECK(generated.find("leon \"She said it'd be here.\"") != std::string::npos);
-    CHECK(generated.find("robin \"Well, it's not here.\"") != std::string::npos);
+    CHECK(generated.find("l \"She said it'd be here.\"") != std::string::npos);
+    CHECK(generated.find("r \"Well, it's not here.\"") != std::string::npos);
 }
 
 TEST_CASE("writer drafts can generate a complete social media chat scene") {
@@ -45,10 +45,10 @@ TEST_CASE("writer drafts can generate a complete social media chat scene") {
     options.chat_skin = "discord";
     const auto generated = say_count::render_writer_draft(
         "[Leon is typing]\nAnd I gotta stop him, said Leon.", options);
-    CHECK(generated.find("default leon = ChatCharacter(\"Leon\")") != std::string::npos);
+    CHECK(generated.find("default l = ChatCharacter(\"Leon\")") != std::string::npos);
     CHECK(generated.find("label start:\n") != std::string::npos);
     CHECK(generated.find("label chat_scene:") == std::string::npos);
     CHECK(generated.find("call say_count_chat_begin(\"#ops\", skin=\"discord\")") != std::string::npos);
-    CHECK(generated.find("leon \"And I gotta stop him.\"") != std::string::npos);
+    CHECK(generated.find("l \"And I gotta stop him.\"") != std::string::npos);
     CHECK(generated.find("call say_count_chat_end") != std::string::npos);
 }

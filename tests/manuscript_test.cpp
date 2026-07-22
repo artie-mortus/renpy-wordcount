@@ -15,13 +15,13 @@ TEST_CASE("manuscript dialogue and narration convert to a RenPy scene") {
         "Lucy said, \"The road is flooded.\"");
 
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\")\n"
-        "define lucy = Character(\"Lucy\")\n\n"
+        "define e = Character(\"Eileen\")\n"
+        "define l = Character(\"Lucy\")\n\n"
         "label start:\n"
         "    \"Rain pressed silver lines against the window.\"\n"
-        "    eileen \"We should go.\"\n"
-        "    lucy \"Not yet,\"\n"
-        "    lucy \"The road is flooded.\"\n");
+        "    e \"We should go.\"\n"
+        "    l \"Not yet,\"\n"
+        "    l \"The road is flooded.\"\n");
     CHECK(result.dialogue_lines == 3);
     CHECK(result.narration_lines == 1);
 }
@@ -38,13 +38,13 @@ TEST_CASE("manuscript conversion handles speaker blocks headings and RenPy escap
         "A B: Done.\n", options);
 
     CHECK(result.script ==
-        "    captain_vale \"Use [[route] \\\\\\\\ north.\"\n\n"
+        "    cv \"Use [[route] \\\\\\\\ north.\"\n\n"
         "label the_crossing:\n"
-        "    a_b \"He said \\\"now\\\".\"\n"
-        "    a_b_2 \"Done.\"\n");
+        "    ab \"He said \\\"now\\\".\"\n"
+        "    ab_2 \"Done.\"\n");
     REQUIRE(result.characters.size() == 3);
-    CHECK(result.characters[0].alias == "captain_vale");
-    CHECK(result.characters[2].alias == "a_b_2");
+    CHECK(result.characters[0].alias == "cv");
+    CHECK(result.characters[2].alias == "ab_2");
 }
 
 TEST_CASE("manuscript conversion normalizes a requested label") {
@@ -106,10 +106,10 @@ TEST_CASE("mixed conversion adds missing definitions and respects nested indenta
         "    return\r\n";
     const auto result = convert_mixed_manuscript_to_renpy(source, true);
     CHECK(result.script ==
-        "define captain_vale = Character(\"Captain Vale\")\r\n\r\n"
+        "define cv = Character(\"Captain Vale\")\r\n\r\n"
         "label start:\r\n"
         "    if ready:\r\n"
-        "        captain_vale \"Go now.\"\r\n"
+        "        cv \"Go now.\"\r\n"
         "    return\r\n");
 }
 
@@ -159,16 +159,17 @@ TEST_CASE("character matching reuses project aliases without case sensitivity") 
     CHECK(result.characters.empty());
 }
 
-TEST_CASE("new prose characters deduplicate across capitalization") {
+TEST_CASE("new prose characters use lowercase initial abbreviations and deduplicate") {
     const auto result = convert_manuscript_to_renpy("Lucy: First.\nLUCY: Second.\nlucy: Third.");
     CHECK(result.script ==
-        "define lucy = Character(\"Lucy\")\n\n"
+        "define l = Character(\"Lucy\")\n\n"
         "label start:\n"
-        "    lucy \"First.\"\n"
-        "    lucy \"Second.\"\n"
-        "    lucy \"Third.\"\n");
+        "    l \"First.\"\n"
+        "    l \"Second.\"\n"
+        "    l \"Third.\"\n");
     REQUIRE(result.characters.size() == 1);
     CHECK(result.characters[0].name == "Lucy");
+    CHECK(result.characters[0].alias == "l");
 }
 
 TEST_CASE("mixed conversion uses case-insensitive characters defined in another script") {
@@ -197,14 +198,14 @@ TEST_CASE("book action beats preserve action narration and infer the speaker") {
         "Eileen looked away. “I can’t.”\n"
         "“Why?” asked Lucy.");
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\")\n"
-        "define lucy = Character(\"Lucy\")\n\n"
+        "define e = Character(\"Eileen\")\n"
+        "define l = Character(\"Lucy\")\n\n"
         "label start:\n"
-        "    eileen \"Wait.\"\n"
+        "    e \"Wait.\"\n"
         "    \"Eileen grabbed his sleeve.\"\n"
         "    \"Eileen looked away.\"\n"
-        "    eileen \"I can’t.\"\n"
-        "    lucy \"Why?\"\n");
+        "    e \"I can’t.\"\n"
+        "    l \"Why?\"\n");
     CHECK(result.dialogue_lines == 3);
     CHECK(result.narration_lines == 2);
 }
@@ -235,16 +236,16 @@ TEST_CASE("pronoun action beats use only the most recent explicit speaker") {
         "\u201cI heard something.\u201d They held up a hand.\n"
         "\u201cWho is there?\u201d he whispered.");
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\")\n"
-        "define lucy = Character(\"Lucy\")\n\n"
+        "define e = Character(\"Eileen\")\n"
+        "define l = Character(\"Lucy\")\n\n"
         "label start:\n"
-        "    eileen \"We should leave.\"\n"
+        "    e \"We should leave.\"\n"
         "    \"She checked the door.\"\n"
-        "    eileen \"Now.\"\n"
-        "    lucy \"Wait.\"\n"
-        "    lucy \"I heard something.\"\n"
+        "    e \"Now.\"\n"
+        "    l \"Wait.\"\n"
+        "    l \"I heard something.\"\n"
         "    \"They held up a hand.\"\n"
-        "    lucy \"Who is there?\"\n");
+        "    l \"Who is there?\"\n");
 }
 
 TEST_CASE("line review uses recent speaker before treating a quoted action as code") {
@@ -269,12 +270,12 @@ TEST_CASE("dialogue speaker expressions become RenPy image attributes") {
         "\u201cI am freezing.\u201d\n"
         "Eileen [ANGRY] said, \"Not again.\"");
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\", image=\"eileen\")\n"
-        "define lucy = Character(\"Lucy\", image=\"lucy\")\n\n"
+        "define e = Character(\"Eileen\", image=\"eileen\")\n"
+        "define l = Character(\"Lucy\", image=\"lucy\")\n\n"
         "label start:\n"
-        "    eileen happy \"We did it.\"\n"
-        "    lucy winter coat \"I am freezing.\"\n"
-        "    eileen angry \"Not again.\"\n");
+        "    e happy \"We did it.\"\n"
+        "    l winter coat \"I am freezing.\"\n"
+        "    e angry \"Not again.\"\n");
     CHECK(result.characters.size() == 2);
 }
 
@@ -282,10 +283,10 @@ TEST_CASE("book speech tags ignore capitalization and allow adverbs") {
     const auto result = convert_manuscript_to_renpy(
         "EILEEN QUIETLY SAID, \"Stay.\"\nSHE SAID, \"Please.\"");
     CHECK(result.script ==
-        "define eileen = Character(\"EILEEN\")\n\n"
+        "define e = Character(\"EILEEN\")\n\n"
         "label start:\n"
-        "    eileen \"Stay.\"\n"
-        "    eileen \"Please.\"\n");
+        "    e \"Stay.\"\n"
+        "    e \"Please.\"\n");
 }
 
 TEST_CASE("trailing speech tags accept dialogue without quotation marks") {
@@ -293,11 +294,11 @@ TEST_CASE("trailing speech tags accept dialogue without quotation marks") {
         "And I gotta stop him, said Leon.\n"
         "Well, not without me, Lucy replied softly.");
     CHECK(result.script ==
-        "define leon = Character(\"Leon\")\n"
-        "define lucy = Character(\"Lucy\")\n\n"
+        "define l = Character(\"Leon\")\n"
+        "define l_2 = Character(\"Lucy\")\n\n"
         "label start:\n"
-        "    leon \"And I gotta stop him.\"\n"
-        "    lucy \"Well, not without me.\"\n");
+        "    l \"And I gotta stop him.\"\n"
+        "    l_2 \"Well, not without me.\"\n");
     CHECK(result.dialogue_lines == 2);
     CHECK(result.narration_lines == 0);
 
@@ -333,14 +334,14 @@ TEST_CASE("flexible speech tags handle present tense modifiers and interrupted q
         "\"I mean it,\" Eileen insists. \"Today.\"\n"
         "Eileen turned away. \"Go,\" she urged.");
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\", image=\"eileen\")\n"
-        "define lucy = Character(\"Lucy\")\n\n"
+        "define e = Character(\"Eileen\", image=\"eileen\")\n"
+        "define l = Character(\"Lucy\")\n\n"
         "label start:\n"
-        "    eileen happy \"Ready.\"\n"
-        "    lucy \"Almost,\"\n"
-        "    eileen \"I mean it, Today.\"\n"
+        "    e happy \"Ready.\"\n"
+        "    l \"Almost,\"\n"
+        "    e \"I mean it, Today.\"\n"
         "    \"Eileen turned away.\"\n"
-        "    eileen \"Go,\"\n");
+        "    e \"Go,\"\n");
 }
 
 TEST_CASE("natural speaker cues accept speech clauses and parenthetical moods") {
@@ -363,13 +364,13 @@ TEST_CASE("screenplay cues and dash dialogue convert without quotation marks") {
         "Not without me.\n"
         "Captain Vale — Hold the door.");
     CHECK(result.script ==
-        "define eileen = Character(\"EILEEN\", image=\"eileen\")\n"
-        "define lucy = Character(\"Lucy\")\n"
-        "define captain_vale = Character(\"Captain Vale\")\n\n"
+        "define e = Character(\"EILEEN\", image=\"eileen\")\n"
+        "define l = Character(\"Lucy\")\n"
+        "define cv = Character(\"Captain Vale\")\n\n"
         "label start:\n"
-        "    eileen angry \"We are leaving.\"\n"
-        "    lucy \"Not without me.\"\n"
-        "    captain_vale \"Hold the door.\"\n");
+        "    e angry \"We are leaving.\"\n"
+        "    l \"Not without me.\"\n"
+        "    cv \"Hold the door.\"\n");
 
     const auto review = review_manuscript_lines(
         "EILEEN\n(angrily)\n— We are leaving.\nCaptain Vale — Hold the door.");
@@ -386,14 +387,14 @@ TEST_CASE("natural language mood cues infer common sprite expressions") {
         "Eileen looked angry. \u201cWho touched it?\u201d\n"
         "\u201cIt was not funny.\u201d Eileen frowned.");
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\", image=\"eileen\")\n"
-        "define lucy = Character(\"Lucy\", image=\"lucy\")\n\n"
+        "define e = Character(\"Eileen\", image=\"eileen\")\n"
+        "define l = Character(\"Lucy\", image=\"lucy\")\n\n"
         "label start:\n"
-        "    eileen happy \"We did it.\"\n"
-        "    lucy nervous \"Keep moving,\"\n"
+        "    e happy \"We did it.\"\n"
+        "    l nervous \"Keep moving,\"\n"
         "    \"Eileen looked angry.\"\n"
-        "    eileen angry \"Who touched it?\"\n"
-        "    eileen sad \"It was not funny.\"\n"
+        "    e angry \"Who touched it?\"\n"
+        "    e sad \"It was not funny.\"\n"
         "    \"Eileen frowned.\"\n");
 }
 
@@ -401,9 +402,9 @@ TEST_CASE("explicit expression tags override inferred mood words") {
     const auto result = convert_manuscript_to_renpy(
         "Eileen [smug] said sadly, \"I knew it.\"");
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\", image=\"eileen\")\n\n"
+        "define e = Character(\"Eileen\", image=\"eileen\")\n\n"
         "label start:\n"
-        "    eileen smug \"I knew it.\"\n");
+        "    e smug \"I knew it.\"\n");
 }
 
 TEST_CASE("introductory action phrase finds a new speaker without project definitions") {
@@ -411,11 +412,11 @@ TEST_CASE("introductory action phrase finds a new speaker without project defini
         "\u201cI am fine.\u201d With a brittle smile, Eileen looked away.\n"
         "\u201cThen move.\u201d With a sigh, she opened the door.");
     CHECK(result.script ==
-        "define eileen = Character(\"Eileen\", image=\"eileen\")\n\n"
+        "define e = Character(\"Eileen\", image=\"eileen\")\n\n"
         "label start:\n"
-        "    eileen happy \"I am fine.\"\n"
+        "    e happy \"I am fine.\"\n"
         "    \"With a brittle smile, Eileen looked away.\"\n"
-        "    eileen \"Then move.\"\n"
+        "    e \"Then move.\"\n"
         "    \"With a sigh, she opened the door.\"\n");
 }
 
@@ -444,12 +445,12 @@ TEST_CASE("uncertain prose requires explicit inclusion") {
     const std::string source = "label start:\nRain tapped the glass.\nEileen: Hello.\n";
     const auto safe = convert_mixed_manuscript_to_renpy(source, true, {}, false);
     CHECK(safe.script ==
-        "define eileen = Character(\"Eileen\")\n\n"
-        "label start:\nRain tapped the glass.\n    eileen \"Hello.\"\n");
+        "define e = Character(\"Eileen\")\n\n"
+        "label start:\nRain tapped the glass.\n    e \"Hello.\"\n");
     const auto inclusive = convert_mixed_manuscript_to_renpy(source, true, {}, true);
     CHECK(inclusive.script ==
-        "define eileen = Character(\"Eileen\")\n\n"
-        "label start:\n    \"Rain tapped the glass.\"\n    eileen \"Hello.\"\n");
+        "define e = Character(\"Eileen\")\n\n"
+        "label start:\n    \"Rain tapped the glass.\"\n    e \"Hello.\"\n");
 }
 
 TEST_CASE("offline prose prompt excludes RenPy code") {

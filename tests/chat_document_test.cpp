@@ -61,8 +61,8 @@ TEST_CASE("manuscript converts to chat and chat returns readable dialogue with l
         "Rain hit the glass.\nEileen: We should go.\n", "#general");
     CHECK(chat.messages == 1);
     CHECK(chat.narration == 1);
-    CHECK(chat.text.find("default eileen = ChatCharacter(\"Eileen\")") != std::string::npos);
-    CHECK(chat.text.find("eileen \"We should go.\"") != std::string::npos);
+    CHECK(chat.text.find("default e = ChatCharacter(\"Eileen\")") != std::string::npos);
+    CHECK(chat.text.find("e \"We should go.\"") != std::string::npos);
 
     const auto dialogue = convert_chat_to_manuscript(
         "default e = ChatCharacter(\"Eileen\")\n"
@@ -246,7 +246,7 @@ TEST_CASE("conversion can wrap scenes in bridge calls for an app style") {
     const auto kik = convert_manuscript_to_chat(
         "Eileen: hey, you up?\n", "Eileen", {}, {}, {}, "kik");
     const auto begin = kik.text.find("    call say_count_chat_begin(\"Eileen\", skin=\"kik\")");
-    const auto message = kik.text.find("    eileen \"hey, you up?\"");
+    const auto message = kik.text.find("    e \"hey, you up?\"");
     const auto end = kik.text.find("    call say_count_chat_end");
     REQUIRE(begin != std::string::npos);
     REQUIRE(message != std::string::npos);
@@ -270,11 +270,11 @@ TEST_CASE("stage directions convert to chat arguments without writing code") {
         "[normal speed]\n"
         "Mel: ok\n", "#general");
     CHECK(chat.messages == 4);
-    CHECK(chat.text.find("default mel = ChatCharacter(\"Mel\", is_player=True)") != std::string::npos);
+    CHECK(chat.text.find("default m = ChatCharacter(\"Mel\", is_player=True)") != std::string::npos);
     CHECK(chat.text.find("c=\"#ops\"") != std::string::npos);
-    CHECK(chat.text.find("ot=robo") != std::string::npos);
+    CHECK(chat.text.find("ot=r") != std::string::npos);
     CHECK(chat.text.find("fastmode=0.1") != std::string::npos);
-    CHECK(chat.text.find("mel \"ok\"\n") != std::string::npos);
+    CHECK(chat.text.find("m \"ok\"\n") != std::string::npos);
 }
 
 TEST_CASE("a speaker named Me becomes the player automatically") {
@@ -293,7 +293,7 @@ TEST_CASE("natural choice blocks become chat menus with branches") {
     CHECK(chat.messages == 2);
     CHECK(chat.text.find("menu:") != std::string::npos);
     CHECK(chat.text.find("\"Sounds good\":") != std::string::npos);
-    CHECK(chat.text.find("robo \"nice\"") != std::string::npos);
+    CHECK(chat.text.find("r \"nice\"") != std::string::npos);
     CHECK(chat.text.find("\"No way\":") != std::string::npos);
 }
 
@@ -311,9 +311,9 @@ TEST_CASE("stage directions and nested choices work inside a branch") {
         "- No way\n", "#general");
     CHECK(chat.choices == 3);
     CHECK(chat.text.find("c=\"#ops\"") != std::string::npos);
-    CHECK(chat.text.find("ot=mel") != std::string::npos);
+    CHECK(chat.text.find("ot=m") != std::string::npos);
     CHECK(chat.text.find("\"Bring snacks\":") != std::string::npos);
-    CHECK(chat.text.find("mel \"yes\"") != std::string::npos);
+    CHECK(chat.text.find("m \"yes\"") != std::string::npos);
     const auto back = convert_chat_to_manuscript(chat.text);
     CHECK(back.text.find("[in #ops]") != std::string::npos);
     CHECK(back.text.find("[Mel is typing]") != std::string::npos);
@@ -331,8 +331,8 @@ TEST_CASE("blank lines inside a choice branch do not end the branch") {
         "    Robo: second\n", "#general");
     REQUIRE(chat.choices == 1);
     CHECK(chat.messages == 2);
-    CHECK(chat.text.find("robo \"first\"") != std::string::npos);
-    CHECK(chat.text.find("robo \"second\"") != std::string::npos);
+    CHECK(chat.text.find("r \"first\"") != std::string::npos);
+    CHECK(chat.text.find("r \"second\"") != std::string::npos);
 }
 
 TEST_CASE("unrecognized stage directions become narration with a warning") {

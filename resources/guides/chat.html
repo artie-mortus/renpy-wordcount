@@ -57,13 +57,16 @@ overwritten afterward.</p>
 <td width="48%"><font size="2" color="#4C5A6D">WRITE</font><br>
 <tt>Robo: yo you seeing this??<br>Me: seeing what</tt></td>
 <td><font size="2" color="#4C5A6D">BECOMES</font><br>
-<tt>robo "yo you seeing this??"<br>me "seeing what"</tt></td>
+<tt>r "yo you seeing this??"<br>m "seeing what"</tt></td>
 </tr></table>
 <p>Character definitions are generated when missing:</p>
 <table width="100%" cellpadding="8" bgcolor="#EEF1F3"><tr><td>
-<tt>default robo = ChatCharacter("Robo", icon="images/robo.png")</tt><br>
-<tt>default me = ChatCharacter("[player_name]", is_player=True)</tt>
+<tt>default r = ChatCharacter("Robo", icon="images/robo.png")</tt><br>
+<tt>default m = ChatCharacter("[player_name]", is_player=True)</tt>
 </td></tr></table>
+<p>Generated short codes use lowercase initials: <tt>Leon</tt> becomes <tt>l</tt>
+and <tt>Captain Vale</tt> becomes <tt>cv</tt>. If an abbreviation is already in
+use, the next character receives <tt>_2</tt>, then <tt>_3</tt>, and so on.</p>
 
 <h2>Stage directions: chat features without code</h2>
 <p>Write square-bracket stage directions on their own line, like a screenplay.

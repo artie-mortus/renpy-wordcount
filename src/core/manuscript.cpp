@@ -1,4 +1,5 @@
 #include "core/manuscript.h"
+#include "core/parser.h"
 #include "core/tokenizer.h"
 #include "core/unicode_casefold.h"
 
@@ -138,6 +139,25 @@ std::string Identifier(std::string_view value, std::string_view fallback) {
     if (result.empty()) result = std::string(fallback);
     if (std::isdigit(static_cast<unsigned char>(result.front()))) result.insert(0, "character_");
     return result;
+}
+
+std::string CharacterAliasBase(std::string_view name) {
+    const std::string identifier = Identifier(name, "character");
+    std::string abbreviation;
+    bool start_of_word = true;
+    for (const char character : identifier) {
+        if (character == '_') {
+            start_of_word = true;
+        } else if (start_of_word) {
+            abbreviation += character;
+            start_of_word = false;
+        }
+    }
+    return abbreviation;
+}
+
+std::string CharacterImageTag(std::string_view name) {
+    return Identifier(name, "character");
 }
 
 std::string Escape(std::string_view value) {
@@ -859,6 +879,10 @@ std::vector<ManuscriptLineReview> ClassifyLines(std::string_view text) {
 
 }  // namespace
 
+std::string abbreviate_character_name(std::string_view name) {
+    return CharacterAliasBase(name);
+}
+
 std::vector<ManuscriptLineReview> review_manuscript_lines(std::string_view text) {
     return ClassifyLines(text);
 }
@@ -888,6 +912,9 @@ ManuscriptConversion convert_mixed_manuscript_to_renpy(
     }
 
     ManuscriptConversion result;
+    std::map<std::string, std::string> known_characters = analyze_script(text).character_names;
+    for (const auto& [alias, display_name] : existing_characters)
+        known_characters[alias] = display_name;
     std::vector<std::string> output;
     const bool has_scene_label = std::any_of(lines.begin(), lines.end(), [](const auto& line) {
         const std::string trimmed = Trim(line);
@@ -920,10 +947,12 @@ ManuscriptConversion convert_mixed_manuscript_to_renpy(
         options.label.clear();
         options.include_character_definitions = false;
         options.indentation = indentation > 0 ? indentation : 4;
-        options.existing_characters = existing_characters;
+        options.existing_characters = known_characters;
         const auto converted = convert_manuscript_to_renpy(block, options);
         AppendUniqueCharacters(&result.characters, converted.characters);
         AppendUniqueStrings(&result.reused_aliases, converted.reused_aliases);
+        for (const auto& character : converted.characters)
+            known_characters[character.alias] = character.name;
         result.dialogue_lines += converted.dialogue_lines;
         result.narration_lines += converted.narration_lines;
         auto converted_lines = Lines(converted.script);
@@ -944,12 +973,18 @@ ManuscriptConversion convert_mixed_manuscript_to_renpy(
             if (existing.count(character.alias)) continue;
             definitions.push_back("define " + character.alias + " = Character(\"" +
                 Escape(character.name) + "\"" + (character.uses_image_attributes
-                    ? ", image=\"" + Escape(character.alias) + "\"" : std::string{}) + ")");
+                    ? ", image=\"" + Escape(CharacterImageTag(character.name)) + "\"" : std::string{}) + ")");
         }
         if (!definitions.empty()) {
             definitions.push_back({});
             output.insert(output.begin(), definitions.begin(), definitions.end());
         }
+    }
+
+    for (const auto& character : result.characters) {
+        result.reused_aliases.erase(
+            std::remove(result.reused_aliases.begin(), result.reused_aliases.end(), character.alias),
+            result.reused_aliases.end());
     }
 
     std::ostringstream joined;
@@ -992,7 +1027,7 @@ ManuscriptConversion convert_manuscript_to_renpy(
                 reused_aliases.insert(existing->second);
             return existing->second;
         }
-        std::string base = Identifier(name, "character");
+        std::string base = abbreviate_character_name(name);
         std::string alias = base;
         for (std::size_t suffix = 2; used_aliases.count(alias); ++suffix)
             alias = base + "_" + std::to_string(suffix);
@@ -1068,7 +1103,7 @@ ManuscriptConversion convert_manuscript_to_renpy(
         for (const auto& character : characters) {
             script << "define " << character.alias << " = Character(\"" << Escape(character.name) << "\"";
             if (character.uses_image_attributes)
-                script << ", image=\"" << Escape(character.alias) << "\"";
+                script << ", image=\"" << Escape(CharacterImageTag(character.name)) << "\"";
             script << ")\n";
         }
         script << '\n';
