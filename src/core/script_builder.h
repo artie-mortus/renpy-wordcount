@@ -5,7 +5,22 @@
 
 namespace say_count {
 
-enum class StoryElementKind { Character, Dialogue, Choice, Scene, Music, Sound, Jump };
+enum class StoryElementKind {
+    Character,
+    Dialogue,
+    Choice,
+    Scene,
+    Music,
+    Sound,
+    Jump,
+    Show,
+    Hide,
+    StopMusic,
+    Pause,
+    Call,
+    Return,
+    Transition,
+};
 
 struct StoryElementRequest {
     StoryElementRequest() = default;

@@ -296,6 +296,8 @@ void EditorNotebook::ConfigureEditor(wxStyledTextCtrl* editor) {
     editor->Bind(wxEVT_STC_DWELLSTART, &EditorNotebook::OnDwellStart, this);
     editor->Unbind(wxEVT_STC_DWELLEND, &EditorNotebook::OnDwellEnd, this);
     editor->Bind(wxEVT_STC_DWELLEND, &EditorNotebook::OnDwellEnd, this);
+    editor->Unbind(wxEVT_STC_UPDATEUI, &EditorNotebook::OnUpdateUi, this);
+    editor->Bind(wxEVT_STC_UPDATEUI, &EditorNotebook::OnUpdateUi, this);
     editor->Unbind(wxEVT_KEY_DOWN, &EditorNotebook::OnKeyDown, this);
     editor->Bind(wxEVT_KEY_DOWN, &EditorNotebook::OnKeyDown, this);
     editor->SetMouseDwellTime(350);
@@ -655,6 +657,19 @@ void EditorNotebook::OnDwellEnd(wxStyledTextEvent& event) {
     if (auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject())) editor->CallTipCancel();
 }
 
+void EditorNotebook::OnUpdateUi(wxStyledTextEvent& event) {
+    auto* editor = dynamic_cast<wxStyledTextCtrl*>(event.GetEventObject());
+    if (editor && caret_line_handler_ && GetPageIndex(editor) == GetSelection()) {
+        const auto line = static_cast<std::size_t>(
+            editor->LineFromPosition(editor->GetCurrentPos()) + 1);
+        if (line != reported_caret_line_) {
+            reported_caret_line_ = line;
+            caret_line_handler_(line);
+        }
+    }
+    event.Skip();
+}
+
 void EditorNotebook::ApplyCommandResult(wxStyledTextCtrl* editor, const EditorCommandResult& result) {
     const std::string current = editor->GetText().ToStdString(wxConvUTF8);
     if (result.text != current) {
@@ -871,6 +886,12 @@ void EditorNotebook::SetDiagnosticsHandler(DiagnosticsHandler handler) {
 void EditorNotebook::SetDocumentStateHandler(DocumentStateHandler handler) {
     document_state_handler_ = std::move(handler);
     NotifyDocumentState();
+}
+
+void EditorNotebook::SetCaretLineHandler(CaretLineHandler handler) {
+    caret_line_handler_ = std::move(handler);
+    reported_caret_line_ = CurrentLine();
+    if (caret_line_handler_) caret_line_handler_(reported_caret_line_);
 }
 
 void EditorNotebook::NotifyDocumentState() {
@@ -1595,6 +1616,8 @@ void EditorNotebook::OnPageChanged(wxAuiNotebookEvent& event) {
     if (!find_query_.empty()) RefreshFindHighlights();
     NotifyNvimMode();
     NotifyDocumentState();
+    reported_caret_line_ = CurrentLine();
+    if (caret_line_handler_) caret_line_handler_(reported_caret_line_);
     event.Skip();
 }
 

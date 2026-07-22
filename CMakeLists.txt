@@ -126,6 +126,7 @@ add_executable(say-count
     src/ui/guide_dialog.cpp
     src/ui/welcome_dialog.cpp
     src/ui/story_element_dialog.cpp
+    src/ui/build_scene_panel.cpp
     src/ui/story_library_panel.cpp
     src/ui/project_navigator_panel.cpp
     src/ui/writer_draft_dialog.cpp
@@ -251,6 +252,7 @@ if(BUILD_TESTING)
         src/ui/guide_dialog.cpp
         src/ui/welcome_dialog.cpp
         src/ui/story_element_dialog.cpp
+        src/ui/build_scene_panel.cpp
         src/ui/story_library_panel.cpp
         src/ui/project_navigator_panel.cpp
         src/ui/writer_draft_dialog.cpp

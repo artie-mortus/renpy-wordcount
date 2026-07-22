@@ -31,6 +31,8 @@ const Palette kPalette{
 void Apply(wxWindow* window) {
     if (!window || dynamic_cast<wxStyledTextCtrl*>(window)) return;
 
+    const bool build_scene_preview = window->GetName() == "Build scene preview";
+
     window->SetFont(BodyFont());
     window->SetForegroundColour(kPalette.ink);
 
@@ -38,9 +40,14 @@ void Apply(wxWindow* window) {
         dynamic_cast<wxNotebook*>(window)) {
         window->SetBackgroundColour(kPalette.canvas);
     }
-    if (dynamic_cast<wxTextCtrl*>(window) || dynamic_cast<wxChoice*>(window) ||
+    if ((!build_scene_preview && dynamic_cast<wxTextCtrl*>(window)) || dynamic_cast<wxChoice*>(window) ||
         dynamic_cast<wxListCtrl*>(window) || dynamic_cast<wxDataViewCtrl*>(window)) {
         window->SetBackgroundColour(kPalette.white);
+    }
+    if (build_scene_preview) {
+        window->SetBackgroundColour(kPalette.ink);
+        window->SetForegroundColour(kPalette.white);
+        window->SetFont(UtilityFont(9));
     }
     if (dynamic_cast<wxTextCtrl*>(window) || dynamic_cast<wxChoice*>(window)) {
         window->SetMinSize(wxSize(-1, 30));
@@ -53,7 +60,8 @@ void Apply(wxWindow* window) {
         button->SetForegroundColour(kPalette.ink);
         button->SetFont(BodyFont(9, wxFONTWEIGHT_MEDIUM));
         button->SetMinSize(wxSize(-1, 32));
-        if (button->GetName() == "say-count-primary") {
+        if (button->GetName() == "say-count-primary" ||
+            button->GetName() == "Add build scene cue") {
             button->SetBackgroundColour(kPalette.cue);
             button->SetFont(BodyFont(9, wxFONTWEIGHT_BOLD));
         }

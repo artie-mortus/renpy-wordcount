@@ -6,6 +6,7 @@
 #include "ui/guide_dialog.h"
 #include "ui/welcome_dialog.h"
 #include "ui/story_element_dialog.h"
+#include "ui/build_scene_panel.h"
 #include "ui/story_library_panel.h"
 #include "ui/project_navigator_panel.h"
 #include "ui/command_model.h"
@@ -22,6 +23,7 @@
 #include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
+#include <wx/combobox.h>
 #include <wx/clipbrd.h>
 #include <wx/frame.h>
 #include <wx/html/htmlwin.h>
@@ -32,6 +34,7 @@
 #include <wx/stattext.h>
 #include <wx/stc/stc.h>
 #include <wx/textctrl.h>
+#include <wx/tglbtn.h>
 #include <wx/utils.h>
 
 namespace {
@@ -185,6 +188,12 @@ TEST_CASE("command bar keeps writing stable while problems change") {
     CHECK(state.problem_label == "Fix 2");
     CHECK(state.show_preview);
     CHECK(state.enable_preview);
+    CHECK(state.preview_label == "Preview game");
+    context.can_preview_from_line = true;
+    context.current_line = 27;
+    state = say_count::ui::DeriveCommandBarState(context);
+    CHECK(state.preview_from_line);
+    CHECK(state.preview_label == "Preview line 27");
     CHECK(say_count::ui::CommandFor(say_count::ui::kShowHome).label == std::string("Home"));
 }
 
@@ -312,6 +321,51 @@ TEST_CASE("story library turns cast and project media into plain writing actions
     search->SetValue("missing");
     CHECK(cast->GetCount() == 0);
     CHECK(places->GetCount() == 0);
+}
+
+TEST_CASE("Build Scene shelf turns project-aware cues into script at the cursor") {
+    wxFrame frame(nullptr, wxID_ANY, "build scene shelf test");
+    say_count::ui::BuildScenePanel panel(&frame);
+    say_count::ScriptAnalysis analysis;
+    analysis.character_names = {{"e", "Eileen"}};
+    analysis.scenes = {{"start", 0, 0}, {"ending", 0, 0}};
+    panel.SetProject(analysis, {
+        {"images/bg_kitchen.png", "/game/images/bg_kitchen.png", say_count::AssetKind::Image},
+        {"audio/theme.ogg", "/game/audio/theme.ogg", say_count::AssetKind::Audio},
+    });
+    panel.SetIndentationProvider([] { return std::string("    "); });
+
+    auto* primary = Named<wxComboBox>(panel, "Build scene primary field");
+    auto* secondary = Named<wxTextCtrl>(panel, "Build scene secondary field");
+    auto* preview = Named<wxTextCtrl>(panel, "Build scene preview");
+    auto* insert = Named<wxButton>(panel, "Add build scene cue");
+    REQUIRE(primary); REQUIRE(secondary); REQUIRE(preview); REQUIRE(insert);
+    CHECK(primary->FindString("e") != wxNOT_FOUND);
+    CHECK_FALSE(insert->IsEnabled());
+
+    say_count::StoryElementKind inserted_kind = say_count::StoryElementKind::Return;
+    std::string inserted;
+    panel.SetInsertHandler([&](say_count::StoryElementKind kind, const std::string& text,
+                               const std::string&) {
+        inserted_kind = kind;
+        inserted = text;
+    });
+    primary->SetValue("e");
+    secondary->SetValue("The door is open.");
+    CHECK(preview->GetValue() == "    e \"The door is open.\"\n");
+    CHECK(insert->IsEnabled());
+    wxCommandEvent insert_event(wxEVT_BUTTON, insert->GetId());
+    insert->GetEventHandler()->ProcessEvent(insert_event);
+    CHECK(inserted_kind == say_count::StoryElementKind::Dialogue);
+    CHECK(inserted == "    e \"The door is open.\"\n");
+
+    auto* background = Named<wxToggleButton>(panel, "Build scene cue Set background");
+    REQUIRE(background);
+    wxCommandEvent cue_event(wxEVT_TOGGLEBUTTON, background->GetId());
+    background->GetEventHandler()->ProcessEvent(cue_event);
+    CHECK(primary->FindString("images bg kitchen") != wxNOT_FOUND);
+    primary->SetValue("images bg kitchen");
+    CHECK(preview->GetValue() == "    scene images bg kitchen\n");
 }
 
 TEST_CASE("project scripts stay indexed while editor tabs open lazily") {

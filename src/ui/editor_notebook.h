@@ -70,6 +70,7 @@ public:
     using FindStatusHandler = std::function<void(const FindStatus&)>;
     using DiagnosticsHandler = std::function<void(const std::vector<Diagnostic>&)>;
     using DocumentStateHandler = std::function<void(const DocumentState&)>;
+    using CaretLineHandler = std::function<void(std::size_t)>;
     using NvimModeHandler = std::function<void(bool enabled, const std::string& mode,
                                                 const std::string& command_line)>;
 
@@ -128,6 +129,7 @@ public:
     void SetFindStatusHandler(FindStatusHandler handler);
     void SetDiagnosticsHandler(DiagnosticsHandler handler);
     void SetDocumentStateHandler(DocumentStateHandler handler);
+    void SetCaretLineHandler(CaretLineHandler handler);
     void SelectDiagnostic(const Diagnostic& diagnostic);
     void ToggleComments();
     ExternalFileUpdate ReloadExternalFile(const wxString& path);
@@ -156,6 +158,7 @@ private:
     void OnAutoCompCompleted(wxStyledTextEvent& event);
     void OnDwellStart(wxStyledTextEvent& event);
     void OnDwellEnd(wxStyledTextEvent& event);
+    void OnUpdateUi(wxStyledTextEvent& event);
     void OnKeyDown(wxKeyEvent& event);
     bool HandleNvimKey(wxStyledTextCtrl* editor, wxKeyEvent& event);
     void ApplyNvimState(wxStyledTextCtrl* editor, const VimState& state);
@@ -203,6 +206,8 @@ private:
     std::vector<Diagnostic> diagnostics_;
     DiagnosticsHandler diagnostics_handler_;
     DocumentStateHandler document_state_handler_;
+    CaretLineHandler caret_line_handler_;
+    std::size_t reported_caret_line_ = 0;
     NvimModeHandler nvim_mode_handler_;
     std::unordered_map<wxStyledTextCtrl*, VimEmulator> vim_emulators_;
     std::unordered_map<wxStyledTextCtrl*, std::string> nvim_modes_;

@@ -9,6 +9,21 @@ search application commands. The dockable **Script Index** keeps every project
 script searchable by its folder-relative path while editor tabs are opened only
 as needed; this also keeps same-named scripts in different folders distinct.
 
+The primary preview action follows the caret: move to the scene you are working
+on and click **Preview line N** (or press `F7`) to save the open scripts and
+launch Ren'Py at that line. Use `F6` for a normal preview from the beginning.
+Files outside the connected game and SDKs without warp support automatically
+keep the primary action as **Preview game**.
+
+The dockable **Build Scene** shelf keeps common story actions beside the script.
+Choose a cue under Text, Stage, Sound, or Flow; fill in only the fields that cue
+needs; review the generated **Script Cue**; then click **Add at cursor**. The
+shelf suggests character codes, labels, images, and audio from the connected
+game and can add dialogue, choices, characters, backgrounds, show/hide cues,
+transitions, music and sounds, pauses, jumps, calls, and returns. Character
+definitions are placed safely at the top of the active script. Use
+**View → Build Scene shelf** to hide or restore it.
+
 Use **File → Home** to start a story, open a game, open a loose script, or
 return to recent work. New stories default to a familiar local folder, preview
 their destination before creation, and never replace existing files silently.

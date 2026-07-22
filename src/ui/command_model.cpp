@@ -42,6 +42,7 @@ const std::vector<CommandSpec>& CommandCatalog() {
         {kShowOutline, "Toggle outline", "View", "Show or hide the script outline"},
         {kShowProjectNavigator, "Toggle script index", "View", "Show or hide the project's script index"},
         {kShowSpeakerStats, "Toggle speaker statistics", "View", "Show or hide speaker statistics"},
+        {kShowBuildScene, "Toggle Build Scene shelf", "View", "Show or hide guided story cues"},
         {kShowDiagnostics, "Problems", "View", "Show problems found in the writing"},
         {kShowRoutes, "Route details", "View", "Show route summaries and paths"},
         {kShowProduction, "Production Desk", "View", "Show prose and production tools"},
@@ -52,7 +53,7 @@ const std::vector<CommandSpec>& CommandCatalog() {
         {kThemeLight, "Use light theme", "View", "Use the light editor theme"},
         {kThemeDark, "Use dark theme", "View", "Use the dark editor theme"},
         {kRunRenpy, "Run project", "F6 · Ren'Py", "Preview the game"},
-        {kWarpRenpy, "Run from caret", "F7 · Ren'Py", "Preview the game from the current line"},
+        {kWarpRenpy, "Preview from caret", "F7 · Ren'Py", "Preview the game from the current line"},
         {kDirectorRenpy, "Interactive Director", "Ren'Py", "Launch Ren'Py's Interactive Director"},
         {kRuntimePresets, "Runtime state presets", "Ren'Py", "Choose variables for the next preview"},
         {kRunRenpyLint, "Check game for problems", "Ren'Py", "Run Ren'Py's complete project check"},
@@ -89,6 +90,9 @@ CommandBarState DeriveCommandBarState(const ShellContext& context) {
     result.show_preview = context.has_game;
     result.enable_save = context.document_dirty || !context.document_has_path;
     result.enable_preview = context.has_game && context.renpy_available && !context.renpy_running;
+    result.preview_from_line = context.can_preview_from_line && context.current_line > 0;
+    if (result.preview_from_line)
+        result.preview_label = "Preview line " + std::to_string(context.current_line);
     if (context.fixable_problem_count > 0) {
         result.problem_label = "Fix " + std::to_string(context.fixable_problem_count);
     } else if (context.problem_count == 1) {

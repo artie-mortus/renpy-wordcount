@@ -46,6 +46,7 @@ class CoveragePanel;
 class RoutePanel;
 class ProductionPanel;
 class StoryLibraryPanel;
+class BuildScenePanel;
 class ProjectNavigatorPanel;
 struct FindStatus;
 
@@ -59,6 +60,7 @@ private:
     void BuildMenus();
     void BuildCommandBar();
     void RefreshCommandBarState();
+    bool CanPreviewFromCaret() const;
     void RefreshCueSummary();
     void ShowNotice(const wxString& message, int flags);
     void HideNotice();
@@ -80,6 +82,7 @@ private:
     void StartNewStory();
     wxString PreferredStoryParent() const;
     void RefreshStoryLibrary();
+    void RefreshBuildScene();
     void SaveWorkspace();
     void OnQuickOpen(wxCommandEvent& event);
     void OnCommandPalette(wxCommandEvent& event);
@@ -205,6 +208,7 @@ private:
     ScriptAnalysis analysis_;
     bool current_document_dirty_ = false;
     wxString current_document_path_;
+    std::size_t current_document_line_ = 1;
     wxString last_saved_time_;
     wxString last_history_time_;
     std::size_t problem_count_ = 0;
@@ -227,6 +231,7 @@ private:
     wxTextCtrl* renpy_tool_output_ = nullptr;
     RenpyLintPanel* renpy_lint_ = nullptr;
     StoryLibraryPanel* story_library_ = nullptr;
+    BuildScenePanel* build_scene_ = nullptr;
     ProjectNavigatorPanel* project_navigator_ = nullptr;
     std::vector<ProjectAsset> story_assets_;
     CoveragePanel* coverage_panel_ = nullptr;

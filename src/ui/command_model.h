@@ -68,6 +68,7 @@ enum MenuId {
     kShowOutline,
     kShowProjectNavigator,
     kShowSpeakerStats,
+    kShowBuildScene,
     kShowStoryLibrary,
     kShowDiagnostics,
     kQuickOpen,
@@ -92,6 +93,8 @@ struct ShellContext {
     std::size_t fixable_problem_count = 0;
     bool renpy_available = false;
     bool renpy_running = false;
+    bool can_preview_from_line = false;
+    std::size_t current_line = 0;
 };
 
 struct CommandBarState {
@@ -102,6 +105,8 @@ struct CommandBarState {
     bool show_preview = false;
     bool enable_save = true;
     bool enable_preview = false;
+    bool preview_from_line = false;
+    std::string preview_label = "Preview game";
     std::string problem_label;
 };
 

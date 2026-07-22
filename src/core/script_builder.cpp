@@ -19,6 +19,46 @@ bool identifier(const std::string& value) {
     return std::all_of(value.begin() + 1, value.end(), [](unsigned char c) { return std::isalnum(c) || c == '_'; });
 }
 
+bool label_identifier(const std::string& value) {
+    if (value.empty()) return false;
+    const std::size_t start = value.front() == '.' ? 1 : 0;
+    if (start == value.size()) return false;
+    std::size_t part_start = start;
+    while (part_start < value.size()) {
+        const std::size_t dot = value.find('.', part_start);
+        const std::string part = value.substr(
+            part_start, dot == std::string::npos ? value.size() - part_start : dot - part_start);
+        if (!identifier(part)) return false;
+        if (dot == std::string::npos) return true;
+        part_start = dot + 1;
+    }
+    return false;
+}
+
+bool image_name(const std::string& value) {
+    if (value.empty() || value.find_first_of("\r\n") != std::string::npos) return false;
+    std::istringstream input(value);
+    std::string word;
+    bool found = false;
+    while (input >> word) {
+        if (!identifier(word)) return false;
+        found = true;
+    }
+    return found;
+}
+
+bool duration(const std::string& value) {
+    if (value.empty()) return true;
+    bool digit = false;
+    bool dot = false;
+    for (const char c : value) {
+        if (std::isdigit(static_cast<unsigned char>(c))) { digit = true; continue; }
+        if (c == '.' && !dot) { dot = true; continue; }
+        return false;
+    }
+    return digit;
+}
+
 std::string quote(std::string value) {
     std::string result = "\"";
     for (const char c : value) {
@@ -72,7 +112,7 @@ StoryElementResult build_story_element(const StoryElementRequest& request) {
             break;
         }
         case StoryElementKind::Scene:
-            if (primary.empty()) return {false, {}, "Enter an image name, such as bg kitchen.", {}};
+            if (!image_name(primary)) return {false, {}, "Enter an image name, such as bg kitchen.", {}};
             text = "scene " + primary + "\n"; break;
         case StoryElementKind::Music:
         case StoryElementKind::Sound:
@@ -80,8 +120,33 @@ StoryElementResult build_story_element(const StoryElementRequest& request) {
             text = std::string("play ") + (request.kind == StoryElementKind::Music ? "music " : "sound ") + quote(primary) + "\n";
             break;
         case StoryElementKind::Jump:
-            if (!identifier(primary)) return {false, {}, "Enter the exact scene name to continue at.", {}};
+            if (!label_identifier(primary)) return {false, {}, "Enter the exact scene name to continue at.", {}};
             text = "jump " + primary + "\n"; break;
+        case StoryElementKind::Show:
+            if (!image_name(primary)) return {false, {}, "Enter an image name, such as eileen happy.", {}};
+            if (!secondary.empty() && !identifier(secondary))
+                return {false, {}, "Use one placement name, such as left or center.", {}};
+            text = "show " + primary + (secondary.empty() ? "" : " at " + secondary) + "\n";
+            break;
+        case StoryElementKind::Hide:
+            if (!image_name(primary)) return {false, {}, "Enter the image tag to hide, such as eileen.", {}};
+            text = "hide " + primary + "\n"; break;
+        case StoryElementKind::StopMusic:
+            if (!duration(primary)) return {false, {}, "Use seconds such as 0.5, or leave this blank.", {}};
+            text = "stop music" + (primary.empty() ? "" : " fadeout " + primary) + "\n";
+            break;
+        case StoryElementKind::Pause:
+            if (!duration(primary)) return {false, {}, "Use seconds such as 1.0, or leave this blank.", {}};
+            text = "pause" + (primary.empty() ? "" : " " + primary) + "\n";
+            break;
+        case StoryElementKind::Call:
+            if (!label_identifier(primary)) return {false, {}, "Enter the exact scene name to call.", {}};
+            text = "call " + primary + "\n"; break;
+        case StoryElementKind::Return:
+            text = "return\n"; break;
+        case StoryElementKind::Transition:
+            if (!identifier(primary)) return {false, {}, "Choose a transition such as dissolve or fade.", {}};
+            text = "with " + primary + "\n"; break;
     }
     return {true, at_line_start(text, request.indentation), {}, {}};
 }

@@ -44,6 +44,7 @@
 #include "ui/runtime_preset_dialog.h"
 #include "ui/renpy_lint_panel.h"
 #include "ui/story_library_panel.h"
+#include "ui/build_scene_panel.h"
 #include "ui/project_navigator_panel.h"
 #include "ui/coverage_panel.h"
 #include "ui/route_panel.h"
@@ -166,6 +167,7 @@ MainFrame::MainFrame()
         }
         speaker_stats_->SetAnalysis(analysis);
         if (story_library_ && manager_.GetPane("asset-browser").IsShown()) RefreshStoryLibrary();
+        if (build_scene_) RefreshBuildScene();
         outline_->SetDocument(source, analysis);
         if (notebook_) RefreshRoutes();
         if (notebook_) RefreshProduction();
@@ -213,6 +215,7 @@ MainFrame::MainFrame()
                                         wxDefaultPosition, wxDefaultSize,
                                         wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
     story_library_ = new StoryLibraryPanel(this);
+    build_scene_ = new BuildScenePanel(this);
     project_navigator_ = new ProjectNavigatorPanel(this);
     project_navigator_->SetOpenHandler([this](std::size_t index) {
         notebook_->SelectFileIndex(index);
@@ -230,6 +233,16 @@ MainFrame::MainFrame()
         notebook_->InsertTopLevelDefinition(dialog.generated_text());
         SetStatusText("Character added at the top of this script — Undo is available");
     });
+    build_scene_->SetIndentationProvider([this] {
+        return notebook_->CurrentIndentation().ToStdString(wxConvUTF8);
+    });
+    build_scene_->SetInsertHandler(
+        [this](StoryElementKind kind, const std::string& text, const std::string& message) {
+            if (kind == StoryElementKind::Character) notebook_->InsertTopLevelDefinition(text);
+            else notebook_->InsertStoryElement(text);
+            SetStatusText(wxString::FromUTF8(message));
+        });
+    RefreshBuildScene();
     coverage_panel_ = new CoveragePanel(this);
     coverage_panel_->SetManualHandler([this](const std::string& label, bool covered) {
         if (!project_) return;
@@ -315,6 +328,11 @@ MainFrame::MainFrame()
         RefreshCommandBarState();
         RefreshCueSummary();
     });
+    notebook_->SetCaretLineHandler([this](std::size_t line) {
+        current_document_line_ = line;
+        RefreshCommandBarState();
+        if (build_scene_) build_scene_->RefreshContext();
+    });
     if (auto* status = GetStatusBar()) {
         status->SetBackgroundColour(style::Colors().ink);
         status->SetForegroundColour(style::Colors().white);
@@ -364,6 +382,8 @@ MainFrame::MainFrame()
                          .CloseButton(true).Hide());
     manager_.AddPane(story_library_, wxAuiPaneInfo().Left().Name("asset-browser").Caption("Story Library")
                          .BestSize(360, 560).MinSize(300, 300).CloseButton(true).MaximizeButton(true).Hide());
+    manager_.AddPane(build_scene_, wxAuiPaneInfo().Right().Name("build-scene").Caption("Build Scene")
+                         .BestSize(360, 620).MinSize(310, 300).CloseButton(true).MaximizeButton(true));
     manager_.AddPane(project_navigator_, wxAuiPaneInfo().Left().Name("project-navigator").Caption("Script Index")
                          .BestSize(300, 560).MinSize(240, 240).CloseButton(true).MaximizeButton(true).Hide());
     manager_.AddPane(coverage_panel_, wxAuiPaneInfo().Left().Name("coverage").Caption("Label Coverage")
@@ -530,6 +550,7 @@ bool MainFrame::ConnectProjectFolder(const wxString& selected_path) {
     manager_.Update();
     story_assets_ = discover_project_assets(project_->scripts_root);
     RefreshStoryLibrary();
+    RefreshBuildScene();
     SetupCoverageProject();
     RefreshRoutes();
     RefreshProduction();
@@ -584,6 +605,7 @@ void MainFrame::RefreshProjectDiscovery() {
     project_navigator_->SetProject(project_->scripts);
     story_assets_ = discover_project_assets(project_->scripts_root);
     RefreshStoryLibrary();
+    RefreshBuildScene();
     coverage_labels_ = collect_project_labels(notebook_->ProjectScripts());
     RefreshCoveragePanel();
     RefreshRoutes();
@@ -1033,7 +1055,9 @@ void MainFrame::OnWarpRenpy(wxCommandEvent&) {
     }
     if (!notebook_->SaveAll()) return;
     const std::string target = relative.generic_string() + ":" + std::to_string(notebook_->CurrentLine());
-    LaunchRenpyWithRuntime({"--warp", wxString::FromUTF8(target)});
+    if (LaunchRenpyWithRuntime({"--warp", wxString::FromUTF8(target)}))
+        SetStatusText(wxString::Format("Previewing %s from line %zu",
+            wxString::FromUTF8(relative.generic_string()), notebook_->CurrentLine()));
 }
 
 void MainFrame::OnDirectorRenpy(wxCommandEvent&) {
@@ -1133,6 +1157,13 @@ void MainFrame::RefreshStoryLibrary() {
     if (!notebook_ || !story_library_) return;
     const auto scripts = notebook_->ProjectScripts();
     story_library_->SetLibrary(analyze_project(scripts, {count_menu_choices_, {}, 35}), story_assets_);
+}
+
+void MainFrame::RefreshBuildScene() {
+    if (!notebook_ || !build_scene_) return;
+    const auto scripts = notebook_->ProjectScripts();
+    build_scene_->SetProject(
+        analyze_project(scripts, {count_menu_choices_, {}, 35}), story_assets_);
 }
 
 void MainFrame::OnShowAssets(wxCommandEvent&) {
@@ -1664,6 +1695,7 @@ void MainFrame::OnTogglePane(wxCommandEvent& event) {
     const char* pane = event.GetId() == kShowOutline ? "outline" :
                        event.GetId() == kShowProjectNavigator ? "project-navigator" :
                        event.GetId() == kShowSpeakerStats ? "speaker-statistics" :
+                       event.GetId() == kShowBuildScene ? "build-scene" :
                        event.GetId() == kShowStoryLibrary ? "asset-browser" : "diagnostics";
     manager_.GetPane(pane).Show(event.IsChecked());
     manager_.Update();
@@ -1677,6 +1709,7 @@ void MainFrame::OnPaneClose(wxAuiManagerEvent& event) {
         if (name == "outline") id = kShowOutline;
         else if (name == "project-navigator") id = kShowProjectNavigator;
         else if (name == "speaker-statistics") id = kShowSpeakerStats;
+        else if (name == "build-scene") id = kShowBuildScene;
         else if (name == "asset-browser") id = kShowStoryLibrary;
         else if (name == "diagnostics") id = kShowDiagnostics;
         if (id != wxID_NONE && GetMenuBar()) GetMenuBar()->Check(id, false);
@@ -1726,11 +1759,15 @@ void MainFrame::RestoreWorkspace() {
     notebook_->RestoreWorkspaceViews(state->files, state->active_file);
     const bool perspective_has_project_navigator =
         state->perspective.find("name=project-navigator") != std::string::npos;
+    const bool perspective_has_build_scene =
+        state->perspective.find("name=build-scene") != std::string::npos;
     if (!state->perspective.empty()) {
         manager_.LoadPerspective(wxString::FromUTF8(state->perspective), true);
         manager_.GetPane("command-bar").Show(true);
         if (project_ && !perspective_has_project_navigator)
             manager_.GetPane("project-navigator").Show(true);
+        if (!perspective_has_build_scene)
+            manager_.GetPane("build-scene").Show(true);
         manager_.Update();
     }
     RefreshRoutes();
@@ -1739,6 +1776,7 @@ void MainFrame::RestoreWorkspace() {
         GetMenuBar()->Check(kShowOutline, manager_.GetPane("outline").IsShown());
         GetMenuBar()->Check(kShowProjectNavigator, manager_.GetPane("project-navigator").IsShown());
         GetMenuBar()->Check(kShowSpeakerStats, manager_.GetPane("speaker-statistics").IsShown());
+        GetMenuBar()->Check(kShowBuildScene, manager_.GetPane("build-scene").IsShown());
         GetMenuBar()->Check(kShowStoryLibrary, manager_.GetPane("asset-browser").IsShown());
         GetMenuBar()->Check(kShowDiagnostics, manager_.GetPane("diagnostics").IsShown());
     }
@@ -1776,12 +1814,14 @@ void MainFrame::DispatchCommand(int id) {
     wxCommandEvent command(wxEVT_MENU, id);
     command.SetEventObject(this);
     if (id == kToggleWrap || id == kToggleNvimMotions || id == kFocusMode || id == kShowOutline ||
-        id == kShowSpeakerStats || id == kShowStoryLibrary || id == kShowDiagnostics) {
+        id == kShowSpeakerStats || id == kShowBuildScene || id == kShowStoryLibrary ||
+        id == kShowDiagnostics) {
         const bool checked = id == kToggleWrap ? !editor_settings_.word_wrap :
             id == kToggleNvimMotions ? !editor_settings_.nvim_motions :
             id == kFocusMode ? !focus_mode_ :
             id == kShowOutline ? !manager_.GetPane("outline").IsShown() :
             id == kShowSpeakerStats ? !manager_.GetPane("speaker-statistics").IsShown() :
+            id == kShowBuildScene ? !manager_.GetPane("build-scene").IsShown() :
             id == kShowStoryLibrary ? !manager_.GetPane("asset-browser").IsShown() :
                                       !manager_.GetPane("diagnostics").IsShown();
         command.SetInt(checked ? 1 : 0);

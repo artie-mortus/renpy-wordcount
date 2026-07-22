@@ -2,6 +2,8 @@
 
 - Completed: Steps 0.1 through 9.5; Phases 8 and 9 and the release gate are complete.
 - The application shell now uses a modern script-desk design with a live cue bar, quieter default layout, paper/ink editor palette, and purpose-led production workflows.
+- The Light.vn-inspired preview loop promotes Ren'Py warp to the primary action: the button follows the caret as **Preview line N**, while unsupported or out-of-project files fall back to a normal game preview.
+- The persistent Build Scene shelf offers project-aware, preview-before-insert cues for text, stage, sound/timing, and story flow without requiring writers to memorize Ren'Py syntax.
 - Home is reusable from the File menu, new-story creation previews its destination and supports Unicode titles, and the stable action bar keeps writing available alongside problem badges.
 - Story Library now provides project-wide cast lookup plus searchable image/audio previews and context-safe insertion, replacing the separate asset-browser surface while retaining its saved pane identity.
 - Workspace sessions restore the project, open files, active tab, caret/scroll positions, and dock layout; Ctrl+P and Ctrl+Shift+P provide fuzzy Quick Open and command access.

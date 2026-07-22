@@ -25,6 +25,13 @@ FormCopy CopyFor(StoryElementKind kind) {
         case StoryElementKind::Music: return {"Music file path", "", "", "Example: audio/theme.ogg"};
         case StoryElementKind::Sound: return {"Sound file path", "", "", "Example: audio/door-knock.ogg"};
         case StoryElementKind::Jump: return {"Scene name", "", "", "The destination scene must already exist."};
+        case StoryElementKind::Show: return {"Image name", "Placement (optional)", "", "Example: eileen happy at left."};
+        case StoryElementKind::Hide: return {"Image tag", "", "", "Hide every displayed image with this tag."};
+        case StoryElementKind::StopMusic: return {"Fade-out seconds (optional)", "", "", "Leave blank to stop immediately."};
+        case StoryElementKind::Pause: return {"Seconds (optional)", "", "", "Leave blank to wait for the player."};
+        case StoryElementKind::Call: return {"Scene name", "", "", "Play another scene, then come back here."};
+        case StoryElementKind::Return: return {"", "", "", "Return to the scene that called this one."};
+        case StoryElementKind::Transition: return {"Transition name", "", "", "Common choices are dissolve and fade."};
     }
     return {};
 }
@@ -48,7 +55,9 @@ StoryElementDialog::StoryElementDialog(wxWindow* parent, const wxString& indenta
 
     kind_ = new wxChoice(this, wxID_ANY);
     for (const auto* label : {"Character", "Dialogue or narration", "Player choice", "Background scene",
-                              "Music", "Sound effect", "Continue at another scene"}) kind_->Append(label);
+                              "Music", "Sound effect", "Continue at another scene", "Show image",
+                              "Hide image", "Stop music", "Pause", "Call another scene", "Return",
+                              "Transition"}) kind_->Append(label);
     kind_->SetSelection(fixed_kind_ ? static_cast<int>(*fixed_kind_) : 0); kind_->SetName("Story element type");
     layout->Add(kind_, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 20);
     kind_->Show(!fixed_kind_.has_value());

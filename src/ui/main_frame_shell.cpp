@@ -1,6 +1,7 @@
 #include "ui/main_frame.h"
 
 #include <algorithm>
+#include <filesystem>
 
 #include <wx/infobar.h>
 #include <wx/menu.h>
@@ -64,7 +65,7 @@ void MainFrame::BuildCommandBar() {
     write_button_ = make_action("Write naturally");
     history_button_ = make_action("Version history");
     problems_button_ = make_action(CommandFor(kShowDiagnostics).label);
-    run_button_ = make_action("Preview game", true);
+    run_button_ = make_action("Preview line 1", true);
     layout->AddSpacer(8);
 
     open_game_button_->Bind(wxEVT_BUTTON, &MainFrame::OnConnectProject, this);
@@ -80,7 +81,10 @@ void MainFrame::BuildCommandBar() {
             manager_.Update();
         }
     });
-    run_button_->Bind(wxEVT_BUTTON, &MainFrame::OnRunRenpy, this);
+    run_button_->Bind(wxEVT_BUTTON, [this](wxCommandEvent& event) {
+        if (CanPreviewFromCaret()) OnWarpRenpy(event);
+        else OnRunRenpy(event);
+    });
     command_bar_->SetSizer(layout);
     RefreshCommandBarState();
     RefreshCueSummary();
@@ -88,9 +92,12 @@ void MainFrame::BuildCommandBar() {
 
 void MainFrame::RefreshCommandBarState() {
     if (!command_bar_) return;
-    const auto state = DeriveCommandBarState({project_.has_value(), current_document_dirty_,
+    ShellContext context{project_.has_value(), current_document_dirty_,
         !current_document_path_.empty(), problem_count_, fixable_problem_count_,
-        renpy_sdk_.has_value(), renpy_process_ != nullptr});
+        renpy_sdk_.has_value(), renpy_process_ != nullptr};
+    context.can_preview_from_line = CanPreviewFromCaret();
+    context.current_line = current_document_line_;
+    const auto state = DeriveCommandBarState(context);
     const int width = GetClientSize().x;
     const bool compact = width < FromDIP(1080);
     const bool narrow = width < FromDIP(900);
@@ -108,12 +115,26 @@ void MainFrame::RefreshCommandBarState() {
     if (run_button_) {
         run_button_->Show(state.show_preview);
         run_button_->Enable(state.enable_preview);
+        static_cast<CommandButton*>(run_button_)->SetCommandLabel(
+            wxString::FromUTF8(state.preview_label));
+        run_button_->SetToolTip(state.preview_from_line
+            ? "Save all scripts and preview from the current line (F7)"
+            : "Save all scripts and preview the game from the beginning (F6)");
     }
     if (save_button_) {
         save_button_->Show(!compact || state.enable_save);
         save_button_->Enable(state.enable_save);
     }
     command_bar_->Layout();
+}
+
+bool MainFrame::CanPreviewFromCaret() const {
+    if (!project_ || !renpy_sdk_ || !renpy_capabilities(renpy_sdk_->version).warp ||
+        current_document_path_.empty()) return false;
+    std::error_code ec;
+    const auto relative = std::filesystem::relative(
+        current_document_path_.ToStdString(wxConvUTF8), project_->scripts_root, ec);
+    return !ec && !relative.empty() && *relative.begin() != "..";
 }
 
 void MainFrame::RefreshCueSummary() {
@@ -218,6 +239,8 @@ void MainFrame::BuildMenus() {
     view->AppendCheckItem(kShowOutline, "Outline panel");
     view->AppendCheckItem(kShowProjectNavigator, "Script index");
     view->AppendCheckItem(kShowSpeakerStats, "Speaker statistics panel");
+    view->AppendCheckItem(kShowBuildScene, "Build Scene shelf");
+    view->Check(kShowBuildScene, true);
     view->AppendCheckItem(kShowStoryLibrary, "Story library");
     view->AppendCheckItem(kShowDiagnostics, CommandFor(kShowDiagnostics).label);
     view->Append(kShowRoutes, "Route &Details...", "Show route summaries and paths");
@@ -243,7 +266,7 @@ void MainFrame::BuildMenus() {
     help->Append(wxID_ABOUT, "&About", "About Say Count");
     renpy_menu_ = new wxMenu();
     renpy_menu_->Append(kRunRenpy, "Run Project\tF6");
-    renpy_menu_->Append(kWarpRenpy, "Run from Caret\tF7");
+    renpy_menu_->Append(kWarpRenpy, "Preview from Caret\tF7");
     renpy_menu_->Append(kDirectorRenpy, "Interactive Director");
     renpy_menu_->Append(kRuntimePresets, "Runtime State Presets...");
     renpy_menu_->Append(kRunRenpyLint, CommandFor(kRunRenpyLint).label);
