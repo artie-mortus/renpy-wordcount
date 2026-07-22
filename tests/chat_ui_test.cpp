@@ -340,7 +340,9 @@ TEST_CASE("Build Scene shelf turns project-aware cues into script at the cursor"
     auto* preview = Named<wxTextCtrl>(panel, "Build scene preview");
     auto* insert = Named<wxButton>(panel, "Add build scene cue");
     REQUIRE(primary); REQUIRE(secondary); REQUIRE(preview); REQUIRE(insert);
-    CHECK(primary->FindString("e") != wxNOT_FOUND);
+    const int eileen = primary->FindString("Eileen");
+    CHECK(eileen != wxNOT_FOUND);
+    CHECK(primary->FindString("e") == wxNOT_FOUND);
     CHECK_FALSE(insert->IsEnabled());
 
     say_count::StoryElementKind inserted_kind = say_count::StoryElementKind::Return;
@@ -350,7 +352,7 @@ TEST_CASE("Build Scene shelf turns project-aware cues into script at the cursor"
         inserted_kind = kind;
         inserted = text;
     });
-    primary->SetValue("e");
+    primary->SetSelection(eileen);
     secondary->SetValue("The door is open.");
     CHECK(preview->GetValue() == "    e \"The door is open.\"\n");
     CHECK(insert->IsEnabled());

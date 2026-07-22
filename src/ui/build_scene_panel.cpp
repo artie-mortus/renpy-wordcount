@@ -31,8 +31,8 @@ FormCopy CopyFor(StoryElementKind kind) {
             return {"Short character code", "Name players will see", "", "e",
                     "Creates a character definition at the top of this script."};
         case StoryElementKind::Dialogue:
-            return {"Who speaks? (blank for narrator)", "What do they say?", "", "e",
-                    "Choose a known character code or leave it blank for narration."};
+            return {"Who speaks? (blank for narrator)", "What do they say?", "", "Eileen",
+                    "Choose a character by name. Their short code is used in the script."};
         case StoryElementKind::Choice:
             return {"Question (optional)", "", "Choices — one per line", "What now?",
                     "Add at least two choices. Replace each generated pass with what happens next."};
@@ -227,8 +227,7 @@ void BuildScenePanel::SetProject(const ScriptAnalysis& analysis,
                                  const std::vector<ProjectAsset>& assets) {
     characters_.clear();
     for (const auto& [alias, name] : analysis.character_names) {
-        (void)name;
-        characters_.push_back(alias);
+        characters_.push_back({name, alias});
     }
     labels_.clear();
     for (const auto& scene : analysis.scenes)
@@ -243,7 +242,7 @@ void BuildScenePanel::SetProject(const ScriptAnalysis& analysis,
         std::string statement = asset_insert_statement(asset, AssetInsertAction::Show);
         if (statement.rfind("show ", 0) == 0) images_.push_back(statement.substr(5));
     }
-    auto unique = [](std::vector<std::string>& values) {
+    auto unique = [](auto& values) {
         std::sort(values.begin(), values.end());
         values.erase(std::unique(values.begin(), values.end()), values.end());
     };
@@ -279,7 +278,15 @@ void BuildScenePanel::SelectKind(StoryElementKind kind) {
 
 std::vector<std::string> BuildScenePanel::SuggestionsFor(StoryElementKind kind) const {
     switch (kind) {
-        case StoryElementKind::Dialogue: return characters_;
+        case StoryElementKind::Dialogue: {
+            std::vector<std::string> names;
+            names.reserve(characters_.size());
+            for (const auto& [name, alias] : characters_) {
+                (void)alias;
+                names.push_back(name);
+            }
+            return names;
+        }
         case StoryElementKind::Scene:
         case StoryElementKind::Show:
         case StoryElementKind::Hide: return images_;
@@ -292,6 +299,26 @@ std::vector<std::string> BuildScenePanel::SuggestionsFor(StoryElementKind kind) 
         case StoryElementKind::StopMusic: return {"0.5", "1.0", "2.0"};
         default: return {};
     }
+}
+
+std::string BuildScenePanel::PrimaryValue() const {
+    const std::string value = primary_->GetValue().ToStdString(wxConvUTF8);
+    if (selected_kind_ != StoryElementKind::Dialogue) return value;
+
+    const int selection = primary_->GetSelection();
+    if (selection != wxNOT_FOUND && static_cast<std::size_t>(selection) < characters_.size())
+        return characters_[selection].second;
+
+    // SetValue() and some platform-native combo boxes can clear the selection
+    // even when their text exactly matches an item. Resolve an unambiguous
+    // display name here while continuing to accept manually entered aliases.
+    const auto matching_name = std::find_if(characters_.begin(), characters_.end(),
+        [&](const auto& character) { return character.first == value; });
+    if (matching_name != characters_.end() &&
+        std::find_if(std::next(matching_name), characters_.end(),
+            [&](const auto& character) { return character.first == value; }) == characters_.end())
+        return matching_name->second;
+    return value;
 }
 
 void BuildScenePanel::RefreshSuggestions() {
@@ -319,7 +346,7 @@ void BuildScenePanel::RefreshForm() {
     guidance_->SetLabel(wxString::FromUTF8(copy.guidance));
     const std::string indentation = indentation_provider_ ? indentation_provider_() : std::string{};
     const auto result = build_story_element({
-        selected_kind_, primary_->GetValue().ToStdString(wxConvUTF8),
+        selected_kind_, PrimaryValue(),
         secondary_->GetValue().ToStdString(wxConvUTF8),
         details_->GetValue().ToStdString(wxConvUTF8), indentation});
     preview_->SetForegroundColour(result.valid ? style::Colors().white : style::Colors().mint);
@@ -344,7 +371,7 @@ void BuildScenePanel::ClearFields(bool keep_primary) {
 void BuildScenePanel::InsertCue() {
     const std::string indentation = indentation_provider_ ? indentation_provider_() : std::string{};
     const auto result = build_story_element({
-        selected_kind_, primary_->GetValue().ToStdString(wxConvUTF8),
+        selected_kind_, PrimaryValue(),
         secondary_->GetValue().ToStdString(wxConvUTF8),
         details_->GetValue().ToStdString(wxConvUTF8), indentation});
     if (!result.valid || !insert_handler_) return;

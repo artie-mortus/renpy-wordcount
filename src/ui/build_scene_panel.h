@@ -44,11 +44,12 @@ private:
     void RefreshSuggestions();
     void InsertCue();
     void ClearFields(bool keep_primary = false);
+    std::string PrimaryValue() const;
     std::vector<std::string> SuggestionsFor(StoryElementKind kind) const;
 
     StoryElementKind selected_kind_ = StoryElementKind::Dialogue;
     std::vector<CueButton> cue_buttons_;
-    std::vector<std::string> characters_;
+    std::vector<std::pair<std::string, std::string>> characters_;
     std::vector<std::string> images_;
     std::vector<std::string> audio_;
     std::vector<std::string> labels_;
